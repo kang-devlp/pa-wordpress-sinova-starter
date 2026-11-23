@@ -1,0 +1,5 @@
+{
+  "base_url": "https://pa-contoh.go.id",
+  "secret_key": "GANTI_DENGAN_KUNCI_HMAC_MINIMAL_64_KARAKTER_ACAKEKS",
+  "timeout": 30
+}

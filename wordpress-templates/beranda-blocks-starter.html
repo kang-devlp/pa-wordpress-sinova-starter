@@ -1,0 +1,119 @@
+<!--
+  PA SINOVA Starter Kit - Blok Beranda Portabel (100% Tanpa Dependensi Plugin Pro)
+  Cara Pakai: Tempel ke widget Custom HTML di Elementor Free atau Blok HTML Khusus WordPress.
+  Catatan: Ganti URL href Google Drive pada Area I-VI dan Survey sesuai tautan satker Anda.
+  Tautan pada kartu SKM / SPAK / SPKP otomatis tersinkron oleh plugin pa-sinova-hub.php (modul: survei-pelayanan).
+-->
+<div class="pa-starter-showcase">
+  <h2 class="pa-starter-heading">DOKUMEN PEMBANGUNAN ZONA INTEGRITAS</h2>
+  <p class="pa-starter-sub">Komitmen Menuju Wilayah Bebas dari Korupsi (WBK) &amp; WBBM</p>
+
+  <div class="pa-zi-grid">
+    <a class="pa-zi-card" href="#ganti-link-area-1" target="_blank" rel="noopener noreferrer">
+      <span class="pa-zi-area">Area I</span>
+      <span class="pa-zi-desc">MANAJEMEN PERUBAHAN</span>
+    </a>
+    <a class="pa-zi-card" href="#ganti-link-area-2" target="_blank" rel="noopener noreferrer">
+      <span class="pa-zi-area">Area II</span>
+      <span class="pa-zi-desc">PENATAAN TATA LAKSANA</span>
+    </a>
+    <a class="pa-zi-card" href="#ganti-link-area-3" target="_blank" rel="noopener noreferrer">
+      <span class="pa-zi-area">Area III</span>
+      <span class="pa-zi-desc">PENATAAN MANAJEMEN SDM</span>
+    </a>
+    <a class="pa-zi-card" href="#ganti-link-area-4" target="_blank" rel="noopener noreferrer">
+      <span class="pa-zi-area">Area IV</span>
+      <span class="pa-zi-desc">PENGUATAN AKUNTABILITAS</span>
+    </a>
+    <a class="pa-zi-card" href="#ganti-link-area-5" target="_blank" rel="noopener noreferrer">
+      <span class="pa-zi-area">Area V</span>
+      <span class="pa-zi-desc">PENGUATAN PENGAWASAN</span>
+    </a>
+    <a class="pa-zi-card" href="#ganti-link-area-6" target="_blank" rel="noopener noreferrer">
+      <span class="pa-zi-area">Area VI</span>
+      <span class="pa-zi-desc">KUALITAS PELAYANAN PUBLIK</span>
+    </a>
+  </div>
+
+  <!-- Widget Slider Indeks Pelayanan Publik (Otomatis Tersinkron dari Modul survei-pelayanan) -->
+  <section class="survey-panel pa-starter-survey" aria-label="Indeks Pelayanan Publik">
+    <div class="survey-slider">
+      <article class="survey-slide is-active" data-slide="0">
+        <div class="survey-head">
+          <span class="survey-pill">★ Mutu A (Sangat Baik)</span>
+          <span class="survey-period-badge">Triwulan III</span>
+        </div>
+        <h3>Indeks Pelayanan Publik</h3>
+        <div class="survey-cards">
+          <div class="survey-card"><strong>SKM</strong> <span>Indeks Kepuasan Masyarakat</span> <b>4.00 / 4.00</b></div>
+          <div class="survey-card"><strong>SPAK</strong> <span>Persepsi Anti Korupsi</span> <b>4.00 / 4.00</b></div>
+          <div class="survey-card"><strong>SPKP</strong> <span>Kualitas Pelayanan</span> <b>4.00 / 4.00</b></div>
+        </div>
+      </article>
+      <article class="survey-slide" data-slide="1">
+        <div class="survey-head">
+          <span class="survey-pill">★ Mutu A</span>
+          <span class="survey-period-badge">Triwulan II</span>
+        </div>
+        <h3>Indeks Pelayanan Publik</h3>
+        <div class="survey-cards">
+          <div class="survey-card"><strong>SKM</strong> <span>Indeks Kepuasan Masyarakat</span> <b>-</b></div>
+          <div class="survey-card"><strong>SPAK</strong> <span>Persepsi Anti Korupsi</span> <b>-</b></div>
+          <div class="survey-card"><strong>SPKP</strong> <span>Kualitas Pelayanan</span> <b>-</b></div>
+        </div>
+      </article>
+      <article class="survey-slide" data-slide="2">
+        <div class="survey-head">
+          <span class="survey-pill">★ Mutu A</span>
+          <span class="survey-period-badge">Triwulan I</span>
+        </div>
+        <h3>Indeks Pelayanan Publik</h3>
+        <div class="survey-cards">
+          <div class="survey-card"><strong>SKM</strong> <span>Indeks Kepuasan Masyarakat</span> <b>-</b></div>
+          <div class="survey-card"><strong>SPAK</strong> <span>Persepsi Anti Korupsi</span> <b>-</b></div>
+          <div class="survey-card"><strong>SPKP</strong> <span>Kualitas Pelayanan</span> <b>-</b></div>
+        </div>
+      </article>
+    </div>
+    <div class="survey-dots">
+      <button type="button" class="survey-dot is-active" data-target="0">TW III</button>
+      <button type="button" class="survey-dot" data-target="1">TW II</button>
+      <button type="button" class="survey-dot" data-target="2">TW I</button>
+    </div>
+  </section>
+</div>
+
+<style>
+.pa-starter-showcase{max-width:1120px;margin:20px auto;font-family:'Inter',system-ui,sans-serif;text-align:center}
+.pa-starter-heading{margin:0 0 4px;color:#056e4f;font-weight:800;font-size:1.5rem}
+.pa-starter-sub{margin:0 0 18px;color:#557128;font-weight:700;font-size:.95rem}
+.pa-zi-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;align-items:stretch;margin-bottom:24px}
+@media(max-width:960px){.pa-zi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:520px){.pa-zi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pa-zi-card{display:flex;flex-direction:column;justify-content:center;align-items:center;padding:20px 12px;border-radius:12px;background:linear-gradient(135deg,#056e4f 0%,#043927 100%);border:1.5px solid #C9A227;color:#fff!important;text-decoration:none!important;box-shadow:0 6px 14px rgba(4,57,39,.18);transition:transform .2s ease}
+.pa-zi-card:hover{transform:translateY(-3px);border-color:#E5C158}
+.pa-zi-area{font-size:15px;font-weight:800;color:#E5C158;margin-bottom:6px}
+.pa-zi-desc{font-size:11.5px;line-height:1.32;font-weight:600;min-height:2.64em;display:flex;align-items:center;justify-content:center}
+.pa-starter-survey{max-width:360px;margin:0 auto;padding:16px;border-radius:16px;background:linear-gradient(155deg,#065f46 0%,#044e3a 52%,#022c22 100%);border:1.5px solid #C9A227;color:#fff;text-align:left}
+.pa-starter-survey .survey-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:10px;font-weight:800}
+.pa-starter-survey .survey-pill{padding:3px 8px;border-radius:999px;background:rgba(229,193,88,.18);border:1px solid #C9A227;color:#E5C158}
+.pa-starter-survey .survey-period-badge{padding:3px 8px;border-radius:999px;background:#d1fae5;color:#022c22}
+.pa-starter-survey h3{margin:0 0 10px;color:#fff;font-size:16px;font-weight:800}
+.pa-starter-survey .survey-slide{display:none}.pa-starter-survey .survey-slide.is-active{display:block}
+.pa-starter-survey .survey-cards{display:flex;flex-direction:column;gap:8px}
+.pa-starter-survey .survey-card{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#fff;text-decoration:none;font-size:12px}
+.pa-starter-survey .survey-dots{display:flex;justify-content:center;gap:6px;margin-top:12px}
+.pa-starter-survey .survey-dot{padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font-size:11px;font-weight:700;cursor:pointer}
+.pa-starter-survey .survey-dot.is-active{background:#E5C158;color:#022c22;border-color:#E5C158}
+</style>
+<script>
+document.querySelectorAll('.pa-starter-survey').forEach(function(panel){
+  panel.querySelectorAll('.survey-dot').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = btn.getAttribute('data-target');
+      panel.querySelectorAll('.survey-dot').forEach(function(b){ b.classList.toggle('is-active', b === btn); });
+      panel.querySelectorAll('.survey-slide').forEach(function(s){ s.classList.toggle('is-active', s.getAttribute('data-slide') === idx); });
+    });
+  });
+});
+</script>
