@@ -14,18 +14,18 @@ Seluruh fitur dikemas dalam 5 berkas `mu-plugins` tanpa ketergantungan plugin be
 ### Beranda Portal (Mode Gelap / Dark Mode)
 ![Tampilan Beranda Mode Gelap](docs/screenshots/beranda-dark.png)
 
-### Halaman Arsip Dokumen SINOVA ("Rumah Tahun 2027")
-![Tampilan Modul Arsip Dokumen SINOVA LRA](docs/screenshots/modul-sinova.png)
+### Halaman Arsip Dokumen Publik & Sidebar Navigasi
+![Tampilan Modul Arsip Dokumen Publik LRA](docs/screenshots/modul-sinova.png)
 
 ---
 
 ## Fitur Utama
 
-1. **Tema Institusional Hijau Gelap & Emas:** Mendukung penuh tema gratis **Astra** (dan tetap berjalan rapi pada tema bawaan WordPress) dengan navigasi dropdown 6 pilar, kotak sambutan pimpinan, layanan perkara, berita terkini, serta footer 4 kolom resmi.
-2. **Seeder 1-Klik (40 Halaman & Menu Utama):** Otomatis membuat 23 halaman arsip dokumen SINOVA, 17 halaman informasi wajib bertanda `[LENGKAPI]`, halaman Beranda lengkap, artikel contoh, dan `Menu Utama SINOVA`.
-3. **23 Modul Arsip Dokumen SINOVA (Slot s.d. 2027):** Mendukung pengunggahan file **PDF langsung ke server** maupun penautan **Google Drive** berdasarkan tahun, kategori (misal DIPA 01/04, LIPA 7A/7B/7C), bulan, semester, maupun triwulan (SKM/SPAK/SPKP).
-4. **Sinkronisasi Otomatis Kartu Survei Beranda:** Setiap unggahan dokumen pada modul `survei-pelayanan` otomatis menautkan tombol SKM, SPAK, dan SPKP di halaman depan ke berkas laporan resminya.
-5. **Keamanan & Performa Dasar:** Cache halaman HTML statis, indikator waktu render, pencegahan enumerasi user, XML-RPC nonaktif, filter kata/tautan terlarang (*Anti-Judol WAF*), serta CAPTCHA login ganda (**Cloudflare Turnstile** atau soal hitung offline).
+1. **Tampilan Publik Bersih & Institusional:** Seluruh istilah teknis penilaian (*SINOVA*, nomor SK, maupun kode kriteria `B1.1–W4.1`) disembunyikan dari halaman pengunjung publik dan hanya tampil di backend **WP Admin → SINOVA Hub**. Mendukung **Mode Terang & Mode Gelap**, jam WIB langsung di kiri atas, kotak pencarian header, breadcrumb & sidebar halaman dalam, serta **Sarana Disabilitas lengkap** (termasuk pembaca suara Bahasa Indonesia).
+2. **Dashboard Kepatuhan 35 Kriteria di WP Admin:** Operator satker tanpa server terpisah langsung mendapatkan skor kelengkapan `B1.1–W4.1`, deteksi otomatis halaman `[LENGKAPI]`, dan tombol **Salin URL** 1-klik langsung dari **WP Admin → SINOVA Hub**.
+3. **Seeder 1-Klik (40 Halaman, Berita Awal, & Menu Utama):** Otomatis membuat 23 halaman arsip dokumen, 17 halaman informasi wajib (`[LENGKAPI]`), halaman Beranda, statistik kunjungan website privasi aman (IP ter-hash), artikel berita contoh, dan `Menu Utama` pada tema gratis **Astra**.
+4. **23 Modul Arsip Dokumen Terstruktur (Slot s.d. 2027):** Mendukung pengunggahan file **PDF langsung ke server** maupun penautan **Google Drive** berdasarkan tahun, kategori (DIPA 01/04, LIPA 7A/7B/7C), bulan, semester, maupun triwulan (SKM/SPAK/SPKP) yang otomatis tertaut ke kartu survei Beranda.
+5. **Keamanan Berlapis & Performa:** Cache halaman HTML statis, indikator waktu render, Brute-Force Rate Limiter (5x gagal/15 menit), OWASP security headers (`Permissions-Policy`, `HSTS`), proteksi folder unggahan (`.htaccess` anti-eksekusi PHP), pencegahan enumerasi user, XML-RPC nonaktif, Anti-Judol WAF + log audit, serta CAPTCHA login ganda (**Cloudflare Turnstile** atau soal hitung offline + Honeypot).
 
 ---
 

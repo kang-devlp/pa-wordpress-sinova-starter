@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: PA SINOVA Starter - UI Portal PA (Astra & Blok), Berita Dinamis, Aksesibilitas & Performa
- * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, Topbar & Footer 4 Kolom resmi Pengadilan Agama, Shortcode Sambutan & Berita Terkini, Capture-Safe SINOVA, serta Toolbar Aksesibilitas WCAG 2.2 AA.
- * Version: 1.2.0-starter
+ * Plugin Name: PA SINOVA Starter - UI Portal Resmi PA, Pencarian, Statistik Pengunjung, Sidebar Halaman Dalam & Aksesibilitas Lengkap
+ * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, bebas istilah internal di tampilan publik, kotak pencarian header, statistik pengunjung privasi ter-hash, sidebar & breadcrumb halaman dalam, serta dock disabilitas dengan Pembaca Suara Bahasa Indonesia.
+ * Version: 1.3.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -18,6 +18,104 @@ add_filter('body_class', static function ($classes) {
     $classes[] = 'pa-sinova-portal';
     $classes[] = (function_exists('wp_is_block_theme') && wp_is_block_theme()) ? 'pa-sinova-block-shell' : 'pa-sinova-classic-shell';
     return $classes;
+});
+
+// 2. Statistik Kunjungan Website Privasi Aman (Hash IP Harian — Mendukung B5.1)
+function pa_starter_get_visitor_stats(): array {
+    $stats = get_option('pa_sinova_visitor_stats', array());
+    if (!is_array($stats)) {
+        $stats = array();
+    }
+    $todayKey = gmdate('Y-m-d', time() + 7 * 3600);
+    $monthKey = substr($todayKey, 0, 7);
+
+    return array(
+        'today' => (($stats['day_key'] ?? '') === $todayKey) ? (int) ($stats['day_count'] ?? 0) : 0,
+        'month' => (($stats['month_key'] ?? '') === $monthKey) ? (int) ($stats['month_count'] ?? 0) : 0,
+        'total' => (int) ($stats['total_count'] ?? 0),
+    );
+}
+
+function pa_starter_record_visitor_hit(): array {
+    if (PHP_SAPI === 'cli' || is_admin()) {
+        return pa_starter_get_visitor_stats();
+    }
+    $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+    if ($ua !== '' && preg_match('/bot|crawl|spider|slurp|curl|wget|headless/i', $ua)) {
+        return pa_starter_get_visitor_stats();
+    }
+
+    $todayKey = gmdate('Y-m-d', time() + 7 * 3600);
+    $monthKey = substr($todayKey, 0, 7);
+    $stats    = get_option('pa_sinova_visitor_stats', array());
+    if (!is_array($stats)) {
+        $stats = array();
+    }
+
+    if (($stats['day_key'] ?? '') !== $todayKey) {
+        $stats['day_key']    = $todayKey;
+        $stats['day_count']  = 0;
+        $stats['day_hashes'] = array();
+    }
+    if (($stats['month_key'] ?? '') !== $monthKey) {
+        $stats['month_key']   = $monthKey;
+        $stats['month_count'] = 0;
+    }
+    if (!isset($stats['total_count'])) {
+        $stats['total_count'] = 0;
+    }
+
+    $ip   = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+    $salt = function_exists('wp_salt') ? wp_salt('auth') : __FILE__;
+    $hash = substr(hash_hmac('sha256', $todayKey . '|' . $ip . '|' . $ua, $salt), 0, 16);
+
+    $seenHashes = isset($stats['day_hashes']) && is_array($stats['day_hashes']) ? $stats['day_hashes'] : array();
+    if (!isset($seenHashes[$hash])) {
+        if (count($seenHashes) < 2000) {
+            $seenHashes[$hash] = 1;
+        }
+        $stats['day_hashes']  = $seenHashes;
+        $stats['day_count']   = (int) $stats['day_count'] + 1;
+        $stats['month_count'] = (int) $stats['month_count'] + 1;
+        $stats['total_count'] = (int) $stats['total_count'] + 1;
+        update_option('pa_sinova_visitor_stats', $stats, false);
+    }
+
+    return array(
+        'today' => (int) $stats['day_count'],
+        'month' => (int) $stats['month_count'],
+        'total' => (int) $stats['total_count'],
+    );
+}
+
+add_action('template_redirect', static function () {
+    if (!is_admin() && !is_feed() && !is_404()) {
+        pa_starter_record_visitor_hit();
+    }
+}, 20);
+
+add_action('rest_api_init', static function () {
+    register_rest_route('pa-portal/v1', '/visit', array(
+        'methods'             => 'POST',
+        'permission_callback' => '__return_true',
+        'callback'            => static function () {
+            return new WP_REST_Response(pa_starter_record_visitor_hit(), 200);
+        },
+    ));
+});
+
+add_shortcode('pa_visitor_stats', static function () {
+    $st = pa_starter_get_visitor_stats();
+    ob_start();
+    ?>
+    <div class="pa-vstats-grid">
+        <div class="pa-vstat-box"><span>Pengunjung Hari Ini</span><strong id="pa-page-vis-today"><?php echo esc_html(number_format($st['today'], 0, ',', '.')); ?></strong></div>
+        <div class="pa-vstat-box"><span>Pengunjung Bulan Ini</span><strong id="pa-page-vis-month"><?php echo esc_html(number_format($st['month'], 0, ',', '.')); ?></strong></div>
+        <div class="pa-vstat-box"><span>Total Kunjungan</span><strong id="pa-page-vis-total"><?php echo esc_html(number_format($st['total'], 0, ',', '.')); ?></strong></div>
+    </div>
+    <p style="font-size:12.5px;color:#64748b;margin-top:10px;">Penghitung kunjungan menyimpan sidik harian anonim (hash satu arah tanpa menyimpan alamat IP mentah pengunjung).</p>
+    <?php
+    return (string) ob_get_clean();
 });
 
 add_action('wp_head', static function () {
@@ -42,7 +140,7 @@ add_action('wp_enqueue_scripts', static function () {
     );
 }, 999);
 
-// 2. Shortcode [pa_sinova_welcome_section]: Sambutan Pimpinan + Standar Maklumat Pelayanan PTSP
+// 3. Shortcode [pa_sinova_welcome_section]: Sambutan Pimpinan + Standar Maklumat Pelayanan PTSP
 add_shortcode('pa_sinova_welcome_section', static function () {
     $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $satker  = $cfg['satker_name'] ?? 'Pengadilan Agama';
@@ -80,7 +178,7 @@ add_shortcode('pa_sinova_welcome_section', static function () {
     return (string) ob_get_clean();
 });
 
-// 3. Shortcode [pa_sinova_latest_posts count="3"]: Berita & Pengumuman Terkini Dinamis
+// 4. Shortcode [pa_sinova_latest_posts count="3"]: Berita & Pengumuman Terkini Dinamis
 add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     $cfgAtts = shortcode_atts(array('count' => 3), $atts, 'pa_sinova_latest_posts');
     $count   = max(1, min(6, (int) $cfgAtts['count']));
@@ -125,7 +223,88 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     return (string) ob_get_clean();
 });
 
-// 4. CSS Terpadu Portal Pengadilan Agama (Astra Free + Blok Theme)
+// 5. Tambahkan Logo Satker & Kotak Pencarian Internal ke Baris 1 Header Astra
+add_action('astra_render_header_column', static function ($row, $section) {
+    if ($row !== 'primary' || $section !== 'left' || is_admin()) {
+        return;
+    }
+    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $logoUrl = trim((string) ($cfg['logo_url'] ?? ''));
+    ?>
+    <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>" aria-label="Pencarian Informasi Website">
+        <input type="search" name="s" class="pa-header-search-input" placeholder="Cari dokumen, berita, layanan..." value="<?php echo esc_attr(get_search_query()); ?>">
+        <button type="submit" class="pa-header-search-btn" aria-label="Cari">Cari</button>
+    </form>
+    <?php if ($logoUrl !== '') : ?>
+        <img src="<?php echo esc_url($logoUrl); ?>" alt="Logo Pengadilan" class="pa-header-custom-logo" width="44" height="44">
+    <?php endif;
+}, 20, 2);
+
+// 6. Breadcrumb + Sidebar Navigasi Pilar Otomatis pada Halaman Dalam (!is_front_page() && is_page())
+add_filter('the_content', static function ($content) {
+    if (is_admin() || !is_page() || is_front_page() || !is_main_query() || !in_the_loop()) {
+        return $content;
+    }
+    $postId = (int) get_the_ID();
+    $items  = wp_get_nav_menu_items('Menu Utama SINOVA');
+    if (empty($items) || !is_array($items)) {
+        return $content;
+    }
+
+    $byId      = array();
+    $children  = array();
+    $parentId  = 0;
+    foreach ($items as $it) {
+        $id = (int) $it->ID;
+        $byId[$id] = $it;
+        $pid = (int) $it->menu_item_parent;
+        if ($pid > 0) {
+            $children[$pid][] = $it;
+        }
+        if ((int) $it->object_id === $postId && $pid > 0) {
+            $parentId = $pid;
+        }
+    }
+    if ($parentId <= 0 || empty($byId[$parentId]) || empty($children[$parentId])) {
+        return $content;
+    }
+
+    $parentTitle = (string) $byId[$parentId]->title;
+    $siblings    = $children[$parentId];
+
+    ob_start();
+    ?>
+    <nav class="pa-breadcrumb" aria-label="Breadcrumb">
+        <a href="<?php echo esc_url(home_url('/')); ?>">Beranda</a>
+        <span aria-hidden="true">›</span>
+        <span><?php echo esc_html($parentTitle); ?></span>
+        <span aria-hidden="true">›</span>
+        <strong><?php echo esc_html(get_the_title($postId)); ?></strong>
+    </nav>
+    <div class="pa-inner-layout">
+        <aside class="pa-inner-sidebar" aria-label="Navigasi <?php echo esc_attr($parentTitle); ?>">
+            <div class="pa-sidebar-head"><?php echo esc_html($parentTitle); ?></div>
+            <ul class="pa-sidebar-list">
+                <?php foreach ($siblings as $sib) :
+                    $isCur = ((int) $sib->object_id === $postId);
+                ?>
+                    <li>
+                        <a href="<?php echo esc_url((string) $sib->url); ?>" class="<?php echo $isCur ? 'is-current' : ''; ?>" <?php echo $isCur ? 'aria-current="page"' : ''; ?>>
+                            <?php echo esc_html((string) $sib->title); ?>
+                        </a>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </aside>
+        <div class="pa-inner-main">
+            <?php echo $content; ?>
+        </div>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}, 30);
+
+// 7. CSS Terpadu Portal Resmi Pengadilan Agama (Astra Free + Blok Theme)
 add_action('wp_head', static function () {
     if (is_admin()) {
         return;
@@ -150,7 +329,6 @@ body, button, input, select, textarea {
     animation: none !important;
 }
 
-/* Sembunyikan shell bawaan Block Theme & Footer Astra standar agar konsisten memakai Footer 4 Kolom PA */
 body.pa-sinova-block-shell .wp-site-blocks > header.wp-block-template-part,
 body.pa-sinova-block-shell .wp-site-blocks > footer.wp-block-template-part,
 body.pa-sinova-block-shell header:has(.wp-block-page-list),
@@ -171,13 +349,13 @@ body.pa-sinova-block-shell .wp-block-post-title,
 body.pa-sinova-classic-shell:not(.home) .entry-title {
     color: var(--pa-green-dark);
     font-weight: 800;
-    font-size: clamp(1.4rem, 2.4vw, 2rem);
+    font-size: clamp(1.35rem, 2.3vw, 1.95rem);
     border-bottom: 3px solid var(--pa-gold);
     padding-bottom: 8px;
-    margin-bottom: 18px;
+    margin-bottom: 16px;
 }
 
-/* Styling Header Native Tema Astra menjadi 2 Baris Rapi (Brand + Navbar 1-Garis Hijau Gelap–Gold) */
+/* Styling Header Native Tema Astra menjadi 2 Baris Rapi */
 body.pa-sinova-classic-shell .main-header-bar {
     background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
     border-bottom: 3px solid #C9A227 !important;
@@ -200,8 +378,59 @@ body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-le
     max-width: 100% !important;
     padding: 13px 16px !important;
     border-bottom: 1px solid rgba(201, 162, 39, 0.35);
-    justify-content: flex-start !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
 }
+body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-left .ast-builder-layout-element[data-section="title_tagline"] {
+    order: 1;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .pa-header-custom-logo {
+    order: 0;
+    border-radius: 8px;
+    background: #fff;
+    padding: 3px;
+    object-fit: contain;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .pa-header-search-form {
+    order: 2;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pa-header-search-input {
+    width: 265px;
+    min-width: 190px;
+    padding: 8px 14px !important;
+    border-radius: 999px !important;
+    border: 1px solid rgba(229, 193, 88, 0.55) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+    font-size: 12.5px !important;
+    line-height: 1.3 !important;
+    outline: none;
+}
+.pa-header-search-input::placeholder { color: #d1fae5; }
+.pa-header-search-input:focus { background: rgba(2, 44, 34, 0.75) !important; border-color: #E5C158 !important; }
+.pa-header-search-btn {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 8px 16px !important;
+    border-radius: 999px !important;
+    border: none !important;
+    background: #C9A227 !important;
+    color: #022c22 !important;
+    font-size: 12.5px !important;
+    line-height: 1.2 !important;
+    font-weight: 800 !important;
+    cursor: pointer;
+}
+.ast-mobile-header-wrap .pa-header-search-form,
+.ast-mobile-header-wrap .pa-header-custom-logo { display: none !important; }
+
 body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-right {
     width: 100% !important;
     max-width: 100% !important;
@@ -222,13 +451,8 @@ body.pa-sinova-classic-shell .site-title {
     line-height: 1.25 !important;
 }
 body.pa-sinova-classic-shell .site-title a,
-body.pa-sinova-classic-shell .site-description {
-    color: #ffffff !important;
-}
-body.pa-sinova-classic-shell .site-description {
-    color: #d1fae5 !important;
-    font-size: 12px !important;
-}
+body.pa-sinova-classic-shell .site-description { color: #ffffff !important; }
+body.pa-sinova-classic-shell .site-description { color: #d1fae5 !important; font-size: 12px !important; }
 body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1,
 body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu {
     display: flex !important;
@@ -311,21 +535,91 @@ body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .me
     background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
     color: #E5C158 !important;
 }
-body.pa-sinova-classic-shell .ast-mobile-header-wrap .ast-primary-header-bar {
-    padding: 10px 14px !important;
+body.pa-sinova-classic-shell .ast-mobile-header-wrap .ast-primary-header-bar { padding: 10px 14px !important; }
+body.pa-sinova-classic-shell .ast-mobile-menu-buttons .menu-toggle { background: rgba(201, 162, 39, 0.2) !important; border-color: #C9A227 !important; color: #E5C158 !important; }
+body.pa-sinova-classic-shell .ast-mobile-popup-drawer .ast-mobile-popup-inner { background: #043927 !important; }
+body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #ffffff !important; border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important; }
+
+/* Breadcrumb & Sidebar Halaman Dalam */
+.pa-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 10px;
+    background: #f4faf7;
+    border: 1px solid #d5e6dc;
+    font-size: 12.5px;
+    color: #475569;
+    margin-bottom: 18px;
 }
-body.pa-sinova-classic-shell .ast-mobile-menu-buttons .menu-toggle {
-    background: rgba(201, 162, 39, 0.2) !important;
-    border-color: #C9A227 !important;
+.pa-breadcrumb a { color: #056e4f; font-weight: 700; text-decoration: none; }
+.pa-breadcrumb a:hover { text-decoration: underline; }
+.pa-inner-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 22px;
+    align-items: start;
+}
+@media (max-width: 900px) { .pa-inner-layout { grid-template-columns: 1fr; } }
+.pa-inner-sidebar {
+    background: #ffffff;
+    border: 1px solid #d5e6dc;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 6px 18px rgba(4, 57, 39, 0.05);
+}
+.pa-sidebar-head {
+    padding: 13px 16px;
+    background: linear-gradient(135deg, #043927 0%, #056e4f 100%);
+    border-bottom: 3px solid #C9A227;
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 13.5px;
+}
+.pa-sidebar-list {
+    list-style: none;
+    margin: 0;
+    padding: 8px;
+}
+.pa-sidebar-list li { margin-bottom: 4px; }
+.pa-sidebar-list a {
+    display: block;
+    padding: 9px 12px;
+    border-radius: 8px;
+    color: #1e293b;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none !important;
+    transition: background-color 0.14s ease, color 0.14s ease;
+}
+.pa-sidebar-list a:hover { background: #ecfdf5; color: #056e4f; }
+.pa-sidebar-list a.is-current {
+    background: #056e4f;
     color: #E5C158 !important;
+    font-weight: 700;
 }
-body.pa-sinova-classic-shell .ast-mobile-popup-drawer .ast-mobile-popup-inner {
-    background: #043927 !important;
+.pa-inner-main { min-width: 0; }
+.pa-inner-main .pa-sinova-hub { margin-top: 0 !important; }
+
+/* Statistik Pengunjung Grid */
+.pa-vstats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 14px;
 }
-body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link {
-    color: #ffffff !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+@media (max-width: 600px) { .pa-vstats-grid { grid-template-columns: 1fr; } }
+.pa-vstat-box {
+    padding: 18px;
+    border-radius: 12px;
+    background: #f4faf7;
+    border: 1.5px solid #d5e6dc;
+    border-top: 4px solid #056e4f;
 }
+.pa-vstat-box span { display: block; font-size: 12px; font-weight: 700; color: #475569; }
+.pa-vstat-box strong { display: block; margin-top: 6px; font-size: 26px; font-weight: 900; color: #043927; }
 
 /* Jam Real-Time & Tombol Light/Dark Mode di Topbar */
 .pa-live-clock {
@@ -350,12 +644,9 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link {
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 .pa-topbar-theme-btn:hover,
-.pa-topbar-theme-btn[aria-pressed="true"] {
-    background: #E5C158;
-    color: #022c22;
-}
+.pa-topbar-theme-btn[aria-pressed="true"] { background: #E5C158; color: #022c22; }
 
-/* Topbar Institusional (Tampil di Astra maupun Block Theme) */
+/* Topbar Institusional */
 .pa-shell-topbar {
     background: #022c22;
     color: #d1fae5;
@@ -372,156 +663,28 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link {
     justify-content: space-between;
     gap: 8px 18px;
 }
-.pa-shell-topbar-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    align-items: center;
-}
-.pa-shell-topbar a {
-    color: #E5C158;
-    text-decoration: none;
-    font-weight: 600;
-}
-.pa-shell-topbar a:hover {
-    text-decoration: underline;
-}
+.pa-shell-topbar-links { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.pa-shell-topbar a { color: #E5C158; text-decoration: none; font-weight: 600; }
+.pa-shell-topbar a:hover { text-decoration: underline; }
 
-/* Fallback Header & Navbar saat Block Theme aktif (jika user belum memasang Astra) */
-.pa-shell-masthead {
-    background: linear-gradient(135deg, #043927 0%, #056e4f 100%);
-    color: #fff;
-    padding: 16px;
-    border-bottom: 3px solid #C9A227;
-}
-.pa-shell-brand {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    text-decoration: none;
-    color: #fff;
-}
-.pa-shell-emblem {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%);
-    color: #022c22;
-    font-weight: 900;
-    font-size: 17px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-.pa-shell-brand-title {
-    margin: 0;
-    font-size: clamp(1.05rem, 2vw, 1.4rem);
-    font-weight: 800;
-    color: #fff;
-    line-height: 1.2;
-}
-.pa-shell-brand-sub {
-    margin: 2px 0 0;
-    font-size: 12.5px;
-    color: #d1fae5;
-}
-.pa-shell-badge {
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: rgba(201, 162, 39, 0.16);
-    border: 1px solid #C9A227;
-    color: #E5C158;
-    font-size: 12px;
-    font-weight: 700;
-}
-.pa-shell-navwrap {
-    background: #ffffff;
-    border-bottom: 1px solid #d5e6dc;
-    box-shadow: 0 4px 14px rgba(4, 57, 39, 0.06);
-    position: sticky;
-    top: 0;
-    z-index: 9990;
-}
-.pa-shell-nav-row {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 0 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.pa-shell-menu-btn {
-    display: none;
-    margin: 8px 0;
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: 1.5px solid #056e4f;
-    background: #f4faf7;
-    color: #043927;
-    font-weight: 700;
-    cursor: pointer;
-}
-.pa-shell-menu {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px;
-}
+/* Fallback Header & Navbar saat Block Theme aktif */
+.pa-shell-masthead { background: linear-gradient(135deg, #043927 0%, #056e4f 100%); color: #fff; padding: 16px; border-bottom: 3px solid #C9A227; }
+.pa-shell-brand { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #fff; }
+.pa-shell-emblem { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%); color: #022c22; font-weight: 900; font-size: 17px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pa-shell-brand-title { margin: 0; font-size: clamp(1.05rem, 2vw, 1.4rem); font-weight: 800; color: #fff; line-height: 1.2; }
+.pa-shell-brand-sub { margin: 2px 0 0; font-size: 12.5px; color: #d1fae5; }
+.pa-shell-badge { padding: 6px 12px; border-radius: 999px; background: rgba(201, 162, 39, 0.16); border: 1px solid #C9A227; color: #E5C158; font-size: 12px; font-weight: 700; }
+.pa-shell-navwrap { background: #ffffff; border-bottom: 1px solid #d5e6dc; box-shadow: 0 4px 14px rgba(4, 57, 39, 0.06); position: sticky; top: 0; z-index: 9990; }
+.pa-shell-nav-row { max-width: 1180px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; }
+.pa-shell-menu-btn { display: none; margin: 8px 0; padding: 8px 14px; border-radius: 8px; border: 1.5px solid #056e4f; background: #f4faf7; color: #043927; font-weight: 700; cursor: pointer; }
+.pa-shell-menu { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
 .pa-shell-menu > li { position: relative; }
-.pa-shell-menu > li > a {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 13px 12px;
-    color: #043927;
-    text-decoration: none;
-    font-size: 13.5px;
-    font-weight: 700;
-    border-bottom: 2px solid transparent;
-}
-.pa-shell-menu > li > a:hover,
-.pa-shell-menu > li:focus-within > a {
-    color: #056e4f;
-    background: #f4faf7;
-    border-bottom-color: #C9A227;
-}
-.pa-shell-submenu {
-    list-style: none;
-    margin: 0;
-    padding: 6px;
-    position: absolute;
-    left: 0;
-    top: 100%;
-    min-width: 270px;
-    max-height: 70vh;
-    overflow-y: auto;
-    background: #ffffff;
-    border: 1px solid #d5e6dc;
-    border-top: 3px solid #C9A227;
-    border-radius: 0 0 12px 12px;
-    box-shadow: 0 14px 32px rgba(4, 57, 39, 0.16);
-    display: none;
-    z-index: 9995;
-}
-.pa-shell-menu > li:hover > .pa-shell-submenu,
-.pa-shell-menu > li:focus-within > .pa-shell-submenu { display: block; }
-.pa-shell-submenu a {
-    display: block;
-    padding: 8px 12px;
-    border-radius: 8px;
-    color: #1e293b;
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 600;
-}
-.pa-shell-submenu a:hover {
-    background: linear-gradient(135deg, #043927 0%, #056e4f 100%);
-    color: #E5C158;
-}
+.pa-shell-menu > li > a { display: flex; align-items: center; gap: 5px; padding: 13px 12px; color: #043927; text-decoration: none; font-size: 13.5px; font-weight: 700; border-bottom: 2px solid transparent; }
+.pa-shell-menu > li > a:hover, .pa-shell-menu > li:focus-within > a { color: #056e4f; background: #f4faf7; border-bottom-color: #C9A227; }
+.pa-shell-submenu { list-style: none; margin: 0; padding: 6px; position: absolute; left: 0; top: 100%; min-width: 270px; max-height: 70vh; overflow-y: auto; background: #ffffff; border: 1px solid #d5e6dc; border-top: 3px solid #C9A227; border-radius: 0 0 12px 12px; box-shadow: 0 14px 32px rgba(4, 57, 39, 0.16); display: none; z-index: 9995; }
+.pa-shell-menu > li:hover > .pa-shell-submenu, .pa-shell-menu > li:focus-within > .pa-shell-submenu { display: block; }
+.pa-shell-submenu a { display: block; padding: 8px 12px; border-radius: 8px; color: #1e293b; text-decoration: none; font-size: 13px; font-weight: 600; }
+.pa-shell-submenu a:hover { background: linear-gradient(135deg, #043927 0%, #056e4f 100%); color: #E5C158; }
 @media (max-width: 960px) {
     .pa-shell-menu-btn { display: inline-flex; }
     .pa-shell-nav-row { flex-direction: column; align-items: stretch; }
@@ -531,614 +694,112 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link {
 }
 
 /* CSS Beranda Portal Resmi Pengadilan Agama */
-.pa-starter-showcase {
-    max-width: 1180px;
-    margin: 6px auto 28px;
-    font-family: 'Inter', system-ui, sans-serif;
-}
-.pa-ticker-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    background: #f4faf7;
-    border: 1px solid #d5e6dc;
-    border-left: 4px solid #C9A227;
-    margin-bottom: 18px;
-    font-size: 12.5px;
-    color: #043927;
-}
-.pa-ticker-tag {
-    padding: 3px 9px;
-    border-radius: 6px;
-    background: #056e4f;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-}
-.pa-ticker-text {
-    flex: 1;
-    min-width: 220px;
-    font-weight: 600;
-}
-.pa-ticker-link {
-    color: #056e4f !important;
-    font-weight: 800;
-    text-decoration: none !important;
-    white-space: nowrap;
-}
+.pa-starter-showcase { max-width: 1180px; margin: 6px auto 28px; font-family: 'Inter', system-ui, sans-serif; }
+.pa-ticker-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-radius: 10px; background: #f4faf7; border: 1px solid #d5e6dc; border-left: 4px solid #C9A227; margin-bottom: 18px; font-size: 12.5px; color: #043927; }
+.pa-ticker-tag { padding: 3px 9px; border-radius: 6px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
+.pa-ticker-text { flex: 1; min-width: 220px; font-weight: 600; }
+.pa-ticker-link { color: #056e4f !important; font-weight: 800; text-decoration: none !important; white-space: nowrap; }
 .pa-ticker-link:hover { text-decoration: underline !important; }
-
-.pa-hero-banner {
-    padding: clamp(28px, 4.5vw, 48px) clamp(20px, 4vw, 42px);
-    border-radius: 18px;
-    background: radial-gradient(circle at top right, rgba(201, 162, 39, 0.24), transparent 52%),
-                linear-gradient(135deg, #022c22 0%, #044e3a 52%, #056e4f 100%);
-    border: 1.5px solid #C9A227;
-    color: #fff;
-    text-align: center;
-    box-shadow: 0 14px 34px rgba(4, 57, 39, 0.18);
-    margin-bottom: 30px;
-}
-.pa-hero-kicker {
-    display: inline-block;
-    padding: 5px 14px;
-    border-radius: 999px;
-    background: rgba(201, 162, 39, 0.18);
-    border: 1px solid #C9A227;
-    color: #E5C158;
-    font-size: 11.5px;
-    font-weight: 800;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    margin-bottom: 12px;
-}
-.pa-hero-title {
-    margin: 0 0 10px;
-    color: #fff;
-    font-size: clamp(1.5rem, 3.2vw, 2.3rem);
-    font-weight: 800;
-    line-height: 1.2;
-}
-.pa-hero-lead {
-    margin: 0 auto 22px;
-    max-width: 760px;
-    color: #d1fae5;
-    font-size: 0.98rem;
-    line-height: 1.55;
-}
-.pa-hero-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-}
-.pa-btn-gold {
-    display: inline-flex;
-    align-items: center;
-    padding: 11px 20px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%);
-    color: #022c22 !important;
-    font-weight: 800;
-    font-size: 13.5px;
-    text-decoration: none !important;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
-}
-.pa-btn-outline {
-    display: inline-flex;
-    align-items: center;
-    padding: 11px 18px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1.5px solid rgba(229, 193, 88, 0.55);
-    color: #fff !important;
-    font-weight: 700;
-    font-size: 13.5px;
-    text-decoration: none !important;
-}
+.pa-hero-banner { padding: clamp(28px, 4.5vw, 48px) clamp(20px, 4vw, 42px); border-radius: 18px; background: radial-gradient(circle at top right, rgba(201, 162, 39, 0.24), transparent 52%), linear-gradient(135deg, #022c22 0%, #044e3a 52%, #056e4f 100%); border: 1.5px solid #C9A227; color: #fff; text-align: center; box-shadow: 0 14px 34px rgba(4, 57, 39, 0.18); margin-bottom: 30px; }
+.pa-hero-kicker { display: inline-block; padding: 5px 14px; border-radius: 999px; background: rgba(201, 162, 39, 0.18); border: 1px solid #C9A227; color: #E5C158; font-size: 11.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 12px; }
+.pa-hero-title { margin: 0 0 10px; color: #fff; font-size: clamp(1.5rem, 3.2vw, 2.3rem); font-weight: 800; line-height: 1.2; }
+.pa-hero-lead { margin: 0 auto 22px; max-width: 760px; color: #d1fae5; font-size: 0.98rem; line-height: 1.55; }
+.pa-hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.pa-btn-gold { display: inline-flex; align-items: center; padding: 11px 20px; border-radius: 10px; background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%); color: #022c22 !important; font-weight: 800; font-size: 13.5px; text-decoration: none !important; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); }
+.pa-btn-outline { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); border: 1.5px solid rgba(229, 193, 88, 0.55); color: #fff !important; font-weight: 700; font-size: 13.5px; text-decoration: none !important; }
 .pa-btn-outline:hover { background: rgba(255, 255, 255, 0.2); }
-
-.pa-section-block {
-    margin-bottom: 32px;
-    text-align: center;
-}
-.pa-starter-heading {
-    margin: 0 0 4px;
-    color: #056e4f;
-    font-weight: 800;
-    font-size: 1.38rem;
-}
-.pa-starter-sub {
-    margin: 0 0 18px;
-    color: #4b5563;
-    font-weight: 600;
-    font-size: 0.92rem;
-}
-.pa-services-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-    text-align: left;
-}
+.pa-section-block { margin-bottom: 32px; text-align: center; }
+.pa-starter-heading { margin: 0 0 4px; color: #056e4f; font-weight: 800; font-size: 1.38rem; }
+.pa-starter-sub { margin: 0 0 18px; color: #4b5563; font-weight: 600; font-size: 0.92rem; }
+.pa-services-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; text-align: left; }
 @media (max-width: 960px) { .pa-services-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .pa-services-grid { grid-template-columns: 1fr; } }
-.pa-service-card {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 16px;
-    border-radius: 14px;
-    background: #ffffff;
-    border: 1.5px solid #d5e6dc;
-    border-top: 4px solid #056e4f;
-    color: #1f2937 !important;
-    text-decoration: none !important;
-    box-shadow: 0 6px 16px rgba(4, 57, 39, 0.06);
-    transition: transform 0.18s ease, border-color 0.18s ease;
-}
-.pa-service-card:hover {
-    transform: translateY(-3px);
-    border-color: #C9A227;
-}
-.pa-svc-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.pa-svc-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    background: #ecfdf5;
-    color: #056e4f;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
+.pa-service-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 14px; background: #ffffff; border: 1.5px solid #d5e6dc; border-top: 4px solid #056e4f; color: #1f2937 !important; text-decoration: none !important; box-shadow: 0 6px 16px rgba(4, 57, 39, 0.06); transition: transform 0.18s ease, border-color 0.18s ease; }
+.pa-service-card:hover { transform: translateY(-3px); border-color: #C9A227; }
+.pa-svc-top { display: flex; align-items: center; justify-content: space-between; }
+.pa-svc-icon { width: 34px; height: 34px; border-radius: 9px; background: #ecfdf5; color: #056e4f; display: inline-flex; align-items: center; justify-content: center; }
 .pa-svc-icon svg { width: 18px; height: 18px; }
-.pa-svc-badge {
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
-    color: #043927;
-    font-size: 10.5px;
-    font-weight: 800;
-}
-.pa-service-card strong {
-    font-size: 14.5px;
-    color: #043927;
-}
-.pa-service-card span:last-child {
-    font-size: 12.5px;
-    line-height: 1.45;
-    color: #4b5563;
-}
-
-/* Sambutan Pimpinan & Maklumat Pelayanan */
-.pa-welcome-grid {
-    display: grid;
-    grid-template-columns: 1.15fr 1fr;
-    gap: 18px;
-    margin-bottom: 32px;
-    text-align: left;
-}
+.pa-svc-badge { padding: 2px 8px; border-radius: 999px; background: #f8fafc; border: 1px solid #cbd5e1; color: #043927; font-size: 10.5px; font-weight: 800; }
+.pa-service-card strong { font-size: 14.5px; color: #043927; }
+.pa-service-card span:last-child { font-size: 12.5px; line-height: 1.45; color: #4b5563; }
+.pa-welcome-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 32px; text-align: left; }
 @media (max-width: 860px) { .pa-welcome-grid { grid-template-columns: 1fr; } }
-.pa-welcome-card {
-    padding: 22px;
-    border-radius: 16px;
-    background: #f4faf7;
-    border: 1.5px solid #d5e6dc;
-    border-left: 5px solid #056e4f;
-}
-.pa-wc-kicker {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: #056e4f;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 800;
-    margin-bottom: 8px;
-}
-.pa-welcome-card h3 {
-    margin: 0 0 10px;
-    color: #043927;
-    font-size: 1.15rem;
-    font-weight: 800;
-}
-.pa-wc-body {
-    margin: 0 0 14px;
-    color: #334155;
-    font-size: 0.92rem;
-    line-height: 1.6;
-}
-.pa-wc-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-.pa-wc-links a {
-    padding: 6px 12px;
-    border-radius: 8px;
-    background: #ffffff;
-    border: 1px solid #056e4f;
-    color: #043927 !important;
-    font-size: 12px;
-    font-weight: 700;
-    text-decoration: none !important;
-}
-.pa-wc-links a:hover {
-    background: #056e4f;
-    color: #ffffff !important;
-}
-.pa-maklumat-card {
-    padding: 22px;
-    border-radius: 16px;
-    background: linear-gradient(155deg, #043927 0%, #056e4f 100%);
-    border: 1.5px solid #C9A227;
-    color: #ffffff;
-}
-.pa-mk-kicker {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: rgba(229, 193, 88, 0.18);
-    border: 1px solid #C9A227;
-    color: #E5C158;
-    font-size: 11px;
-    font-weight: 800;
-    margin-bottom: 8px;
-}
-.pa-maklumat-card h3 {
-    margin: 0 0 8px;
-    color: #fff;
-    font-size: 1.15rem;
-    font-weight: 800;
-}
-.pa-mk-quote {
-    margin: 0 0 12px;
-    color: #e6f4ee;
-    font-size: 12.5px;
-    line-height: 1.55;
-    font-style: italic;
-}
-.pa-mk-hours {
-    list-style: none;
-    margin: 0 0 12px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.18);
-    font-size: 12.5px;
-    line-height: 1.65;
-}
-.pa-mk-btn {
-    color: #E5C158 !important;
-    font-size: 12.5px;
-    font-weight: 800;
-    text-decoration: none !important;
-}
+.pa-welcome-card { padding: 22px; border-radius: 16px; background: #f4faf7; border: 1.5px solid #d5e6dc; border-left: 5px solid #056e4f; }
+.pa-wc-kicker { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
+.pa-welcome-card h3 { margin: 0 0 10px; color: #043927; font-size: 1.15rem; font-weight: 800; }
+.pa-wc-body { margin: 0 0 14px; color: #334155; font-size: 0.92rem; line-height: 1.6; }
+.pa-wc-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.pa-wc-links a { padding: 6px 12px; border-radius: 8px; background: #ffffff; border: 1px solid #056e4f; color: #043927 !important; font-size: 12px; font-weight: 700; text-decoration: none !important; }
+.pa-wc-links a:hover { background: #056e4f; color: #ffffff !important; }
+.pa-maklumat-card { padding: 22px; border-radius: 16px; background: linear-gradient(155deg, #043927 0%, #056e4f 100%); border: 1.5px solid #C9A227; color: #ffffff; }
+.pa-mk-kicker { display: inline-block; padding: 3px 10px; border-radius: 999px; background: rgba(229, 193, 88, 0.18); border: 1px solid #C9A227; color: #E5C158; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
+.pa-maklumat-card h3 { margin: 0 0 8px; color: #fff; font-size: 1.15rem; font-weight: 800; }
+.pa-mk-quote { margin: 0 0 12px; color: #e6f4ee; font-size: 12.5px; line-height: 1.55; font-style: italic; }
+.pa-mk-hours { list-style: none; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.18); font-size: 12.5px; line-height: 1.65; }
+.pa-mk-btn { color: #E5C158 !important; font-size: 12.5px; font-weight: 800; text-decoration: none !important; }
 .pa-mk-btn:hover { text-decoration: underline !important; }
-
-/* Zona Integritas 6 Kartu Sejajar */
-.pa-zi-grid {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 12px;
-    align-items: stretch;
-}
+.pa-zi-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
 @media (max-width: 960px) { .pa-zi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .pa-zi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.pa-zi-card {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 18px 12px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #056e4f 0%, #043927 100%);
-    border: 1.5px solid #C9A227;
-    color: #fff !important;
-    text-decoration: none !important;
-    box-shadow: 0 6px 14px rgba(4, 57, 39, 0.18);
-    transition: transform 0.2s ease;
-}
-.pa-zi-card:hover {
-    transform: translateY(-3px);
-    border-color: #E5C158;
-}
-.pa-zi-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
-    color: #E5C158;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 8px;
-}
+.pa-zi-card { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 18px 12px; border-radius: 12px; background: linear-gradient(135deg, #056e4f 0%, #043927 100%); border: 1.5px solid #C9A227; color: #fff !important; text-decoration: none !important; box-shadow: 0 6px 14px rgba(4, 57, 39, 0.18); transition: transform 0.2s ease; }
+.pa-zi-card:hover { transform: translateY(-3px); border-color: #E5C158; }
+.pa-zi-icon { width: 34px; height: 34px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: #E5C158; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
 .pa-zi-icon svg { width: 18px; height: 18px; }
-.pa-zi-area {
-    font-size: 15px;
-    font-weight: 800;
-    color: #E5C158;
-    margin-bottom: 4px;
-}
-.pa-zi-desc {
-    font-size: 11.5px;
-    line-height: 1.32;
-    font-weight: 600;
-    min-height: 2.64em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-}
-
-/* Berita & Pengumuman Terkini */
-.pa-news-head {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-.pa-news-all {
-    color: #056e4f !important;
-    font-weight: 800;
-    font-size: 13px;
-    text-decoration: none !important;
-}
-.pa-news-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-    text-align: left;
-}
+.pa-zi-area { font-size: 15px; font-weight: 800; color: #E5C158; margin-bottom: 4px; }
+.pa-zi-desc { font-size: 11.5px; line-height: 1.32; font-weight: 600; min-height: 2.64em; display: flex; align-items: center; justify-content: center; text-align: center; }
+.pa-news-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; margin-bottom: 16px; }
+.pa-news-all { color: #056e4f !important; font-weight: 800; font-size: 13px; text-decoration: none !important; }
+.pa-news-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; text-align: left; }
 @media (max-width: 860px) { .pa-news-grid { grid-template-columns: 1fr; } }
-.pa-news-card {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 18px;
-    border-radius: 14px;
-    background: #ffffff;
-    border: 1px solid #d5e6dc;
-    box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05);
-}
-.pa-news-date {
-    font-size: 11.5px;
-    font-weight: 700;
-    color: #8A6808;
-}
-.pa-news-card h3 {
-    margin: 0;
-    font-size: 15px;
-    line-height: 1.4;
-}
-.pa-news-card h3 a {
-    color: #043927 !important;
-    text-decoration: none !important;
-}
+.pa-news-card { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #d5e6dc; box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05); }
+.pa-news-date { font-size: 11.5px; font-weight: 700; color: #8A6808; }
+.pa-news-card h3 { margin: 0; font-size: 15px; line-height: 1.4; }
+.pa-news-card h3 a { color: #043927 !important; text-decoration: none !important; }
 .pa-news-card h3 a:hover { color: #056e4f !important; }
-.pa-news-card p {
-    margin: 0;
-    font-size: 12.5px;
-    line-height: 1.5;
-    color: #4b5563;
-}
-.pa-news-more {
-    color: #056e4f !important;
-    font-size: 12px;
-    font-weight: 800;
-    text-decoration: none !important;
-}
-
-/* Split Survei + Pintasan SINOVA */
-.pa-split-section {
-    display: grid;
-    grid-template-columns: 360px 1fr;
-    gap: 20px;
-    align-items: stretch;
-}
+.pa-news-card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: #4b5563; }
+.pa-news-more { color: #056e4f !important; font-size: 12px; font-weight: 800; text-decoration: none !important; }
+.pa-split-section { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: stretch; }
 @media (max-width: 880px) { .pa-split-section { grid-template-columns: 1fr; } }
-.pa-starter-survey {
-    padding: 18px;
-    border-radius: 16px;
-    background: linear-gradient(155deg, #065f46 0%, #044e3a 52%, #022c22 100%);
-    border: 1.5px solid #C9A227;
-    color: #fff;
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-.pa-starter-survey .survey-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    font-size: 10.5px;
-    font-weight: 800;
-}
-.pa-starter-survey .survey-pill {
-    padding: 3px 9px;
-    border-radius: 999px;
-    background: rgba(229, 193, 88, 0.18);
-    border: 1px solid #C9A227;
-    color: #E5C158;
-}
-.pa-starter-survey .survey-period-badge {
-    padding: 3px 9px;
-    border-radius: 999px;
-    background: #d1fae5;
-    color: #022c22;
-}
-.pa-starter-survey h3 {
-    margin: 0 0 10px;
-    color: #fff;
-    font-size: 16.5px;
-    font-weight: 800;
-}
+.pa-starter-survey { padding: 18px; border-radius: 16px; background: linear-gradient(155deg, #065f46 0%, #044e3a 52%, #022c22 100%); border: 1.5px solid #C9A227; color: #fff; text-align: left; display: flex; flex-direction: column; justify-content: space-between; }
+.pa-starter-survey .survey-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 10.5px; font-weight: 800; }
+.pa-starter-survey .survey-pill { padding: 3px 9px; border-radius: 999px; background: rgba(229, 193, 88, 0.18); border: 1px solid #C9A227; color: #E5C158; }
+.pa-starter-survey .survey-period-badge { padding: 3px 9px; border-radius: 999px; background: #d1fae5; color: #022c22; }
+.pa-starter-survey h3 { margin: 0 0 10px; color: #fff; font-size: 16.5px; font-weight: 800; }
 .pa-starter-survey .survey-slide { display: none; }
 .pa-starter-survey .survey-slide.is-active { display: block; }
 .pa-starter-survey .survey-cards { display: flex; flex-direction: column; gap: 8px; }
-.pa-starter-survey .survey-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    color: #fff !important;
-    text-decoration: none !important;
-    font-size: 12px;
-}
-.pa-starter-survey a.survey-card:hover {
-    background: rgba(201, 162, 39, 0.22);
-    border-color: #E5C158;
-}
-.pa-starter-survey .survey-dots {
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-    margin-top: 14px;
-}
-.pa-starter-survey .survey-dot {
-    padding: 5px 11px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: transparent;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    cursor: pointer;
-}
-.pa-starter-survey .survey-dot.is-active {
-    background: #E5C158;
-    color: #022c22;
-    border-color: #E5C158;
-}
-.pa-hub-shortcuts {
-    background: #f4faf7;
-    border: 1.5px solid #d5e6dc;
-    border-radius: 16px;
-    padding: 20px;
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-.pa-hub-shortcuts-head h3 {
-    margin: 0 0 4px;
-    color: #043927;
-    font-size: 1.15rem;
-    font-weight: 800;
-}
-.pa-hub-shortcuts-head p {
-    margin: 0 0 14px;
-    color: #4b5563;
-    font-size: 0.88rem;
-}
-.pa-shortcut-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-}
+.pa-starter-survey .survey-card { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); color: #fff !important; text-decoration: none !important; font-size: 12px; }
+.pa-starter-survey a.survey-card:hover { background: rgba(201, 162, 39, 0.22); border-color: #E5C158; }
+.pa-starter-survey .survey-dots { display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
+.pa-starter-survey .survey-dot { padding: 5px 11px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.28); background: transparent; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
+.pa-starter-survey .survey-dot.is-active { background: #E5C158; color: #022c22; border-color: #E5C158; }
+.pa-hub-shortcuts { background: #f4faf7; border: 1.5px solid #d5e6dc; border-radius: 16px; padding: 20px; text-align: left; display: flex; flex-direction: column; justify-content: space-between; }
+.pa-hub-shortcuts-head h3 { margin: 0 0 4px; color: #043927; font-size: 1.15rem; font-weight: 800; }
+.pa-hub-shortcuts-head p { margin: 0 0 14px; color: #4b5563; font-size: 0.88rem; }
+.pa-shortcut-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 520px) { .pa-shortcut-grid { grid-template-columns: 1fr; } }
-.pa-shortcut-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 12px 14px;
-    border-radius: 10px;
-    background: #ffffff;
-    border: 1px solid #d5e6dc;
-    text-decoration: none !important;
-    transition: border-color 0.15s ease, transform 0.15s ease;
-}
+.pa-shortcut-item { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #d5e6dc; text-decoration: none !important; transition: border-color 0.15s ease, transform 0.15s ease; }
 .pa-shortcut-item:hover { border-color: #056e4f; transform: translateY(-2px); }
 .pa-shortcut-item span { font-size: 11px; font-weight: 800; color: #8A6808; text-transform: uppercase; }
 .pa-shortcut-item strong { font-size: 13.5px; color: #043927; }
 
-/* Footer 4 Kolom Resmi Pengadilan Agama */
-.pa-shell-footer {
-    background: #022c22;
-    color: #d1fae5;
-    border-top: 4px solid #C9A227;
-    padding: 34px 16px 24px;
-    font-size: 13px;
-}
-.pa-footer-grid {
-    max-width: 1180px;
-    margin: 0 auto 22px;
-    display: grid;
-    grid-template-columns: 1.4fr 1fr 1fr 1fr;
-    gap: 24px;
-}
+/* Footer 4 Kolom Resmi + Statistik Pengunjung */
+.pa-shell-footer { background: #022c22; color: #d1fae5; border-top: 4px solid #C9A227; padding: 34px 16px 24px; font-size: 13px; }
+.pa-footer-grid { max-width: 1180px; margin: 0 auto 22px; display: grid; grid-template-columns: 1.35fr 1fr 1fr 1.1fr; gap: 24px; }
 @media (max-width: 900px) { .pa-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 540px) { .pa-footer-grid { grid-template-columns: 1fr; } }
-.pa-footer-col h4 {
-    margin: 0 0 10px;
-    color: #E5C158;
-    font-size: 14px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-.pa-footer-col p {
-    margin: 0 0 8px;
-    line-height: 1.55;
-    color: #e2e8f0;
-    font-size: 12.5px;
-}
-.pa-footer-col ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
+.pa-footer-col h4 { margin: 0 0 10px; color: #E5C158; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
+.pa-footer-col p { margin: 0 0 8px; line-height: 1.55; color: #e2e8f0; font-size: 12.5px; }
+.pa-footer-col ul { list-style: none; margin: 0; padding: 0; }
 .pa-footer-col li { margin-bottom: 6px; }
-.pa-footer-col a {
-    color: #d1fae5;
-    text-decoration: none;
-    font-size: 12.5px;
-}
-.pa-footer-col a:hover {
-    color: #E5C158;
-    text-decoration: underline;
-}
-.pa-shell-footer-bottom {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding-top: 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    font-size: 12px;
-}
-.pa-shell-render-pill {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: rgba(229, 193, 88, 0.16);
-    border: 1px solid rgba(229, 193, 88, 0.45);
-    color: #E5C158;
-    font-size: 12px;
-    font-weight: 700;
-}
+.pa-footer-col a { color: #d1fae5; text-decoration: none; font-size: 12.5px; }
+.pa-footer-col a:hover { color: #E5C158; text-decoration: underline; }
+.pa-footer-vis-box { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(229, 193, 88, 0.25); font-size: 12px; }
+.pa-footer-vis-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.pa-footer-vis-row:last-child { margin-bottom: 0; }
+.pa-footer-vis-row strong { color: #E5C158; font-variant-numeric: tabular-nums; }
+.pa-shell-footer-bottom { max-width: 1180px; margin: 0 auto; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.14); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; }
+.pa-shell-render-pill { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(229, 193, 88, 0.16); border: 1px solid rgba(229, 193, 88, 0.45); color: #E5C158; font-size: 12px; font-weight: 700; }
 
 /* Dark Mode & Kontras Tinggi (Astra + Block Theme) */
 html[data-pa-theme="dark"] body,
@@ -1157,6 +818,8 @@ html[data-pa-theme="dark"] article.post {
 html[data-pa-theme="dark"] .pa-shell-navwrap,
 html[data-pa-theme="dark"] .pa-shell-submenu,
 html[data-pa-theme="dark"] .pa-ticker-bar,
+html[data-pa-theme="dark"] .pa-breadcrumb,
+html[data-pa-theme="dark"] .pa-inner-sidebar,
 html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu {
     background: #13221a !important;
     border-color: #2c4637 !important;
@@ -1165,18 +828,20 @@ html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .mai
 html[data-pa-theme="dark"] .pa-shell-menu > li > a,
 html[data-pa-theme="dark"] .pa-shell-submenu a,
 html[data-pa-theme="dark"] .pa-ticker-link,
+html[data-pa-theme="dark"] .pa-sidebar-list a,
+html[data-pa-theme="dark"] .pa-breadcrumb a,
 html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .menu-link {
     color: #e6f4ee !important;
 }
+html[data-pa-theme="dark"] .pa-sidebar-list a:hover { background: #1e3729; color: #E5C158 !important; }
 html[data-pa-theme="dark"] body.pa-sinova-classic-shell:not(.home) .entry-title,
-html[data-pa-theme="dark"] body.pa-sinova-block-shell .wp-block-post-title {
-    color: #E5C158 !important;
-}
+html[data-pa-theme="dark"] body.pa-sinova-block-shell .wp-block-post-title { color: #E5C158 !important; }
 html[data-pa-theme="dark"] .pa-service-card,
 html[data-pa-theme="dark"] .pa-welcome-card,
 html[data-pa-theme="dark"] .pa-news-card,
 html[data-pa-theme="dark"] .pa-hub-shortcuts,
-html[data-pa-theme="dark"] .pa-shortcut-item {
+html[data-pa-theme="dark"] .pa-shortcut-item,
+html[data-pa-theme="dark"] .pa-vstat-box {
     background: #182a20;
     border-color: #355241;
     color: #e6f4ee !important;
@@ -1186,18 +851,22 @@ html[data-pa-theme="dark"] .pa-welcome-card h3,
 html[data-pa-theme="dark"] .pa-news-card h3 a,
 html[data-pa-theme="dark"] .pa-hub-shortcuts-head h3,
 html[data-pa-theme="dark"] .pa-shortcut-item strong,
+html[data-pa-theme="dark"] .pa-vstat-box strong,
 html[data-pa-theme="dark"] .pa-starter-heading { color: #E5C158 !important; }
 html[data-pa-theme="dark"] .pa-service-card span:last-child,
 html[data-pa-theme="dark"] .pa-wc-body,
 html[data-pa-theme="dark"] .pa-news-card p,
 html[data-pa-theme="dark"] .pa-starter-sub,
+html[data-pa-theme="dark"] .pa-vstat-box span,
 html[data-pa-theme="dark"] .pa-hub-shortcuts-head p { color: #cbd5e1; }
 html[data-pa-theme="dark"] a { color: #E5C158; }
+
 html[data-pa-contrast="high"] body,
 html[data-pa-contrast="high"] .site,
 html[data-pa-contrast="high"] .wp-site-blocks { background: #ffffff !important; color: #000000 !important; }
 html[data-pa-contrast="high"] a { color: #003d29 !important; text-decoration: underline !important; }
 
+/* Dock Sarana Aksesibilitas & Pembaca Suara WCAG 2.2 AA */
 #pa-a11y-dock {
     position: fixed;
     left: 14px;
@@ -1228,16 +897,15 @@ html[data-pa-contrast="high"] a { color: #003d29 !important; text-decoration: un
     <?php
 }, 90);
 
-// 5. Topbar Institusional (Semua Tema) + Shell Header/Menu Saat Memakai Tema Blok WordPress
+// 8. Topbar Institusional (Semua Tema) + Shell Header/Menu Saat Memakai Tema Blok WordPress
 add_action('wp_body_open', static function () {
     if (is_admin()) {
         return;
     }
     $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $satker  = $cfg['satker_name'] ?? (get_bloginfo('name') ?: 'Pengadilan Agama');
-    $tagline = get_bloginfo('description') ?: 'Portal Keterbukaan Informasi Publik (SK Dirjen Badilag 2722/2026)';
+    $tagline = get_bloginfo('description') ?: 'Portal Resmi Keterbukaan Informasi Publik';
     $phone   = $cfg['phone'] ?? '';
-    $email   = $cfg['email'] ?? '';
 
     $wibNow  = new DateTimeImmutable('now', new DateTimeZone('Asia/Jakarta'));
     $daysId  = array('Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu');
@@ -1254,7 +922,7 @@ add_action('wp_body_open', static function () {
             <span>PTSP: <?php echo esc_html($phone ?: 'Senin–Jumat'); ?></span>
             <a href="<?php echo esc_url($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'); ?>" target="_blank" rel="noopener noreferrer">SIPP</a>
             <a href="<?php echo esc_url($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer">e-Court</a>
-            <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Survei Badilag</a>
+            <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Survei Pelayanan</a>
             <a href="<?php echo esc_url(wp_login_url()); ?>">Login Admin</a>
             <button type="button" id="pa-topbar-theme-btn" class="pa-topbar-theme-btn" aria-pressed="false" title="Ubah Mode Terang/Gelap">🌙 Mode Gelap</button>
         </div>
@@ -1294,11 +962,14 @@ add_action('wp_body_open', static function () {
                 <p class="pa-shell-brand-sub"><?php echo esc_html($tagline); ?></p>
             </div>
         </a>
-        <span class="pa-shell-badge">SK Dirjen Badilag 2722/2026</span>
+        <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>">
+            <input type="search" name="s" class="pa-header-search-input" placeholder="Cari informasi, berita..." value="<?php echo esc_attr(get_search_query()); ?>">
+            <button type="submit" class="pa-header-search-btn">Cari</button>
+        </form>
     </div>
 </header>
 <?php if (!empty($topItems)) : ?>
-<nav class="pa-shell-navwrap" aria-label="Menu Utama SINOVA">
+<nav class="pa-shell-navwrap" aria-label="Navigasi Utama Website">
     <div class="pa-shell-nav-row">
         <button type="button" class="pa-shell-menu-btn" id="pa-shell-menu-toggle" aria-expanded="false">☰ Menu Navigasi</button>
         <ul class="pa-shell-menu" id="pa-shell-menu-list">
@@ -1323,13 +994,14 @@ add_action('wp_body_open', static function () {
 <?php endif;
 }, 5);
 
-// 6. Footer 4 Kolom Resmi Pengadilan Agama + Toolbar Aksesibilitas & Slider JS
+// 9. Footer 4 Kolom Resmi + Statistik Pengunjung + Toolbar Aksesibilitas & Pembaca Suara Web Speech
 add_action('wp_footer', static function () {
     if (is_admin()) {
         return;
     }
     $cfg    = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $satker = $cfg['satker_name'] ?? (get_bloginfo('name') ?: 'Pengadilan Agama');
+    $vStats = pa_starter_get_visitor_stats();
     ?>
 <footer class="pa-shell-footer" role="contentinfo">
     <div class="pa-footer-grid">
@@ -1338,9 +1010,12 @@ add_action('wp_footer', static function () {
             <p><?php echo esc_html($cfg['address'] ?? 'Jl. Keadilan Raya No. 1'); ?></p>
             <p><strong>Telp / PTSP:</strong> <?php echo esc_html($cfg['phone'] ?? '-'); ?></p>
             <p><strong>Email:</strong> <?php echo esc_html($cfg['email'] ?? '-'); ?></p>
+            <?php if (!empty($cfg['hearing_hours'])) : ?>
+                <p><strong>Jam Sidang:</strong> <?php echo esc_html($cfg['hearing_hours']); ?></p>
+            <?php endif; ?>
         </div>
         <div class="pa-footer-col">
-            <h4>Transparansi SINOVA</h4>
+            <h4>Transparansi Publik</h4>
             <ul>
                 <li><a href="<?php echo esc_url(home_url('/lra/')); ?>">Laporan Realisasi Anggaran</a></li>
                 <li><a href="<?php echo esc_url(home_url('/dipa/')); ?>">Dokumen DIPA 01 &amp; 04</a></li>
@@ -1360,26 +1035,31 @@ add_action('wp_footer', static function () {
             </ul>
         </div>
         <div class="pa-footer-col">
-            <h4>Tautan Lembaga</h4>
+            <h4>Ekosistem &amp; Statistik</h4>
             <ul>
                 <li><a href="https://www.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Mahkamah Agung RI</a></li>
                 <li><a href="https://badilag.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Ditjen Badilag MA RI</a></li>
                 <li><a href="https://siwas.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">SIWAS Mahkamah Agung</a></li>
-                <li><a href="https://putusan3.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Direktori Putusan</a></li>
-                <li><a href="https://www.lapor.go.id/" target="_blank" rel="noopener noreferrer">SP4N-LAPOR! Nasional</a></li>
             </ul>
+            <div class="pa-footer-vis-box">
+                <div class="pa-footer-vis-row"><span>Hari Ini:</span><strong id="pa-vis-today"><?php echo esc_html(number_format($vStats['today'], 0, ',', '.')); ?></strong></div>
+                <div class="pa-footer-vis-row"><span>Bulan Ini:</span><strong id="pa-vis-month"><?php echo esc_html(number_format($vStats['month'], 0, ',', '.')); ?></strong></div>
+                <div class="pa-footer-vis-row"><span>Total Kunjungan:</span><strong id="pa-vis-total"><?php echo esc_html(number_format($vStats['total'], 0, ',', '.')); ?></strong></div>
+            </div>
         </div>
     </div>
     <div class="pa-shell-footer-bottom">
-        <span>&copy; <?php echo esc_html((string) date('Y')); ?> <?php echo esc_html($satker); ?> · Keterbukaan Informasi Publik SK Dirjen Badilag 2722/2026</span>
+        <span>&copy; <?php echo esc_html((string) date('Y')); ?> <?php echo esc_html($satker); ?> · Portal Resmi Keterbukaan Informasi Publik</span>
         <span class="pa-shell-render-pill">Rendering : <?php echo esc_html(timer_stop(0, 3)); ?> detik.</span>
     </div>
 </footer>
-<div id="pa-a11y-dock" role="region" aria-label="Menu Aksesibilitas Website">
+<div id="pa-a11y-dock" role="region" aria-label="Sarana Aksesibilitas Website">
     <button type="button" id="pa-btn-dark" aria-pressed="false" title="Ubah Mode Terang/Gelap">Mode Gelap</button>
     <button type="button" id="pa-btn-contrast" aria-pressed="false" title="Kontras Tinggi WCAG">Kontras</button>
     <button type="button" id="pa-btn-font-up" title="Perbesar Teks">A+</button>
-    <button type="button" id="pa-btn-font-reset" title="Reset Ukuran Teks">Reset</button>
+    <button type="button" id="pa-btn-font-down" title="Perkecil Teks">A-</button>
+    <button type="button" id="pa-btn-speak" aria-pressed="false" title="Pembaca Layar Bahasa Indonesia">🔊 Bacakan</button>
+    <button type="button" id="pa-btn-font-reset" title="Reset Tampilan Standar">Reset</button>
 </div>
 <script id="pa-a11y-js">
 (function(){
@@ -1388,6 +1068,8 @@ add_action('wp_footer', static function () {
     var btnTopTheme = document.getElementById('pa-topbar-theme-btn');
     var btnContrast = document.getElementById('pa-btn-contrast');
     var btnUp = document.getElementById('pa-btn-font-up');
+    var btnDown = document.getElementById('pa-btn-font-down');
+    var btnSpeak = document.getElementById('pa-btn-speak');
     var btnReset = document.getElementById('pa-btn-font-reset');
     var menuToggle = document.getElementById('pa-shell-menu-toggle');
     var menuList = document.getElementById('pa-shell-menu-list');
@@ -1403,6 +1085,21 @@ add_action('wp_footer', static function () {
         };
         tickClock();
         setInterval(tickClock, 1000);
+    }
+
+    if(window.fetch){
+        fetch('<?php echo esc_url(rest_url('pa-portal/v1/visit')); ?>', { method: 'POST', credentials: 'same-origin' })
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(d){
+                if(!d || typeof d.total === 'undefined') return;
+                var fmt = function(n){ return Number(n).toLocaleString('id-ID'); };
+                ['today','month','total'].forEach(function(k){
+                    var f = document.getElementById('pa-vis-' + k);
+                    var p = document.getElementById('pa-page-vis-' + k);
+                    if(f) f.textContent = fmt(d[k]);
+                    if(p) p.textContent = fmt(d[k]);
+                });
+            }).catch(function(){});
     }
 
     if(menuToggle && menuList){
@@ -1453,11 +1150,41 @@ add_action('wp_footer', static function () {
             try{ localStorage.setItem('pa_starter_zoom', nxt); }catch(e){}
         });
     }
+    if(btnDown){
+        btnDown.addEventListener('click', function(){
+            var cur = parseFloat(getComputedStyle(root).fontSize) || 16;
+            var nxt = Math.max(12, cur - 2) + 'px';
+            root.style.fontSize = nxt;
+            try{ localStorage.setItem('pa_starter_zoom', nxt); }catch(e){}
+        });
+    }
+    if(btnSpeak && 'speechSynthesis' in window){
+        btnSpeak.addEventListener('click', function(){
+            if(window.speechSynthesis.speaking){
+                window.speechSynthesis.cancel();
+                btnSpeak.setAttribute('aria-pressed', 'false');
+                btnSpeak.textContent = '🔊 Bacakan';
+                return;
+            }
+            var mainEl = document.querySelector('main, .entry-content, .pa-starter-showcase');
+            var txt = mainEl ? (mainEl.innerText || mainEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 1800) : document.title;
+            if(!txt) return;
+            var utter = new SpeechSynthesisUtterance(txt);
+            utter.lang = 'id-ID';
+            utter.rate = 0.98;
+            utter.onend = function(){ btnSpeak.setAttribute('aria-pressed', 'false'); btnSpeak.textContent = '🔊 Bacakan'; };
+            btnSpeak.setAttribute('aria-pressed', 'true');
+            btnSpeak.textContent = '⏹ Stop Suara';
+            window.speechSynthesis.speak(utter);
+        });
+    }
     if(btnReset){
         btnReset.addEventListener('click', function(){
             root.style.fontSize = '';
             root.removeAttribute('data-pa-theme');
             root.removeAttribute('data-pa-contrast');
+            if('speechSynthesis' in window) window.speechSynthesis.cancel();
+            if(btnSpeak){ btnSpeak.setAttribute('aria-pressed', 'false'); btnSpeak.textContent = '🔊 Bacakan'; }
             try{ localStorage.removeItem('pa_starter_zoom'); localStorage.removeItem('pa_starter_theme'); localStorage.removeItem('pa_starter_contrast'); }catch(e){}
             syncState();
         });

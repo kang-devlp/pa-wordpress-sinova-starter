@@ -636,7 +636,7 @@ function pa_sinova_render_year_card(int $year, array $subGroups, array $grid, st
     }
 
     $cardClass = $featured ? 'pa-sinova-year-card is-featured' : 'pa-sinova-year-card';
-    $badgeText = $year >= 2027 ? 'Rumah Tahun 2027 (Siap Diisi)' : ($year === (int) date('Y') ? 'Tahun Berjalan' : 'Arsip Tahun ' . $year);
+    $badgeText = $year > (int) date('Y') ? 'Arsip Terjadwal ' . $year : ($year === (int) date('Y') ? 'Tahun Berjalan' : 'Arsip Tahun ' . $year);
 
     ob_start();
     ?>
@@ -723,7 +723,7 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
     ?>
     <div id="pa-sinova-hub" class="pa-sinova-hub" data-slug="<?php echo esc_attr($slug); ?>">
         <header class="pa-sinova-hero">
-            <span class="pa-sinova-kicker">Keterbukaan Informasi Publik · SK Dirjen Badilag 2722/2026</span>
+            <span class="pa-sinova-kicker">Keterbukaan Informasi Publik · Arsip Dokumen Resmi</span>
             <h2><?php echo esc_html($cfg['title']); ?></h2>
             <p class="pa-sinova-sub"><?php echo esc_html($cfg['subtitle']); ?></p>
             <div class="pa-sinova-summary">

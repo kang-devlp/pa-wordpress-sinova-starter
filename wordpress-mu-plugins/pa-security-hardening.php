@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: PA SINOVA Starter - Security Baseline, Anti-Judol WAF & Dual-Mode CAPTCHA
- * Description: Baseline keamanan SK Dirjen Badilag 2722/2026: disable file edit, sembunyikan generator, blokir enumerasi user, Anti-Judol WAF, serta Dual-Mode Login CAPTCHA (Turnstile / Math Fallback + Honeypot).
- * Version: 1.0.0-starter
+ * Plugin Name: PA SINOVA Starter - Security Hardening, Anti-Judol WAF, Rate Limiter & Dual-Mode CAPTCHA
+ * Description: Pengamanan berlapis portal Pengadilan Agama: Brute-Force Rate Limiter (5x gagal/15 menit), OWASP Headers & HSTS, pelindung folder unggahan (.htaccess), blokir XML-RPC/enumerasi user, Anti-Judol WAF, serta Dual-Mode Login CAPTCHA (Turnstile / Math Fallback + Honeypot).
+ * Version: 1.2.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -10,10 +10,45 @@ defined('ABSPATH') || exit;
 defined('DISALLOW_FILE_EDIT') || define('DISALLOW_FILE_EDIT', true);
 @ini_set('display_errors', '0');
 
+if (function_exists('header_remove') && !headers_sent()) {
+    @header_remove('X-Powered-By');
+}
+
 add_filter('xmlrpc_enabled', '__return_false');
 remove_action('wp_head', 'wp_generator');
+remove_action('wp_head', 'rsd_link');
+remove_action('wp_head', 'wlwmanifest_link');
+remove_action('wp_head', 'wp_shortlink_wp_head');
+remove_action('wp_head', 'rest_output_link_wp_head', 10);
+remove_action('wp_head', 'wp_oembed_add_discovery_links', 10);
 add_filter('the_generator', '__return_empty_string');
 add_filter('elementor/frontend/print_generator_tag', '__return_false', 999);
+
+function pa_starter_client_ip_hash(): string {
+    $ip   = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+    $salt = function_exists('wp_salt') ? wp_salt('auth') : __FILE__;
+    return substr(hash_hmac('sha256', $ip, $salt), 0, 24);
+}
+
+function pa_starter_security_log(string $event, string $detail = ''): void {
+    if (!function_exists('get_option') || !function_exists('update_option')) {
+        return;
+    }
+    $logs = get_option('pa_starter_security_logs', array());
+    if (!is_array($logs)) {
+        $logs = array();
+    }
+    array_unshift($logs, array(
+        'at'      => gmdate('Y-m-d H:i:s') . ' UTC',
+        'event'   => sanitize_key($event),
+        'detail'  => substr(preg_replace('/[\r\n]+/', ' ', $detail), 0, 140),
+        'ip_hash' => substr(hash('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? '')), 0, 12),
+    ));
+    if (count($logs) > 40) {
+        $logs = array_slice($logs, 0, 40);
+    }
+    update_option('pa_starter_security_logs', $logs, false);
+}
 
 add_action('wp_head', static function () {
     if (!is_admin()) ob_start();
@@ -31,10 +66,14 @@ add_filter('wp_headers', static function ($headers) {
     if (!is_array($headers)) {
         $headers = array();
     }
-    unset($headers['X-Pingback'], $headers['x-pingback']);
+    unset($headers['X-Pingback'], $headers['x-pingback'], $headers['X-Powered-By']);
     $headers['X-Content-Type-Options'] = 'nosniff';
     $headers['X-Frame-Options']        = 'SAMEORIGIN';
     $headers['Referrer-Policy']        = 'strict-origin-when-cross-origin';
+    $headers['Permissions-Policy']     = 'camera=(), microphone=(), geolocation=(), payment=()';
+    if (function_exists('is_ssl') && is_ssl()) {
+        $headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
+    }
     return $headers;
 });
 
@@ -56,14 +95,42 @@ add_action('template_redirect', static function () {
     }
 }, 1);
 
+// Amankan direktori dokumen agar tidak bisa mengeksekusi PHP ataupun directory listing
+add_action('admin_init', static function () {
+    if (get_option('pa_starter_uploads_hardened') === '1') {
+        return;
+    }
+    $docsRoot = WP_CONTENT_DIR . '/uploads/sinova-docs';
+    if (!is_dir($docsRoot)) {
+        wp_mkdir_p($docsRoot);
+    }
+    $hta = $docsRoot . '/.htaccess';
+    if (is_dir($docsRoot) && !is_file($hta)) {
+        $rules = "Options -Indexes\n"
+            . "<FilesMatch \"\\.(php[0-9]*|phtml|phar|pht|cgi|pl|py|sh|asp|aspx)$\">\n"
+            . "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n"
+            . "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n"
+            . "</FilesMatch>\n"
+            . "<IfModule mod_headers.c>\n  Header set X-Content-Type-Options \"nosniff\"\n</IfModule>\n";
+        @file_put_contents($hta, $rules, LOCK_EX);
+    }
+    if (is_dir($docsRoot) && !is_file($docsRoot . '/index.php')) {
+        @file_put_contents($docsRoot . '/index.php', "<?php // Silence is golden.\n", LOCK_EX);
+    }
+    update_option('pa_starter_uploads_hardened', '1', false);
+});
+
 // Layer 1 WAF: Anti-Judol & Webshell Probes
 (static function () {
+    if (PHP_SAPI === 'cli') {
+        return;
+    }
     $rawUri  = (string) ($_SERVER['REQUEST_URI'] ?? '');
     $rawQs   = (string) ($_SERVER['QUERY_STRING'] ?? '');
     $ua      = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
     $decoded = strtolower(rawurldecode($rawUri . ' ' . $rawQs));
 
-    $block = static function ($reason) {
+    $block = static function ($reason) use ($rawUri) {
         if (!headers_sent()) {
             status_header(403);
             header('Content-Type: application/json; charset=UTF-8');
@@ -99,10 +166,12 @@ add_filter('wp_insert_post_data', static function ($data) {
     if (!is_array($data)) return $data;
     $combined = (string) ($data['post_title'] ?? '') . "\n" . (string) ($data['post_content'] ?? '');
     if (preg_match('/\b(slot\s+gacor|judi\s+online|situs\s+toto|bandar\s+togel|rtp\s+live|daftar\s+slot|maxwin\s+hari\s+ini)\b/i', $combined)) {
+        pa_starter_security_log('content-judol-blocked', (string) ($data['post_title'] ?? ''));
         wp_die('Penyimpanan dibatalkan oleh Anti-Judol Guard.', 'Blokir Keamanan', array('response' => 403));
     }
     $host = preg_quote((string) parse_url(home_url('/'), PHP_URL_HOST), '/');
     if ($host !== '' && preg_match('/<[^>]+style=["\'][^"\']*(display\s*:\s*none|visibility\s*:\s*hidden|left\s*:\s*-\d{3,}px)[^"\']*["\'][^>]*>.*?<a\s+[^>]*href=["\']https?:\/\/(?!(?:[a-z0-9.-]*\.)?' . $host . '\b)/is', (string) ($data['post_content'] ?? ''))) {
+        pa_starter_security_log('content-cloaking-blocked', (string) ($data['post_title'] ?? ''));
         wp_die('Penyimpanan dibatalkan oleh Cloaking Guard.', 'Blokir Keamanan', array('response' => 403));
     }
     return $data;
@@ -111,12 +180,13 @@ add_filter('wp_insert_post_data', static function ($data) {
 add_filter('wp_handle_upload_prefilter', static function ($file) {
     if (!is_array($file) || empty($file['name'])) return $file;
     if (preg_match('/\.(php[0-9]*|phtml|phar|pht|cgi|pl|py|sh|asp|aspx|htaccess)(\.|$)/i', (string) $file['name'])) {
+        pa_starter_security_log('upload-ext-blocked', (string) $file['name']);
         $file['error'] = 'Ekstensi berkas ditolak kebijakan keamanan.';
     }
     return $file;
 });
 
-// Layer 3: Dual-Mode Login CAPTCHA (Turnstile / Math Fallback + Honeypot)
+// Layer 3: Brute-Force Login Rate Limiter (5x gagal / 15 menit) + Dual-Mode Login CAPTCHA
 function pa_starter_login_turnstile(): ?array {
     if (!function_exists('pa_sinova_get_settings')) return null;
     $cfg = pa_sinova_get_settings();
@@ -152,7 +222,15 @@ add_action('login_form', static function () {
 add_filter('authenticate', static function ($user) {
     if ((defined('WP_CLI') && WP_CLI) || (defined('REST_REQUEST') && REST_REQUEST) || (defined('XMLRPC_REQUEST') && XMLRPC_REQUEST) || wp_doing_cron()) return $user;
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !isset($_POST['log'], $_POST['pwd'])) return $user;
-    if (!empty($_POST['pa_hp_website'])) return new WP_Error('pa_captcha_failed', '<strong>Keamanan:</strong> Verifikasi anti-bot gagal.');
+
+    $ipHash = pa_starter_client_ip_hash();
+    if (get_transient('pa_bf_lock_' . $ipHash)) {
+        return new WP_Error('pa_rate_limited', '<strong>Keamanan:</strong> Terlalu banyak percobaan login gagal. Silakan tunggu 15 menit.');
+    }
+    if (!empty($_POST['pa_hp_website'])) {
+        pa_starter_security_log('login-honeypot', sanitize_user((string) $_POST['log']));
+        return new WP_Error('pa_captcha_failed', '<strong>Keamanan:</strong> Verifikasi anti-bot gagal.');
+    }
 
     $ts = pa_starter_login_turnstile();
     if ($ts !== null) {
@@ -163,6 +241,7 @@ add_filter('authenticate', static function ($user) {
             'body'    => array('secret' => $ts['secret_key'], 'response' => $resp),
         ));
         if (is_wp_error($res) || empty(json_decode((string) wp_remote_retrieve_body($res), true)['success'])) {
+            pa_starter_security_log('login-turnstile-fail', sanitize_user((string) $_POST['log']));
             return new WP_Error('pa_turnstile_failed', '<strong>Keamanan:</strong> Token Turnstile tidak valid.');
         }
         return $user;
@@ -176,7 +255,24 @@ add_filter('authenticate', static function ($user) {
     }
     $expected = hash_hmac('sha256', $ans . '|' . $parts[0] . '|' . $parts[1], wp_salt('auth'));
     if (!hash_equals($expected, $parts[2])) {
+        pa_starter_security_log('login-captcha-wrong', sanitize_user((string) $_POST['log']));
         return new WP_Error('pa_captcha_wrong', '<strong>Keamanan:</strong> Jawaban verifikasi salah.');
     }
     return $user;
 }, 15);
+
+add_action('wp_login_failed', static function ($username) {
+    $ipHash = pa_starter_client_ip_hash();
+    $fails  = (int) get_transient('pa_bf_fail_' . $ipHash) + 1;
+    set_transient('pa_bf_fail_' . $ipHash, $fails, 900);
+    if ($fails >= 5) {
+        set_transient('pa_bf_lock_' . $ipHash, 1, 900);
+        pa_starter_security_log('login-ratelimit-lock', (string) $username . " ({$fails}x gagal)");
+    }
+});
+
+add_action('wp_login', static function () {
+    $ipHash = pa_starter_client_ip_hash();
+    delete_transient('pa_bf_fail_' . $ipHash);
+    delete_transient('pa_bf_lock_' . $ipHash);
+});
