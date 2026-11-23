@@ -479,7 +479,7 @@ class WordPressSinovaSyncService
         return [
             // A.1 INFORMASI BERKALA (24 kriteria, bobot 40%)
             ['B1.1', 'berkala', 'Rencana Aksi Kinerja (5 tahun)', 'PTIP', '/kesekretariatan/rencana-aksi-kinerja/', 6218, 'rencana-aksi', 'sakip_5y', 'Arsip 5 tahunan + slot 2027'],
-            ['B1.2', 'berkala', 'Laporan Tahunan / Pelaksanaan Kegiatan', 'PTIP', '/informasi-umum/laporan-tahunan/', 5008, null, 'page_ok', 'Halaman Laporan Tahunan PA Semarang aktif (HTTP 200)'],
+            ['B1.2', 'berkala', 'Laporan Tahunan / Pelaksanaan Kegiatan', 'PTIP', '/informasi-umum/laporan-tahunan/', 5008, null, 'page_ok', 'Halaman Laporan Tahunan Satker Pengadilan Agama aktif (HTTP 200)'],
             ['B2.1', 'berkala', 'Tautan & Integrasi SIPP Satker', 'Kepaniteraan', 'https://sipp.pa-contoh.go.id/', 3857, null, 'page_ok', 'Tautan SIPP aktif pada Beranda & Mega Menu'],
             ['B2.2', 'berkala', 'Agenda / Jadwal Persidangan Harian', 'Kepaniteraan', '/kepaniteraan/agenda-jadwal-persidangan/', 5135, null, 'page_ok', 'Terhubung langsung ke jadwal sidang SIPP'],
             ['B2.3', 'berkala', 'Statistik Perkara per Bulan', 'Kepaniteraan', '/kepaniteraan/statistik-perkara/', 5165, null, 'page_ok', 'Embed statistik perkara Portal Internal aktif'],
@@ -506,11 +506,11 @@ class WordPressSinovaSyncService
             // A.2 INFORMASI WAJIB (11 kriteria, bobot 20%)
             ['W1.1', 'wajib', 'Visi dan Misi Pengadilan', 'Kesekretariatan', '/profil-pengadilan/visi-dan-misi/', 4715, null, 'page_ok', 'Halaman profil Visi & Misi terpublikasi'],
             ['W1.2', 'wajib', 'Tugas Pokok dan Fungsi Pengadilan', 'Kesekretariatan', '/profil-pengadilan/tugas-pokok-dan-fungsi-pengadilan/', 4854, null, 'page_ok', 'Halaman Tupoksi Pengadilan terpublikasi'],
-            ['W1.3', 'wajib', 'Wilayah Yurisdiksi & Peta Wilayah', 'Kepaniteraan', '/profil-pengadilan/wilayah-yurisdiksi/', 4713, null, 'page_ok', 'Peta & cakupan wilayah yurisdiksi PA Semarang'],
+            ['W1.3', 'wajib', 'Wilayah Yurisdiksi & Peta Wilayah', 'Kepaniteraan', '/profil-pengadilan/wilayah-yurisdiksi/', 4713, null, 'page_ok', 'Peta & cakupan wilayah yurisdiksi Satker Pengadilan Agama'],
             ['W1.4', 'wajib', 'Struktur Organisasi (Bagan, Nama & Jabatan)', 'Kesekretariatan', '/profil-pengadilan/struktur-organisasi/', 4810, null, 'page_ok', 'Bagan struktur organisasi resmi aktif'],
             ['W1.5', 'wajib', 'Alamat Lengkap, Telepon, Email & Foto Gedung', 'Kesekretariatan', '/profil-pengadilan/alamat-dan-kontak/', 4994, null, 'page_ok', 'Identitas kontak resmi tercantum di halaman & footer'],
             ['W2.1', 'wajib', 'Informasi & Tautan e-Court Mahkamah Agung', 'Kepaniteraan', '/kepaniteraan/e-court/', 5069, null, 'page_ok', 'Panduan & tautan resmi e-Court aktif'],
-            ['W2.2', 'wajib', 'Tautan Direktori Putusan Satker', 'Kepaniteraan', '/kepaniteraan/direktori-putusan-2/', 5094, null, 'page_ok', 'Tautan ke Direktori Putusan PA Semarang aktif'],
+            ['W2.2', 'wajib', 'Tautan Direktori Putusan Satker', 'Kepaniteraan', '/kepaniteraan/direktori-putusan-2/', 5094, null, 'page_ok', 'Tautan ke Direktori Putusan Satker Pengadilan Agama aktif'],
             ['W2.3', 'wajib', 'Prosedur Berperkara (Semua Jenis Perkara)', 'Kepaniteraan', '/kepaniteraan/prosedur-berperkara/', 5086, null, 'page_ok', 'Alur pendaftaran & prosedur berperkara aktif'],
             ['W2.4', 'wajib', 'Rincian Biaya Proses Berperkara & Radius', 'Kepaniteraan', '/kepaniteraan/biaya-proses-berperkara/', 5264, null, 'page_ok', 'Rincian SK Panjar & Radius panggilan terpublikasi'],
             ['W3.1', 'wajib', 'Profil Pejabat, Pegawai, & Pejabat Pengawas', 'Kepegawaian & Ortala', '/kesekretariatan/profil-pegawai/', 4692, null, 'page_ok', 'Profil pegawai & daftar pejabat pengawas (#5820) aktif'],

@@ -1,93 +1,105 @@
-# Starter Kit Website WordPress & Panel Kepatuhan SINOVA (SK Dirjen Badilag 2722/2026)
+# Starter Kit Website WordPress & Arsip Dokumen SINOVA (SK Dirjen Badilag 2722/2026)
 
-Paket *starter* **open source** (lisensi MIT) untuk satuan kerja **Pengadilan Agama (Tingkat Pertama)** berbasis **WordPress** yang dioptimasi penuh untuk penilaian **SINOVA – SK Dirjen Badilag No. 2722/DJA/SK.TI1/X/2026**:
+Paket starter **open source** (Lisensi MIT) untuk membantu satuan kerja **Pengadilan Agama** membangun website resmi berbasis WordPress sesuai struktur informasi **SK Dirjen Badilag Nomor 2722/DJA/SK.TI1/X/2026**.
 
-* **Arsitektur Hijau Gelap (`#056e4f`) & Royal Gold (`#C9A227`)** sesuai standar tata letak SK 2722/2026.
-* **SINOVA Document Hub — 23 Modul ("Rumah s.d. 2027"):** Slot terstruktur DIPA 01/04, LIPA 7A/B/C, Triwulan SKM/SPAK/SPKP (`TW I–IV`), Semester I/II CALK, dan SAKIP 5 Tahunan — mendukung **Upload PDF langsung ke hosting** maupun tautan Google Drive.
-* **1-Click Seeder Struktur Baku & Menu Utama:** Sekali klik langsung membuat **23 halaman dokumen SINOVA + 12 halaman Informasi Wajib (`[LENGKAPI]`) + Menu Utama hierarkis** di WordPress kosong (Astra Free / tema standar).
-* **Dashboard Kepatuhan 35 Kriteria Lampiran II (`B1.1–W4.1`) + Salin URL Instan:** Tersedia dalam **2 mode**:
-  1. **Mode Mandiri (WordPress Only):** Langsung kelola dokumen, cek skor 35 kriteria, dan salin URL dari menu **WP Admin → SINOVA Hub**.
-  2. **Mode Portal Internal Terpisah (Laravel + Vue + REST API HMAC-SHA256):** Hubungkan aplikasi internal kantor (seperti portal manajemen internal satker) agar operator bisa mengunggah dokumen & memantau link *Google Drive* terkunci tanpa perlu membuka `/wp-admin` publik.
-* **Performa & Auto-Capture Ready:** Cache HTML statis *early-serve* + *Stale-While-Revalidate* (`Rendering ~0.02–0.05 detik`), penguncian visibilitas seksi (*capture-safe* agar bot SINOVA tidak memotret layar kosong), Dark Mode + Kontras Tinggi WCAG AAA.
-* **Keamanan Berlapis:** OWASP headers, pemblokir XML-RPC / enumerasi user, Anti-Judol WAF, serta CAPTCHA login ganda (**Cloudflare Turnstile** + fallback soal matematika offline).
-
-> **Catatan Keterbukaan & Keamanan:** Repositori ini **100% kosongan dan bebas rahasia** — tidak berisi `wp-config.php`, kredensial database, plugin komersial/berbayar, maupun data satker mana pun. Seluruh aset tema/plugin pendukung menggunakan WordPress inti atau tema gratis resmi.
+Seluruh fitur dikemas dalam 5 berkas `mu-plugins` tanpa ketergantungan plugin berbayar, serta dapat dipakai **langsung dari WP Admin** maupun dihubungkan ke aplikasi internal satker berbasis Laravel.
 
 ---
 
-## Struktur Folder
+## Fitur Utama
+
+1. **Tema Institusional Hijau Gelap & Emas:** Mendukung penuh tema gratis **Astra** (dan tetap berjalan rapi pada tema bawaan WordPress) dengan navigasi dropdown 6 pilar, kotak sambutan pimpinan, layanan perkara, berita terkini, serta footer 4 kolom resmi.
+2. **Seeder 1-Klik (40 Halaman & Menu Utama):** Otomatis membuat 23 halaman arsip dokumen SINOVA, 17 halaman informasi wajib bertanda `[LENGKAPI]`, halaman Beranda lengkap, artikel contoh, dan `Menu Utama SINOVA`.
+3. **23 Modul Arsip Dokumen SINOVA (Slot s.d. 2027):** Mendukung pengunggahan file **PDF langsung ke server** maupun penautan **Google Drive** berdasarkan tahun, kategori (misal DIPA 01/04, LIPA 7A/7B/7C), bulan, semester, maupun triwulan (SKM/SPAK/SPKP).
+4. **Sinkronisasi Otomatis Kartu Survei Beranda:** Setiap unggahan dokumen pada modul `survei-pelayanan` otomatis menautkan tombol SKM, SPAK, dan SPKP di halaman depan ke berkas laporan resminya.
+5. **Keamanan & Performa Dasar:** Cache halaman HTML statis, indikator waktu render, pencegahan enumerasi user, XML-RPC nonaktif, filter kata/tautan terlarang (*Anti-Judol WAF*), serta CAPTCHA login ganda (**Cloudflare Turnstile** atau soal hitung offline).
+
+---
+
+## Daftar Isi Folder
 
 ```text
 sinova-starter-kit/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
-├── wordpress-mu-plugins/                  # Salin isi folder ini ke wp-content/mu-plugins/
-│   ├── 00-pa-sinova-config.php            # Pengaturan Satker, 1-Click Seeder 35 halaman & Menu, + Panel WP Admin
-│   ├── pa-sinova-hub.php                  # Mesin 23 Modul SINOVA, Shortcode [pa_sinova_docs], Widget Survei, & REST HMAC API
-│   ├── pa-home-page-cache.php             # Early-Serve HTML Page Cache + [waktu_render] Real-Time
-│   ├── pa-ui-performance-a11y.php         # Tema Hijau-Gold, Mega Menu 60 FPS, Dark/High-Contrast, Capture-Safe
-│   └── pa-security-hardening.php          # OWASP Headers, Anti-Judol WAF, Dual-Mode CAPTCHA Login
+├── wordpress-mu-plugins/                  # Wajib disalin ke wp-content/mu-plugins/
+│   ├── 00-pa-sinova-config.php            # Pengaturan satker, Seeder 1-Klik, & form upload WP Admin
+│   ├── pa-sinova-hub.php                  # Tabel & shortcode [pa_sinova_docs] 23 modul + REST API HMAC
+│   ├── pa-home-page-cache.php             # Cache HTML halaman publik & shortcode [waktu_render]
+│   ├── pa-ui-performance-a11y.php         # Tampilan portal Astra/blok, berita terkini, & toolbar aksesibilitas
+│   └── pa-security-hardening.php          # Header keamanan, filter upload, WAF dasar, & login CAPTCHA
 ├── wordpress-templates/
-│   └── beranda-blocks-starter.html        # Blok HTML mandiri Kartu Survei Indeks Pelayanan Publik & 6 Kartu ZI
-└── laravel-sinova-panel/                  # Opsional: Modul Laravel + Inertia Vue untuk portal internal terpisah
-    ├── app/Http/Controllers/WebsiteSinovaController.php
-    ├── app/Models/SinovaWebsiteAuditLog.php
-    ├── app/Models/SinovaWebsiteDocument.php
-    ├── app/Services/Sinova/WordPressSinovaSyncService.php
-    ├── database/migrations/2026_11_20_090000_create_sinova_website_documents_table.php
-    ├── resources/js/Pages/WebsiteSinova/Index.vue
-    ├── routes/website_sinova.php
-    └── storage/app/sinova-wp-gateway.example.json
+│   └── beranda-blocks-starter.html        # Kerangka HTML halaman Beranda standar Pengadilan Agama
+└── laravel-sinova-panel/                  # Opsional: modul Laravel + Vue jika memakai panel internal kantor
 ```
 
 ---
 
-## Cara Pakai Cepat (Mode WordPress Mandiri — 5 Menit)
+## Langkah Pemasangan (Berurutan)
 
-Cocok untuk satker dengan hosting **cPanel / DirectAdmin / VPS** yang sudah memasang WordPress fresh (disarankan tema **Astra** versi gratis + **Elementor** versi gratis atau editor blok bawaan WordPress):
+### Prasyarat
+* WordPress baru terpasang di hosting atau server lokal (PHP 8.1+ dan MySQL/MariaDB).
+* Disarankan memasang dan mengaktifkan tema gratis **Astra** melalui **WP Admin → Appearance → Themes → Add New → cari "Astra" → Install & Activate**.
 
-1. **Salin seluruh berkas PHP** dari `wordpress-mu-plugins/` ke folder WordPress Anda di:
-   `wp-content/mu-plugins/`
-   *(Buat folder `mu-plugins` bila belum ada — WordPress otomatis mengaktifkannya tanpa perlu klik Activate.)*
-2. **Buka WP Admin → Pengaturan → Permalinks**, pilih struktur **Post name** (`/sample-post/`), lalu klik **Save Changes**.
-3. **Buka WP Admin → SINOVA Starter Kit:**
-   * Isi **Nama Satker** (contoh: `Pengadilan Agama Contoh Kelas I-A`), alamat kabupaten/kota, URL **SIPP**, **e-Court**, **Direktori Putusan**, dan tautan **Survei Badilag**.
-   * Klik **Generate Secret Key HMAC** bila ingin mengaktifkan sinkronisasi API.
-   * Klik **Simpan Pengaturan**.
-4. **Klik tombol `"Generate Halaman & Menu Utama SK 2722/2026 (1-Klik)"`:**
-   * Sistem otomatis membuat **23 halaman Arsip Dokumen** (sudah terisi `[pa_sinova_docs slug="..."]`), **12 halaman Informasi Wajib** (berisi kerangka `[LENGKAPI]`), serta menyusun **Menu Utama** yang rapi dan tertaut ke semua halaman.
-5. **Pasang Blok Beranda (Opsional):**
-   * Buka halaman Beranda → tambahkan widget **HTML Khusus** (*Custom HTML*) lalu tempel isi berkas `wordpress-templates/beranda-blocks-starter.html` untuk menampilkan **6 Kartu Zona Integritas sama tinggi** dan panel **Indeks Pelayanan Publik (SKM/SPAK/SPKP Triwulan I–IV)** yang tersinkron otomatis dari modul `survei-pelayanan`.
-6. **Isi Dokumen & Cek Kesiapan:**
-   * Buka **WP Admin → SINOVA Starter Kit → tab Checklist 35 Kriteria / Kelola Dokumen**, unggah PDF resmi atau tempel URL Google Drive (pastikan akses *Anyone with the link*), dan gunakan tombol **Salin URL** saat mengisi aplikasi penilaian **SINOVA Badilag**.
+### Langkah 1: Pasang Berkas MU-Plugins
+1. Buka direktori instalasi WordPress Anda (misalnya `public_html/wp-content/`).
+2. Buat folder baru bernama **`mu-plugins`** jika belum ada.
+3. Salin semua berkas `.php` dari folder `wordpress-mu-plugins/` pada repositori ini ke dalam `wp-content/mu-plugins/`.
+   *(WordPress otomatis mengaktifkan semua file di `mu-plugins` tanpa perlu menekan tombol Activate.)*
+
+### Langkah 2: Atur Struktur Permalink
+1. Masuk ke **WP Admin → Settings (Pengaturan) → Permalinks**.
+2. Pilih opsi **Post name** (`/sample-post/`).
+3. Klik **Save Changes**.
+
+### Langkah 3: Isi Identitas Satker & Jalankan Seeder 1-Klik
+1. Buka menu **WP Admin → SINOVA Hub**.
+2. Pada kolom **1. Konfigurasi Satker & REST API HMAC**, lengkapi data berikut lalu klik **Simpan Pengaturan**:
+   * **Nama Satker** (misal: `Pengadilan Agama Contoh Kelas I-A`)
+   * **Alamat Kantor, Telepon/WA PTSP, & Email Resmi**
+   * **Nama & Teks Sambutan Ketua Pengadilan**
+   * **URL SIPP, e-Court, Direktori Putusan, & Survei Badilag**
+   * *(Opsional)* Centang **Generate Secret Key** bila ingin mengaktifkan sinkronisasi API dengan aplikasi internal kantor.
+3. Pada kolom **2. Seeder Halaman & Menu SK 2722/2026**, klik tombol **"Generate Halaman, Beranda & Menu Utama (1-Klik)"**.
+   Sistem akan membuat 23 halaman dokumen SINOVA, 17 halaman informasi wajib, halaman Beranda sebagai halaman depan, artikel contoh, dan menyusun `Menu Utama SINOVA` secara otomatis.
+
+### Langkah 4: Unggah Dokumen Rutin (Bulanan / Triwulanan / Tahunan)
+Admin satker **tidak perlu** mengedit tabel HTML halaman satu per satu:
+1. Buka **WP Admin → SINOVA Hub**.
+2. Pada kolom **3. Upload Dokumen Cepat**, pilih:
+   * **Modul SINOVA** (contoh: `LRA`, `PNBP`, `Biaya Perkara`, `LKJiP`, atau `Survei Pelayanan`),
+   * **Tahun** (tersedia slot hingga tahun `2027`), **Sub-Kelompok**, dan **Periode Slot** (Bulan / Triwulan / Semester / Tahunan),
+   * Unggah file **PDF** (maks. 10 MB) atau tempel tautan **Google Drive** yang sudah dibuka akses publiknya (*Anyone with the link*).
+3. Klik **Simpan & Tayangkan ke Halaman Web**. Dokumen otomatis tampil pada halaman publik terkait.
+
+### Langkah 5: Lengkapi Halaman Profil & Berita Satker
+1. Buka **WP Admin → Pages (Laman)**, lalu sunting halaman bertanda `[LENGKAPI: ...]` (seperti *Visi dan Misi*, *Struktur Organisasi*, *Wilayah Yurisdiksi*, *Alamat & Kontak*, *Standar Pelayanan*, dan *Prosedur Berperkara*).
+2. Untuk mengganti tautan Google Drive pada 6 kartu Zona Integritas di Beranda, sunting halaman **Beranda** lalu ubah atribut `href="#ganti-link-area-1"` hingga `area-6` ke folder Google Drive Zona Integritas satker Anda.
+3. Publikasikan berita kegiatan atau pengumuman melalui **WP Admin → Posts (Pos) → Add New**; 3 berita terbaru otomatis muncul pada halaman Beranda.
 
 ---
 
-## Cara Menghubungkan ke Portal Laravel Internal (Opsional)
+## Opsional: Menghubungkan ke Aplikasi Internal Laravel (Jika Tersedia)
 
-Jika satker Anda ingin staf mengelola publikasi dari aplikasi internal (seperti Laravel + Inertia Vue 3) tanpa perlu login ke `/wp-admin`:
-
-1. Salin seluruh folder di dalam `laravel-sinova-panel/` ke direktori aplikasi Laravel Anda (controller, models, service, migration, Vue page, routes).
-2. Jalankan migrasi database Laravel:
+Jika satker memiliki aplikasi manajemen internal berbasis Laravel + Inertia Vue 3 dan ingin mengunggah dokumen tanpa membuka `/wp-admin`:
+1. Salin isi folder `laravel-sinova-panel/` ke direktori proyek Laravel Anda (`app/`, `database/migrations/`, `resources/js/Pages/`, dan `routes/`).
+2. Jalankan migrasi tabel:
    ```bash
    php artisan migrate
    ```
-3. Tambahkan variabel berikut di `.env` Laravel (atau buat `storage/app/sinova-wp-gateway.json` dari contoh yang tersedia):
+3. Tambahkan konfigurasi berikut di berkas `.env` Laravel (isi `SINOVA_WP_SECRET_KEY` dengan kunci yang dibuat pada **WP Admin → SINOVA Hub**):
    ```env
-   SINOVA_WP_BASE_URL=https://www.pa-contoh.go.id
-   SINOVA_WP_SECRET_KEY=tempel_kunci_hmac_dari_wp_admin_disini
+   SINOVA_WP_BASE_URL=https://domain-satker-anda.go.id
+   SINOVA_WP_SECRET_KEY=isi_secret_key_hmac_minimal_32_karakter
    SINOVA_WP_TIMEOUT=30
    ```
-4. Pastikan kunci rahasia (`SINOVA_WP_SECRET_KEY`) **persis sama** dengan Secret Key yang tersimpan di **WP Admin → SINOVA Starter Kit**.
-5. Jalankan `npm run build` di Laravel, buka route `/update-website`, lalu klik **"Tarik Semua 23 Modul"**.
+4. Jalankan `npm run build` di Laravel, buka halaman `/update-website`, dan sinkronkan seluruh modul.
 
 ---
 
-## Checklist Keamanan Sebelum Go-Live
-
-- [ ] Aktifkan HTTPS + SSL valid (`https://`) dan aktifkan HSTS di server / Cloudflare.
-- [ ] Ubah URL login `/wp-login.php` bila perlu dan wajibkan **2FA / Authenticator** untuk seluruh akun Administrator.
-- [ ] Jika memakai **Cloudflare Turnstile**, masukkan *Site Key* & *Secret Key* pada menu **Pengaturan → SINOVA Starter Kit**.
-- [ ] Pastikan database MariaDB/MySQL tidak terekspos ke publik (`bind-address = 127.0.0.1`) serta backup berkala tersimpan *offsite*.
-- [ ] Jangan pernah meng-commit berkas `.env`, `*.key`, atau `sinova-wp-gateway.json` ke repositori Git publik.
+## Daftar Periksa Sebelum Publikasi Online
+- Pastikan domain sudah menggunakan **HTTPS/SSL** yang aktif.
+- Aktifkan **Autentikasi Dua Faktor (2FA)** untuk seluruh akun Administrator WordPress.
+- Bila menggunakan **Cloudflare Turnstile**, isikan *Site Key* dan *Secret Key* di menu **SINOVA Hub** agar halaman login memakai Turnstile; jika dikosongkan, sistem otomatis memakai verifikasi hitung matematika offline.
+- Simpan cadangan (*backup*) berkala untuk database dan folder `wp-content/uploads/`.

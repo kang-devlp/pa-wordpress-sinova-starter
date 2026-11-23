@@ -1,20 +1,22 @@
 <?php
 /**
- * Plugin Name: PA SINOVA Starter - UI Hijau Gelap–Gold SK 2722/2026, Navbar Shell, Aksesibilitas & Performa
- * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227), Topbar + Menu Dropdown Hierarkis otomatis pada tema blok WP standar, CSS/JS Beranda anti-strip KSES, Dark Mode, Capture-Safe SINOVA, serta dock aksesibilitas WCAG 2.2 AA.
- * Version: 1.1.0-starter
+ * Plugin Name: PA SINOVA Starter - UI Portal PA (Astra & Blok), Berita Dinamis, Aksesibilitas & Performa
+ * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, Topbar & Footer 4 Kolom resmi Pengadilan Agama, Shortcode Sambutan & Berita Terkini, Capture-Safe SINOVA, serta Toolbar Aksesibilitas WCAG 2.2 AA.
+ * Version: 1.2.0-starter
  */
 
 defined('ABSPATH') || exit;
 
-// 1. Satukan Webfont menjadi 'Inter' tunggal + Preconnect untuk memangkas muatan font berlebihan
+// 1. Satukan Webfont menjadi 'Inter' tunggal + Preconnect
 add_filter('astra_google_fonts', '__return_empty_array', 999);
 add_filter('elementor/frontend/print_google_fonts', '__return_false', 999);
 
 add_filter('body_class', static function ($classes) {
-    if (!is_admin() && function_exists('wp_is_block_theme') && wp_is_block_theme()) {
-        $classes[] = 'pa-sinova-block-shell';
+    if (is_admin()) {
+        return $classes;
     }
+    $classes[] = 'pa-sinova-portal';
+    $classes[] = (function_exists('wp_is_block_theme') && wp_is_block_theme()) ? 'pa-sinova-block-shell' : 'pa-sinova-classic-shell';
     return $classes;
 });
 
@@ -40,7 +42,90 @@ add_action('wp_enqueue_scripts', static function () {
     );
 }, 999);
 
-// 2. Tema SK 2722/2026, Shell Header/Navbar & Footer, CSS Beranda, Capture-Safe Visibility, Dark Mode, High Contrast
+// 2. Shortcode [pa_sinova_welcome_section]: Sambutan Pimpinan + Standar Maklumat Pelayanan PTSP
+add_shortcode('pa_sinova_welcome_section', static function () {
+    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $satker  = $cfg['satker_name'] ?? 'Pengadilan Agama';
+    $leader  = $cfg['leader_name'] ?? 'Ketua Pengadilan Agama';
+    $welcome = $cfg['leader_welcome'] ?? 'Selamat datang di portal keterbukaan informasi resmi satuan kerja Pengadilan Agama.';
+    $phone   = $cfg['phone'] ?? '0811-0000-0000';
+    $email   = $cfg['email'] ?? 'info@pengadilan.go.id';
+
+    ob_start();
+    ?>
+    <section class="pa-welcome-grid" aria-label="Sambutan Pimpinan dan Maklumat Pelayanan">
+        <div class="pa-welcome-card">
+            <span class="pa-wc-kicker">Sambutan Pimpinan</span>
+            <h3><?php echo esc_html($leader); ?> — <?php echo esc_html($satker); ?></h3>
+            <p class="pa-wc-body"><?php echo esc_html($welcome); ?></p>
+            <div class="pa-wc-links">
+                <a href="./visi-dan-misi/">Visi &amp; Misi</a>
+                <a href="./struktur-organisasi/">Struktur Organisasi</a>
+                <a href="./profil-pegawai/">Profil Pejabat &amp; ASN</a>
+            </div>
+        </div>
+        <div class="pa-maklumat-card">
+            <span class="pa-mk-kicker">Maklumat Pelayanan &amp; PTSP</span>
+            <h3>Pelayanan Prima Berintegritas</h3>
+            <p class="pa-mk-quote">"Dengan ini kami menyatakan sanggup menyelenggarakan pelayanan sesuai standar pelayanan yang telah ditetapkan dan apabila tidak menepati janji siap menerima sanksi sesuai peraturan perundang-undangan."</p>
+            <ul class="pa-mk-hours">
+                <li><strong>Senin – Kamis:</strong> 08.00 – 16.30 WIB</li>
+                <li><strong>Jumat:</strong> 08.00 – 17.00 WIB</li>
+                <li><strong>Layanan PTSP:</strong> <?php echo esc_html($phone . ' · ' . $email); ?></li>
+            </ul>
+            <a class="pa-mk-btn" href="./standar-maklumat-pelayanan/">Baca Standar &amp; Maklumat Pelayanan →</a>
+        </div>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+});
+
+// 3. Shortcode [pa_sinova_latest_posts count="3"]: Berita & Pengumuman Terkini Dinamis
+add_shortcode('pa_sinova_latest_posts', static function ($atts) {
+    $cfgAtts = shortcode_atts(array('count' => 3), $atts, 'pa_sinova_latest_posts');
+    $count   = max(1, min(6, (int) $cfgAtts['count']));
+    $posts   = get_posts(array(
+        'post_type'      => 'post',
+        'post_status'    => 'publish',
+        'posts_per_page' => $count,
+        'orderby'        => 'date',
+        'order'          => 'DESC',
+    ));
+
+    if (empty($posts)) {
+        return '';
+    }
+
+    ob_start();
+    ?>
+    <section class="pa-section-block pa-news-section" aria-label="Berita dan Pengumuman Terbaru">
+        <div class="pa-news-head">
+            <div>
+                <h2 class="pa-starter-heading" style="text-align:left;">BERITA &amp; PENGUMUMAN TERKINI</h2>
+                <p class="pa-starter-sub" style="text-align:left;margin-bottom:0;">Informasi Kegiatan, Publikasi, dan Pemberitahuan Resmi Satuan Kerja</p>
+            </div>
+            <a class="pa-news-all" href="<?php echo esc_url(home_url('/?post_type=post')); ?>">Semua Berita →</a>
+        </div>
+        <div class="pa-news-grid">
+            <?php foreach ($posts as $p) :
+                $permalink = get_permalink($p);
+                $dateStr   = get_the_date('d M Y', $p);
+                $excerpt   = wp_trim_words(wp_strip_all_tags((string) ($p->post_excerpt ?: $p->post_content)), 20, '...');
+            ?>
+                <article class="pa-news-card">
+                    <span class="pa-news-date"><?php echo esc_html($dateStr); ?></span>
+                    <h3><a href="<?php echo esc_url((string) $permalink); ?>"><?php echo esc_html(get_the_title($p)); ?></a></h3>
+                    <p><?php echo esc_html($excerpt); ?></p>
+                    <a class="pa-news-more" href="<?php echo esc_url((string) $permalink); ?>">Baca selengkapnya →</a>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+});
+
+// 4. CSS Terpadu Portal Pengadilan Agama (Astra Free + Blok Theme)
 add_action('wp_head', static function () {
     if (is_admin()) {
         return;
@@ -50,6 +135,7 @@ add_action('wp_head', static function () {
 :root {
     --pa-green: #056e4f;
     --pa-green-dark: #043927;
+    --pa-green-deep: #022c22;
     --pa-gold: #C9A227;
     --pa-gold-light: #E5C158;
     --e-global-typography-primary-font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -58,38 +144,90 @@ add_action('wp_head', static function () {
 body, button, input, select, textarea {
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
-/* Capture-Safe: cegah section transparan/blank saat di-capture otomatis oleh bot SINOVA */
 .pa-scroll-reveal, .elementor-invisible {
     opacity: 1 !important;
     visibility: visible !important;
     animation: none !important;
 }
-/* Sembunyikan header daftar halaman bawaan TwentyTwentyFive & lebarkan area konten */
+
+/* Sembunyikan shell bawaan Block Theme & Footer Astra standar agar konsisten memakai Footer 4 Kolom PA */
 body.pa-sinova-block-shell .wp-site-blocks > header.wp-block-template-part,
 body.pa-sinova-block-shell .wp-site-blocks > footer.wp-block-template-part,
 body.pa-sinova-block-shell header:has(.wp-block-page-list),
-body.home.pa-sinova-block-shell .wp-block-post-title {
+body.home.pa-sinova-block-shell .wp-block-post-title,
+body.pa-sinova-classic-shell #colophon.site-footer,
+body.home.pa-sinova-classic-shell .entry-header {
     display: none !important;
 }
-body.pa-sinova-block-shell .wp-site-blocks .is-layout-constrained > :where(:not(.alignfull)) {
-    max-width: 1180px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
+body.pa-sinova-block-shell .wp-site-blocks .is-layout-constrained > :where(:not(.alignfull)),
+body.pa-sinova-classic-shell .ast-container {
+    max-width: 1200px !important;
 }
-body.pa-sinova-block-shell main.wp-block-group {
-    padding-top: 12px !important;
-    padding-bottom: 36px !important;
+body.pa-sinova-classic-shell.home .site-content .ast-container {
+    padding-top: 12px;
+    padding-bottom: 24px;
 }
-body.pa-sinova-block-shell .wp-block-post-title {
+body.pa-sinova-block-shell .wp-block-post-title,
+body.pa-sinova-classic-shell:not(.home) .entry-title {
     color: var(--pa-green-dark);
     font-weight: 800;
-    font-size: clamp(1.5rem, 2.5vw, 2.1rem);
+    font-size: clamp(1.4rem, 2.4vw, 2rem);
     border-bottom: 3px solid var(--pa-gold);
-    padding-bottom: 10px;
-    margin-bottom: 20px;
+    padding-bottom: 8px;
+    margin-bottom: 18px;
 }
 
-/* Topbar & Header Institusional SINOVA */
+/* Styling Header Native Tema Astra menjadi Hijau Gelap - Gold Resmi PA */
+body.pa-sinova-classic-shell .main-header-bar {
+    background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
+    border-bottom: 3px solid #C9A227 !important;
+    color: #fff !important;
+}
+body.pa-sinova-classic-shell .site-title a,
+body.pa-sinova-classic-shell .site-description {
+    color: #ffffff !important;
+}
+body.pa-sinova-classic-shell .site-description {
+    color: #d1fae5 !important;
+    font-size: 12px !important;
+}
+body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu-link {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 13.5px !important;
+    padding-left: 11px !important;
+    padding-right: 11px !important;
+}
+body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu-link:hover,
+body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .current-menu-item > .menu-link {
+    color: #E5C158 !important;
+}
+body.pa-sinova-classic-shell .ast-desktop .main-header-menu .sub-menu {
+    background: #ffffff !important;
+    border-top: 3px solid #C9A227 !important;
+    border-radius: 0 0 10px 10px !important;
+    box-shadow: 0 14px 32px rgba(4, 57, 39, 0.18) !important;
+    width: 280px !important;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+body.pa-sinova-classic-shell .main-header-menu .sub-menu .menu-link {
+    color: #043927 !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    padding: 9px 14px !important;
+}
+body.pa-sinova-classic-shell .main-header-menu .sub-menu .menu-link:hover {
+    background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
+    color: #E5C158 !important;
+}
+body.pa-sinova-classic-shell .ast-mobile-menu-buttons .menu-toggle {
+    background: rgba(201, 162, 39, 0.2) !important;
+    border-color: #C9A227 !important;
+    color: #E5C158 !important;
+}
+
+/* Topbar Institusional (Tampil di Astra maupun Block Theme) */
 .pa-shell-topbar {
     background: #022c22;
     color: #d1fae5;
@@ -104,10 +242,11 @@ body.pa-sinova-block-shell .wp-block-post-title {
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 10px 18px;
+    gap: 8px 18px;
 }
 .pa-shell-topbar-links {
     display: flex;
+    flex-wrap: wrap;
     gap: 14px;
     align-items: center;
 }
@@ -119,6 +258,8 @@ body.pa-sinova-block-shell .wp-block-post-title {
 .pa-shell-topbar a:hover {
     text-decoration: underline;
 }
+
+/* Fallback Header & Navbar saat Block Theme aktif (jika user belum memasang Astra) */
 .pa-shell-masthead {
     background: linear-gradient(135deg, #043927 0%, #056e4f 100%);
     color: #fff;
@@ -139,11 +280,10 @@ body.pa-sinova-block-shell .wp-block-post-title {
     background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%);
     color: #022c22;
     font-weight: 900;
-    font-size: 18px;
+    font-size: 17px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
     flex-shrink: 0;
 }
 .pa-shell-brand-title {
@@ -166,10 +306,7 @@ body.pa-sinova-block-shell .wp-block-post-title {
     color: #E5C158;
     font-size: 12px;
     font-weight: 700;
-    white-space: nowrap;
 }
-
-/* Navbar Dropdown Hierarkis */
 .pa-shell-navwrap {
     background: #ffffff;
     border-bottom: 1px solid #d5e6dc;
@@ -206,9 +343,7 @@ body.pa-sinova-block-shell .wp-block-post-title {
     align-items: center;
     gap: 2px;
 }
-.pa-shell-menu > li {
-    position: relative;
-}
+.pa-shell-menu > li { position: relative; }
 .pa-shell-menu > li > a {
     display: flex;
     align-items: center;
@@ -219,7 +354,6 @@ body.pa-sinova-block-shell .wp-block-post-title {
     font-size: 13.5px;
     font-weight: 700;
     border-bottom: 2px solid transparent;
-    transition: background-color 0.15s ease, color 0.15s ease;
 }
 .pa-shell-menu > li > a:hover,
 .pa-shell-menu > li:focus-within > a {
@@ -246,9 +380,7 @@ body.pa-sinova-block-shell .wp-block-post-title {
     z-index: 9995;
 }
 .pa-shell-menu > li:hover > .pa-shell-submenu,
-.pa-shell-menu > li:focus-within > .pa-shell-submenu {
-    display: block;
-}
+.pa-shell-menu > li:focus-within > .pa-shell-submenu { display: block; }
 .pa-shell-submenu a {
     display: block;
     padding: 8px 12px;
@@ -270,32 +402,59 @@ body.pa-sinova-block-shell .wp-block-post-title {
     .pa-shell-submenu { position: static; box-shadow: none; border-radius: 8px; margin: 0 0 6px 12px; }
 }
 
-/* Harmonisasi menu navigasi tema Astra / klasik */
-.main-header-bar, .ast-primary-header-bar {
-    border-bottom: 3px solid var(--pa-gold);
-}
-.main-header-menu .sub-menu a:hover,
-.ast-nav-menu .sub-menu a:hover {
-    background: linear-gradient(135deg, var(--pa-green-dark) 0%, var(--pa-green) 100%) !important;
-    color: var(--pa-gold-light) !important;
-}
-
-/* Template Beranda Showcase CSS (Aman dari strip KSES WordPress) */
+/* CSS Beranda Portal Resmi Pengadilan Agama */
 .pa-starter-showcase {
     max-width: 1180px;
-    margin: 8px auto 28px;
+    margin: 6px auto 28px;
     font-family: 'Inter', system-ui, sans-serif;
 }
+.pa-ticker-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #f4faf7;
+    border: 1px solid #d5e6dc;
+    border-left: 4px solid #C9A227;
+    margin-bottom: 18px;
+    font-size: 12.5px;
+    color: #043927;
+}
+.pa-ticker-tag {
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: #056e4f;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+.pa-ticker-text {
+    flex: 1;
+    min-width: 220px;
+    font-weight: 600;
+}
+.pa-ticker-link {
+    color: #056e4f !important;
+    font-weight: 800;
+    text-decoration: none !important;
+    white-space: nowrap;
+}
+.pa-ticker-link:hover { text-decoration: underline !important; }
+
 .pa-hero-banner {
-    padding: clamp(26px, 4vw, 44px) clamp(20px, 4vw, 40px);
+    padding: clamp(28px, 4.5vw, 48px) clamp(20px, 4vw, 42px);
     border-radius: 18px;
-    background: radial-gradient(circle at top right, rgba(201, 162, 39, 0.22), transparent 52%),
+    background: radial-gradient(circle at top right, rgba(201, 162, 39, 0.24), transparent 52%),
                 linear-gradient(135deg, #022c22 0%, #044e3a 52%, #056e4f 100%);
     border: 1.5px solid #C9A227;
     color: #fff;
     text-align: center;
     box-shadow: 0 14px 34px rgba(4, 57, 39, 0.18);
-    margin-bottom: 28px;
+    margin-bottom: 30px;
 }
 .pa-hero-kicker {
     display: inline-block;
@@ -313,13 +472,13 @@ body.pa-sinova-block-shell .wp-block-post-title {
 .pa-hero-title {
     margin: 0 0 10px;
     color: #fff;
-    font-size: clamp(1.5rem, 3.2vw, 2.35rem);
+    font-size: clamp(1.5rem, 3.2vw, 2.3rem);
     font-weight: 800;
     line-height: 1.2;
 }
 .pa-hero-lead {
-    margin: 0 auto 20px;
-    max-width: 720px;
+    margin: 0 auto 22px;
+    max-width: 760px;
     color: #d1fae5;
     font-size: 0.98rem;
     line-height: 1.55;
@@ -354,25 +513,23 @@ body.pa-sinova-block-shell .wp-block-post-title {
     font-size: 13.5px;
     text-decoration: none !important;
 }
-.pa-btn-outline:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
+.pa-btn-outline:hover { background: rgba(255, 255, 255, 0.2); }
 
 .pa-section-block {
-    margin-bottom: 30px;
+    margin-bottom: 32px;
     text-align: center;
 }
 .pa-starter-heading {
     margin: 0 0 4px;
     color: #056e4f;
     font-weight: 800;
-    font-size: 1.4rem;
+    font-size: 1.38rem;
 }
 .pa-starter-sub {
     margin: 0 0 18px;
     color: #4b5563;
     font-weight: 600;
-    font-size: 0.93rem;
+    font-size: 0.92rem;
 }
 .pa-services-grid {
     display: grid;
@@ -385,8 +542,8 @@ body.pa-sinova-block-shell .wp-block-post-title {
 .pa-service-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 18px 16px;
+    gap: 8px;
+    padding: 16px;
     border-radius: 14px;
     background: #ffffff;
     border: 1.5px solid #d5e6dc;
@@ -400,18 +557,33 @@ body.pa-sinova-block-shell .wp-block-post-title {
     transform: translateY(-3px);
     border-color: #C9A227;
 }
+.pa-svc-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.pa-svc-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: #ecfdf5;
+    color: #056e4f;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.pa-svc-icon svg { width: 18px; height: 18px; }
 .pa-svc-badge {
-    align-self: flex-start;
     padding: 2px 8px;
     border-radius: 999px;
-    background: #ecfdf5;
-    border: 1px solid #056e4f;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
     color: #043927;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 800;
 }
 .pa-service-card strong {
-    font-size: 15px;
+    font-size: 14.5px;
     color: #043927;
 }
 .pa-service-card span:last-child {
@@ -420,6 +592,112 @@ body.pa-sinova-block-shell .wp-block-post-title {
     color: #4b5563;
 }
 
+/* Sambutan Pimpinan & Maklumat Pelayanan */
+.pa-welcome-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 18px;
+    margin-bottom: 32px;
+    text-align: left;
+}
+@media (max-width: 860px) { .pa-welcome-grid { grid-template-columns: 1fr; } }
+.pa-welcome-card {
+    padding: 22px;
+    border-radius: 16px;
+    background: #f4faf7;
+    border: 1.5px solid #d5e6dc;
+    border-left: 5px solid #056e4f;
+}
+.pa-wc-kicker {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #056e4f;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+.pa-welcome-card h3 {
+    margin: 0 0 10px;
+    color: #043927;
+    font-size: 1.15rem;
+    font-weight: 800;
+}
+.pa-wc-body {
+    margin: 0 0 14px;
+    color: #334155;
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+.pa-wc-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.pa-wc-links a {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #056e4f;
+    color: #043927 !important;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none !important;
+}
+.pa-wc-links a:hover {
+    background: #056e4f;
+    color: #ffffff !important;
+}
+.pa-maklumat-card {
+    padding: 22px;
+    border-radius: 16px;
+    background: linear-gradient(155deg, #043927 0%, #056e4f 100%);
+    border: 1.5px solid #C9A227;
+    color: #ffffff;
+}
+.pa-mk-kicker {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(229, 193, 88, 0.18);
+    border: 1px solid #C9A227;
+    color: #E5C158;
+    font-size: 11px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+.pa-maklumat-card h3 {
+    margin: 0 0 8px;
+    color: #fff;
+    font-size: 1.15rem;
+    font-weight: 800;
+}
+.pa-mk-quote {
+    margin: 0 0 12px;
+    color: #e6f4ee;
+    font-size: 12.5px;
+    line-height: 1.55;
+    font-style: italic;
+}
+.pa-mk-hours {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.18);
+    font-size: 12.5px;
+    line-height: 1.65;
+}
+.pa-mk-btn {
+    color: #E5C158 !important;
+    font-size: 12.5px;
+    font-weight: 800;
+    text-decoration: none !important;
+}
+.pa-mk-btn:hover { text-decoration: underline !important; }
+
+/* Zona Integritas 6 Kartu Sejajar */
 .pa-zi-grid {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -433,7 +711,7 @@ body.pa-sinova-block-shell .wp-block-post-title {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 20px 12px;
+    padding: 18px 12px;
     border-radius: 12px;
     background: linear-gradient(135deg, #056e4f 0%, #043927 100%);
     border: 1.5px solid #C9A227;
@@ -446,11 +724,23 @@ body.pa-sinova-block-shell .wp-block-post-title {
     transform: translateY(-3px);
     border-color: #E5C158;
 }
+.pa-zi-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #E5C158;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+.pa-zi-icon svg { width: 18px; height: 18px; }
 .pa-zi-area {
     font-size: 15px;
     font-weight: 800;
     color: #E5C158;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 .pa-zi-desc {
     font-size: 11.5px;
@@ -463,6 +753,68 @@ body.pa-sinova-block-shell .wp-block-post-title {
     text-align: center;
 }
 
+/* Berita & Pengumuman Terkini */
+.pa-news-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.pa-news-all {
+    color: #056e4f !important;
+    font-weight: 800;
+    font-size: 13px;
+    text-decoration: none !important;
+}
+.pa-news-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    text-align: left;
+}
+@media (max-width: 860px) { .pa-news-grid { grid-template-columns: 1fr; } }
+.pa-news-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 18px;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid #d5e6dc;
+    box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05);
+}
+.pa-news-date {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #8A6808;
+}
+.pa-news-card h3 {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.4;
+}
+.pa-news-card h3 a {
+    color: #043927 !important;
+    text-decoration: none !important;
+}
+.pa-news-card h3 a:hover { color: #056e4f !important; }
+.pa-news-card p {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #4b5563;
+}
+.pa-news-more {
+    color: #056e4f !important;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none !important;
+}
+
+/* Split Survei + Pintasan SINOVA */
 .pa-split-section {
     display: grid;
     grid-template-columns: 360px 1fr;
@@ -470,7 +822,6 @@ body.pa-sinova-block-shell .wp-block-post-title {
     align-items: stretch;
 }
 @media (max-width: 880px) { .pa-split-section { grid-template-columns: 1fr; } }
-
 .pa-starter-survey {
     padding: 18px;
     border-radius: 16px;
@@ -511,11 +862,7 @@ body.pa-sinova-block-shell .wp-block-post-title {
 }
 .pa-starter-survey .survey-slide { display: none; }
 .pa-starter-survey .survey-slide.is-active { display: block; }
-.pa-starter-survey .survey-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
+.pa-starter-survey .survey-cards { display: flex; flex-direction: column; gap: 8px; }
 .pa-starter-survey .survey-card {
     display: flex;
     justify-content: space-between;
@@ -528,7 +875,6 @@ body.pa-sinova-block-shell .wp-block-post-title {
     color: #fff !important;
     text-decoration: none !important;
     font-size: 12px;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .pa-starter-survey a.survey-card:hover {
     background: rgba(201, 162, 39, 0.22);
@@ -555,7 +901,6 @@ body.pa-sinova-block-shell .wp-block-post-title {
     color: #022c22;
     border-color: #E5C158;
 }
-
 .pa-hub-shortcuts {
     background: #f4faf7;
     border: 1.5px solid #d5e6dc;
@@ -594,37 +939,67 @@ body.pa-sinova-block-shell .wp-block-post-title {
     text-decoration: none !important;
     transition: border-color 0.15s ease, transform 0.15s ease;
 }
-.pa-shortcut-item:hover {
-    border-color: #056e4f;
-    transform: translateY(-2px);
-}
-.pa-shortcut-item span {
-    font-size: 11px;
-    font-weight: 800;
-    color: #8A6808;
-    text-transform: uppercase;
-}
-.pa-shortcut-item strong {
-    font-size: 13.5px;
-    color: #043927;
-}
+.pa-shortcut-item:hover { border-color: #056e4f; transform: translateY(-2px); }
+.pa-shortcut-item span { font-size: 11px; font-weight: 800; color: #8A6808; text-transform: uppercase; }
+.pa-shortcut-item strong { font-size: 13.5px; color: #043927; }
 
-/* Footer Institusional */
+/* Footer 4 Kolom Resmi Pengadilan Agama */
 .pa-shell-footer {
     background: #022c22;
     color: #d1fae5;
     border-top: 4px solid #C9A227;
-    padding: 22px 16px 26px;
+    padding: 34px 16px 24px;
     font-size: 13px;
 }
-.pa-shell-footer-meta {
+.pa-footer-grid {
+    max-width: 1180px;
+    margin: 0 auto 22px;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: 24px;
+}
+@media (max-width: 900px) { .pa-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 540px) { .pa-footer-grid { grid-template-columns: 1fr; } }
+.pa-footer-col h4 {
+    margin: 0 0 10px;
+    color: #E5C158;
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.pa-footer-col p {
+    margin: 0 0 8px;
+    line-height: 1.55;
+    color: #e2e8f0;
+    font-size: 12.5px;
+}
+.pa-footer-col ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.pa-footer-col li { margin-bottom: 6px; }
+.pa-footer-col a {
+    color: #d1fae5;
+    text-decoration: none;
+    font-size: 12.5px;
+}
+.pa-footer-col a:hover {
+    color: #E5C158;
+    text-decoration: underline;
+}
+.pa-shell-footer-bottom {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    max-width: 1180px;
-    margin: 0 auto;
+    font-size: 12px;
 }
 .pa-shell-render-pill {
     display: inline-block;
@@ -637,7 +1012,7 @@ body.pa-sinova-block-shell .wp-block-post-title {
     font-weight: 700;
 }
 
-/* Dark Mode */
+/* Dark Mode & Kontras Tinggi */
 html[data-pa-theme="dark"] body,
 html[data-pa-theme="dark"] .site,
 html[data-pa-theme="dark"] .wp-site-blocks,
@@ -648,15 +1023,18 @@ html[data-pa-theme="dark"] article.post {
     color: #e7eef2 !important;
 }
 html[data-pa-theme="dark"] .pa-shell-navwrap,
-html[data-pa-theme="dark"] .pa-shell-submenu {
+html[data-pa-theme="dark"] .pa-shell-submenu,
+html[data-pa-theme="dark"] .pa-ticker-bar {
     background: #13221a;
     border-color: #2c4637;
-}
-html[data-pa-theme="dark"] .pa-shell-menu > li > a,
-html[data-pa-theme="dark"] .pa-shell-submenu a {
     color: #e6f4ee;
 }
+html[data-pa-theme="dark"] .pa-shell-menu > li > a,
+html[data-pa-theme="dark"] .pa-shell-submenu a,
+html[data-pa-theme="dark"] .pa-ticker-link { color: #e6f4ee !important; }
 html[data-pa-theme="dark"] .pa-service-card,
+html[data-pa-theme="dark"] .pa-welcome-card,
+html[data-pa-theme="dark"] .pa-news-card,
 html[data-pa-theme="dark"] .pa-hub-shortcuts,
 html[data-pa-theme="dark"] .pa-shortcut-item {
     background: #182a20;
@@ -664,31 +1042,22 @@ html[data-pa-theme="dark"] .pa-shortcut-item {
     color: #e6f4ee !important;
 }
 html[data-pa-theme="dark"] .pa-service-card strong,
+html[data-pa-theme="dark"] .pa-welcome-card h3,
+html[data-pa-theme="dark"] .pa-news-card h3 a,
 html[data-pa-theme="dark"] .pa-hub-shortcuts-head h3,
 html[data-pa-theme="dark"] .pa-shortcut-item strong,
-html[data-pa-theme="dark"] .pa-starter-heading {
-    color: #E5C158;
-}
+html[data-pa-theme="dark"] .pa-starter-heading { color: #E5C158 !important; }
 html[data-pa-theme="dark"] .pa-service-card span:last-child,
+html[data-pa-theme="dark"] .pa-wc-body,
+html[data-pa-theme="dark"] .pa-news-card p,
 html[data-pa-theme="dark"] .pa-starter-sub,
-html[data-pa-theme="dark"] .pa-hub-shortcuts-head p {
-    color: #cbd5e1;
-}
-html[data-pa-theme="dark"] a {
-    color: #E5C158;
-}
-/* Kontras Tinggi WCAG AAA */
+html[data-pa-theme="dark"] .pa-hub-shortcuts-head p { color: #cbd5e1; }
+html[data-pa-theme="dark"] a { color: #E5C158; }
 html[data-pa-contrast="high"] body,
 html[data-pa-contrast="high"] .site,
-html[data-pa-contrast="high"] .wp-site-blocks {
-    background: #ffffff !important;
-    color: #000000 !important;
-}
-html[data-pa-contrast="high"] a {
-    color: #003d29 !important;
-    text-decoration: underline !important;
-}
-/* Floating Aksesibilitas */
+html[data-pa-contrast="high"] .wp-site-blocks { background: #ffffff !important; color: #000000 !important; }
+html[data-pa-contrast="high"] a { color: #003d29 !important; text-decoration: underline !important; }
+
 #pa-a11y-dock {
     position: fixed;
     left: 14px;
@@ -714,25 +1083,38 @@ html[data-pa-contrast="high"] a {
     cursor: pointer;
 }
 #pa-a11y-dock button:hover,
-#pa-a11y-dock button[aria-pressed="true"] {
-    background: #C9A227;
-    color: #043927;
-}
+#pa-a11y-dock button[aria-pressed="true"] { background: #C9A227; color: #043927; }
 </style>
     <?php
 }, 90);
 
-// 3. Render Header & Menu Hierarkis Otomatis saat Tema Blok Standar WordPress (seperti Twenty Twenty-Five) Aktif
+// 5. Topbar Institusional (Semua Tema) + Shell Header/Menu Saat Memakai Tema Blok WordPress
 add_action('wp_body_open', static function () {
-    if (is_admin() || !function_exists('wp_is_block_theme') || !wp_is_block_theme()) {
+    if (is_admin()) {
+        return;
+    }
+    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $satker  = $cfg['satker_name'] ?? (get_bloginfo('name') ?: 'Pengadilan Agama');
+    $tagline = get_bloginfo('description') ?: 'Portal Keterbukaan Informasi Publik (SK Dirjen Badilag 2722/2026)';
+    $phone   = $cfg['phone'] ?? '';
+    $email   = $cfg['email'] ?? '';
+    ?>
+<div class="pa-shell-topbar">
+    <div class="pa-shell-inner">
+        <span>PTSP: <?php echo esc_html($phone ?: 'Senin–Jumat 08.00–16.30 WIB'); ?> · <?php echo esc_html($email ?: 'info@pengadilan.go.id'); ?></span>
+        <div class="pa-shell-topbar-links">
+            <a href="<?php echo esc_url($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'); ?>" target="_blank" rel="noopener noreferrer">SIPP</a>
+            <a href="<?php echo esc_url($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer">e-Court</a>
+            <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Survei Badilag</a>
+            <a href="<?php echo esc_url(wp_login_url()); ?>">Login Admin</a>
+        </div>
+    </div>
+</div>
+    <?php
+    if (!function_exists('wp_is_block_theme') || !wp_is_block_theme()) {
         return;
     }
 
-    $satker  = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'Pengadilan Agama');
-    $tagline = get_bloginfo('description') ?: 'Portal Resmi Keterbukaan Informasi Publik (SK Dirjen Badilag 2722/2026)';
-    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
-
-    // Ambil menu hierarkis 'Menu Utama SINOVA'
     $menuItems = wp_get_nav_menu_items('Menu Utama SINOVA');
     if (empty($menuItems)) {
         $locs = get_nav_menu_locations();
@@ -740,7 +1122,6 @@ add_action('wp_body_open', static function () {
             $menuItems = wp_get_nav_menu_items((int) $locs['primary']);
         }
     }
-
     $topItems = array();
     $children = array();
     if (is_array($menuItems)) {
@@ -754,15 +1135,6 @@ add_action('wp_body_open', static function () {
         }
     }
     ?>
-<div class="pa-shell-topbar">
-    <div class="pa-shell-inner">
-        <span>Standar Keterbukaan Informasi Publik · SK Dirjen Badilag 2722/2026</span>
-        <div class="pa-shell-topbar-links">
-            <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Survei Badilag</a>
-            <a href="<?php echo esc_url(wp_login_url()); ?>">Login Admin</a>
-        </div>
-    </div>
-</div>
 <header class="pa-shell-masthead" role="banner">
     <div class="pa-shell-inner">
         <a class="pa-shell-brand" href="<?php echo esc_url(home_url('/')); ?>">
@@ -772,13 +1144,13 @@ add_action('wp_body_open', static function () {
                 <p class="pa-shell-brand-sub"><?php echo esc_html($tagline); ?></p>
             </div>
         </a>
-        <span class="pa-shell-badge">SINOVA Hub · Rumah s.d. 2027</span>
+        <span class="pa-shell-badge">SK Dirjen Badilag 2722/2026</span>
     </div>
 </header>
 <?php if (!empty($topItems)) : ?>
 <nav class="pa-shell-navwrap" aria-label="Menu Utama SINOVA">
     <div class="pa-shell-nav-row">
-        <button type="button" class="pa-shell-menu-btn" id="pa-shell-menu-toggle" aria-expanded="false">☰ Menu Navigasi SINOVA</button>
+        <button type="button" class="pa-shell-menu-btn" id="pa-shell-menu-toggle" aria-expanded="false">☰ Menu Navigasi</button>
         <ul class="pa-shell-menu" id="pa-shell-menu-list">
             <?php foreach ($topItems as $top) :
                 $kids = $children[(int) $top->ID] ?? array();
@@ -798,27 +1170,61 @@ add_action('wp_body_open', static function () {
         </ul>
     </div>
 </nav>
-<?php endif; ?>
-    <?php
+<?php endif;
 }, 5);
 
-// 4. Footer Institusional, Toolbar Aksesibilitas & Interaksi Slider Survei Beranda
+// 6. Footer 4 Kolom Resmi Pengadilan Agama + Toolbar Aksesibilitas & Slider JS
 add_action('wp_footer', static function () {
     if (is_admin()) {
         return;
     }
-    if (function_exists('wp_is_block_theme') && wp_is_block_theme()) :
-        $satker = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'Pengadilan Agama');
+    $cfg    = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $satker = $cfg['satker_name'] ?? (get_bloginfo('name') ?: 'Pengadilan Agama');
     ?>
-<footer class="pa-shell-footer">
-    <div class="pa-shell-footer-meta">
-        <div>
-            <strong><?php echo esc_html($satker); ?></strong> — Starter Kit WordPress SINOVA SK Dirjen Badilag 2722/2026
+<footer class="pa-shell-footer" role="contentinfo">
+    <div class="pa-footer-grid">
+        <div class="pa-footer-col">
+            <h4><?php echo esc_html($satker); ?></h4>
+            <p><?php echo esc_html($cfg['address'] ?? 'Jl. Keadilan Raya No. 1'); ?></p>
+            <p><strong>Telp / PTSP:</strong> <?php echo esc_html($cfg['phone'] ?? '-'); ?></p>
+            <p><strong>Email:</strong> <?php echo esc_html($cfg['email'] ?? '-'); ?></p>
         </div>
+        <div class="pa-footer-col">
+            <h4>Transparansi SINOVA</h4>
+            <ul>
+                <li><a href="<?php echo esc_url(home_url('/lra/')); ?>">Laporan Realisasi Anggaran</a></li>
+                <li><a href="<?php echo esc_url(home_url('/dipa/')); ?>">Dokumen DIPA 01 &amp; 04</a></li>
+                <li><a href="<?php echo esc_url(home_url('/biaya-perkara/')); ?>">Biaya Perkara (LIPA 7)</a></li>
+                <li><a href="<?php echo esc_url(home_url('/lkjip/')); ?>">Laporan Kinerja (LKJiP)</a></li>
+                <li><a href="<?php echo esc_url(home_url('/survei-pelayanan/')); ?>">Hasil Survei SKM/SPAK/SPKP</a></li>
+            </ul>
+        </div>
+        <div class="pa-footer-col">
+            <h4>Layanan &amp; Profil</h4>
+            <ul>
+                <li><a href="<?php echo esc_url(home_url('/visi-dan-misi/')); ?>">Visi dan Misi</a></li>
+                <li><a href="<?php echo esc_url(home_url('/struktur-organisasi/')); ?>">Struktur Organisasi</a></li>
+                <li><a href="<?php echo esc_url(home_url('/prosedur-berperkara/')); ?>">Prosedur Berperkara</a></li>
+                <li><a href="<?php echo esc_url(home_url('/standar-maklumat-pelayanan/')); ?>">Standar &amp; Maklumat Pelayanan</a></li>
+                <li><a href="<?php echo esc_url(home_url('/statistik-kunjungan/')); ?>">Statistik Kunjungan Website</a></li>
+            </ul>
+        </div>
+        <div class="pa-footer-col">
+            <h4>Tautan Lembaga</h4>
+            <ul>
+                <li><a href="https://www.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Mahkamah Agung RI</a></li>
+                <li><a href="https://badilag.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Ditjen Badilag MA RI</a></li>
+                <li><a href="https://siwas.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">SIWAS Mahkamah Agung</a></li>
+                <li><a href="https://putusan3.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Direktori Putusan</a></li>
+                <li><a href="https://www.lapor.go.id/" target="_blank" rel="noopener noreferrer">SP4N-LAPOR! Nasional</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="pa-shell-footer-bottom">
+        <span>&copy; <?php echo esc_html((string) date('Y')); ?> <?php echo esc_html($satker); ?> · Keterbukaan Informasi Publik SK Dirjen Badilag 2722/2026</span>
         <span class="pa-shell-render-pill">Rendering : <?php echo esc_html(timer_stop(0, 3)); ?> detik.</span>
     </div>
 </footer>
-    <?php endif; ?>
 <div id="pa-a11y-dock" role="region" aria-label="Menu Aksesibilitas Website">
     <button type="button" id="pa-btn-dark" aria-pressed="false" title="Ubah Mode Terang/Gelap">Mode Gelap</button>
     <button type="button" id="pa-btn-contrast" aria-pressed="false" title="Kontras Tinggi WCAG">Kontras</button>

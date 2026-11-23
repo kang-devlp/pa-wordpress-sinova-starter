@@ -1,84 +1,127 @@
 <!-- wp:html -->
 <!--
-  PA SINOVA Starter Kit - Template Beranda Portabel (SK Dirjen Badilag 2722/2026)
-  100% Tanpa Dependensi Plugin Pro & Bebas Tag <style>/<script> Inline agar Aman dari Strip KSES WordPress.
-  Seluruh styling & interaksi slider ditangani otomatis oleh MU-Plugin pa-ui-performance-a11y.php.
-  Tautan pada kartu SKM / SPAK / SPKP otomatis tersinkron oleh MU-Plugin pa-sinova-hub.php (modul: survei-pelayanan).
+  PA SINOVA Starter Kit - Template Beranda Portal Resmi Pengadilan Agama (SK Dirjen Badilag 2722/2026)
+  Catatan Pemakaian:
+  1. Seluruh styling dan script dikelola oleh MU-Plugin pa-ui-performance-a11y.php agar aman dari strip KSES WordPress.
+  2. Ganti tautan href="#ganti-link-area-1" s.d. "#ganti-link-area-6" sesuai tautan folder dokumen Zona Integritas satker Anda.
+  3. Kartu SKM / SPAK / SPKP otomatis tertaut ke dokumen modul survei-pelayanan oleh MU-Plugin pa-sinova-hub.php.
 -->
 <div class="pa-starter-showcase">
-  <!-- 1. Hero Banner Eksekutif -->
-  <section class="pa-hero-banner" aria-label="Sambutan Portal Resmi">
-    <span class="pa-hero-kicker">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span>
-    <h2 class="pa-hero-title">Portal Resmi Informasi &amp; Layanan Peradilan</h2>
-    <p class="pa-hero-lead">Akses transparan informasi perkara, anggaran, kinerja SAKIP, serta arsip dokumen standar SINOVA Ditjen Badilag.</p>
-    <div class="pa-hero-actions">
-      <a class="pa-btn-gold" href="./agenda-jadwal-persidangan/">Jadwal Sidang &amp; SIPP</a>
-      <a class="pa-btn-outline" href="./e-court/">Layanan e-Court</a>
-      <a class="pa-btn-outline" href="./survei-pelayanan/">Hasil Survei Pelayanan</a>
+  <!-- 1. Ticker Pengumuman & Komitmen Layanan -->
+  <div class="pa-ticker-bar" role="region" aria-label="Informasi Terkini Layanan">
+    <span class="pa-ticker-tag">INFO LAYANAN</span>
+    <span class="pa-ticker-text">Selamat datang di Portal Keterbukaan Informasi Publik Pengadilan Agama · Layanan PTSP buka Senin–Jumat pukul 08.00–16.30 WIB · Seluruh layanan bebas dari pungutan liar dan gratifikasi.</span>
+    <a class="pa-ticker-link" href="./panggilan-ghaib/">Lihat Panggilan Ghaib →</a>
+  </div>
+
+  <!-- 2. Hero Institusional Pengadilan Agama -->
+  <section class="pa-hero-banner" aria-label="Portal Resmi Pengadilan Agama">
+    <div class="pa-hero-content">
+      <span class="pa-hero-kicker">Zona Integritas WBK / WBBM · Standar SK Dirjen Badilag 2722/2026</span>
+      <h2 class="pa-hero-title">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h2>
+      <p class="pa-hero-lead">Menyediakan akses informasi perkara, jadwal sidang, biaya panjar, laporan kinerja SAKIP, serta arsip transparansi keuangan yang akurat dan mudah diakses masyarakat pencari keadilan.</p>
+      <div class="pa-hero-actions">
+        <a class="pa-btn-gold" href="./agenda-jadwal-persidangan/">Jadwal Sidang &amp; SIPP</a>
+        <a class="pa-btn-outline" href="./e-court/">Layanan e-Court</a>
+        <a class="pa-btn-outline" href="./direktori-putusan/">Direktori Putusan</a>
+        <a class="pa-btn-outline" href="./survei-pelayanan/">Survei Pelayanan</a>
+      </div>
     </div>
   </section>
 
-  <!-- 2. Kartu Layanan Utama Pengadilan -->
-  <section class="pa-section-block" aria-label="Layanan Utama Masyarakat">
-    <h2 class="pa-starter-heading">LAYANAN INFORMASI &amp; PERKARA</h2>
-    <p class="pa-starter-sub">Akses Cepat Layanan Elektronik dan Informasi Wajib Pencari Keadilan</p>
-    <div class="pa-services-grid">
+  <!-- 3. Layanan Inti Pencari Keadilan (8 Kartu dengan Ikon SVG) -->
+  <section class="pa-section-block" aria-label="Layanan Inti Peradilan">
+    <h2 class="pa-starter-heading">LAYANAN PERADILAN &amp; INFORMASI PERKARA</h2>
+    <p class="pa-starter-sub">Akses Langsung Layanan Elektronik, Informasi Berperkara, dan Transparansi Pengadilan</p>
+    <div class="pa-services-grid pa-services-grid-8">
+      <a class="pa-service-card" href="./agenda-jadwal-persidangan/">
+        <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><span class="pa-svc-badge">B2.1 / B2.2</span></div>
+        <strong>Jadwal Sidang &amp; SIPP</strong>
+        <span>Pemantauan status perkara dan agenda persidangan harian secara terbuka.</span>
+      </a>
       <a class="pa-service-card" href="./e-court/">
-        <span class="pa-svc-badge">W2.1</span>
+        <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="pa-svc-badge">W2.1</span></div>
         <strong>Pendaftaran e-Court</strong>
-        <span>Pendaftaran, pembayaran, pemanggilan, dan persidangan elektronik.</span>
+        <span>Pendaftaran perkara, pembayaran panjar, panggilan, dan sidang elektronik.</span>
       </a>
       <a class="pa-service-card" href="./direktori-putusan/">
-        <span class="pa-svc-badge">W2.2</span>
+        <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="pa-svc-badge">W2.2</span></div>
         <strong>Direktori Putusan</strong>
-        <span>Publikasi putusan &amp; penetapan resmi Mahkamah Agung RI.</span>
+        <span>Publikasi putusan dan penetapan resmi pada portal Mahkamah Agung RI.</span>
       </a>
       <a class="pa-service-card" href="./prosedur-berperkara/">
-        <span class="pa-svc-badge">W2.3</span>
+        <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="pa-svc-badge">W2.3</span></div>
         <strong>Prosedur Berperkara</strong>
-        <span>Alur lengkap pengajuan perkara tingkat pertama hingga PK.</span>
+        <span>Syarat dan alur lengkap gugatan, permohonan, hingga upaya hukum.</span>
       </a>
       <a class="pa-service-card" href="./biaya-proses-berperkara/">
-        <span class="pa-svc-badge">W2.4</span>
-        <strong>Panjar &amp; Biaya Perkara</strong>
-        <span>SK Ketua tentang radius panggilan dan transparansi panjar.</span>
+        <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg></span><span class="pa-svc-badge">W2.4</span></div>
+        <strong>Panjar &amp; Radius Biaya</strong>
+        <span>SK Ketua tentang taksiran panjar biaya perkara dan radius panggilan.</span>
+      </a>
+      <a class="pa-service-card" href="./panggilan-ghaib/">
+        <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span><span class="pa-svc-badge">B2.4</span></div>
+        <strong>Panggilan Ghaib</strong>
+        <span>Pengumuman resmi panggilan pihak yang tidak diketahui tempat tinggalnya.</span>
+      </a>
+      <a class="pa-service-card" href="./biaya-prodeo/">
+        <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></span><span class="pa-svc-badge">B2.7 / Posbakum</span></div>
+        <strong>Layanan Prodeo &amp; Bantuan</strong>
+        <span>Informasi pembebasan biaya perkara bagi masyarakat kurang mampu.</span>
+      </a>
+      <a class="pa-service-card" href="./akses-informasi/">
+        <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="pa-svc-badge">PPID / Pengaduan</span></div>
+        <strong>PPID &amp; Pengaduan</strong>
+        <span>Laporan akses informasi publik dan saluran pengaduan masyarakat.</span>
       </a>
     </div>
   </section>
 
-  <!-- 3. Dokumen Pembangunan Zona Integritas (6 Area Sejajar / Equal-Height) -->
+  <!-- 4. Sambutan Pimpinan & Standar Maklumat Pelayanan (Dinamis dari WP Admin -> SINOVA Hub) -->
+  [pa_sinova_welcome_section]
+
+  <!-- 5. Dokumen Pembangunan Zona Integritas (6 Area Sejajar + Ikon SVG) -->
   <section class="pa-section-block" aria-label="Dokumen Pembangunan Zona Integritas">
     <h2 class="pa-starter-heading">DOKUMEN PEMBANGUNAN ZONA INTEGRITAS</h2>
-    <p class="pa-starter-sub">Komitmen Menuju Wilayah Bebas dari Korupsi (WBK) &amp; WBBM</p>
+    <p class="pa-starter-sub">Transparansi 6 Area Perubahan Menuju Wilayah Bebas dari Korupsi (WBK) &amp; WBBM</p>
     <div class="pa-zi-grid">
       <a class="pa-zi-card" href="#ganti-link-area-1">
+        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
         <span class="pa-zi-area">Area I</span>
         <span class="pa-zi-desc">MANAJEMEN PERUBAHAN</span>
       </a>
       <a class="pa-zi-card" href="#ganti-link-area-2">
+        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
         <span class="pa-zi-area">Area II</span>
         <span class="pa-zi-desc">PENATAAN TATA LAKSANA</span>
       </a>
       <a class="pa-zi-card" href="#ganti-link-area-3">
+        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
         <span class="pa-zi-area">Area III</span>
         <span class="pa-zi-desc">PENATAAN MANAJEMEN SDM</span>
       </a>
       <a class="pa-zi-card" href="#ganti-link-area-4">
+        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>
         <span class="pa-zi-area">Area IV</span>
         <span class="pa-zi-desc">PENGUATAN AKUNTABILITAS</span>
       </a>
       <a class="pa-zi-card" href="#ganti-link-area-5">
+        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
         <span class="pa-zi-area">Area V</span>
         <span class="pa-zi-desc">PENGUATAN PENGAWASAN</span>
       </a>
       <a class="pa-zi-card" href="#ganti-link-area-6">
+        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
         <span class="pa-zi-area">Area VI</span>
         <span class="pa-zi-desc">KUALITAS PELAYANAN PUBLIK</span>
       </a>
     </div>
   </section>
 
-  <!-- 4. Indeks Pelayanan Publik (Auto-Sync Modul survei-pelayanan) + Pintasan Hub SINOVA -->
+  <!-- 6. Berita & Pengumuman Terkini (Otomatis menarik postingan terbaru WordPress) -->
+  [pa_sinova_latest_posts count="3"]
+
+  <!-- 7. Indeks Pelayanan Publik (Auto-Sync Modul survei-pelayanan) + Pintasan Hub SINOVA -->
   <section class="pa-split-section" aria-label="Survei Pelayanan & Pintasan Transparansi">
     <section class="survey-panel pa-starter-survey" aria-label="Indeks Pelayanan Publik">
       <div class="survey-slider">
@@ -128,16 +171,16 @@
 
     <div class="pa-hub-shortcuts">
       <div class="pa-hub-shortcuts-head">
-        <h3>Transparansi Dokumen SINOVA</h3>
-        <p>Arsip terstruktur 2017–2027 (Rumah Tahun 2027 siap diisi) sesuai SK Dirjen Badilag 2722/2026.</p>
+        <h3>Arsip Transparansi Dokumen SINOVA</h3>
+        <p>Direktori dokumen berkala &amp; wajib terstruktur 2017–2027 (Rumah Tahun 2027 siap diisi).</p>
       </div>
       <div class="pa-shortcut-grid">
-        <a class="pa-shortcut-item" href="./lra/"><span>Keuangan</span><strong>Realisasi Anggaran (LRA)</strong></a>
-        <a class="pa-shortcut-item" href="./dipa/"><span>Anggaran</span><strong>Dokumen DIPA 01 &amp; 04</strong></a>
-        <a class="pa-shortcut-item" href="./biaya-perkara/"><span>Kepaniteraan</span><strong>Biaya Perkara (LIPA 7)</strong></a>
-        <a class="pa-shortcut-item" href="./lkjip/"><span>SAKIP</span><strong>Laporan Kinerja (LKJiP)</strong></a>
-        <a class="pa-shortcut-item" href="./lhkpn/"><span>Kepatuhan</span><strong>Pelaporan LHKPN &amp; ASN</strong></a>
-        <a class="pa-shortcut-item" href="./akses-informasi/"><span>PPID</span><strong>Akses Informasi &amp; Aduan</strong></a>
+        <a class="pa-shortcut-item" href="./lra/"><span>Keuangan (B3.3)</span><strong>Realisasi Anggaran (LRA)</strong></a>
+        <a class="pa-shortcut-item" href="./dipa/"><span>Anggaran (B3.2)</span><strong>Dokumen DIPA 01 &amp; 04</strong></a>
+        <a class="pa-shortcut-item" href="./biaya-perkara/"><span>Kepaniteraan (B2.5)</span><strong>Biaya Perkara (LIPA 7)</strong></a>
+        <a class="pa-shortcut-item" href="./lkjip/"><span>SAKIP (B3.11)</span><strong>Laporan Kinerja (LKJiP)</strong></a>
+        <a class="pa-shortcut-item" href="./lhkpn/"><span>Kepatuhan (B3.1)</span><strong>Pelaporan LHKPN &amp; ASN</strong></a>
+        <a class="pa-shortcut-item" href="./survei-pelayanan/"><span>Survei (B4.4)</span><strong>Hasil Survei SKM/SPAK/SPKP</strong></a>
       </div>
     </div>
   </section>

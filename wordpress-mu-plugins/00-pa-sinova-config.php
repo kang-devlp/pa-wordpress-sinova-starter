@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026 & Panel Admin
- * Description: Pengaturan dinamis Satker, generator Secret Key HMAC-SHA256, Seeder 1-Klik 35 halaman & Menu Utama SK Dirjen Badilag 2722/2026, serta panel Upload Dokumen & Checklist SINOVA di WP Admin.
- * Version: 1.0.0-starter
+ * Description: Pengaturan dinamis Satker, generator Secret Key HMAC-SHA256, Seeder 1-Klik halaman & Menu Utama SK Dirjen Badilag 2722/2026, konfigurasi Astra Free otomatis, serta panel Upload Dokumen di WP Admin.
+ * Version: 1.2.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -10,6 +10,11 @@ defined('ABSPATH') || exit;
 function pa_sinova_get_settings(): array {
     $defaults = array(
         'satker_name'          => get_bloginfo('name') ?: 'Pengadilan Agama Contoh Kelas I-A',
+        'address'              => 'Jl. Keadilan Raya No. 1, Kota Contoh',
+        'phone'                => '(000) 123-4567 · WA PTSP 0811-0000-0000',
+        'email'                => 'info@pa-contoh.go.id',
+        'leader_name'          => 'Ketua Pengadilan Agama',
+        'leader_welcome'       => 'Selamat datang di portal resmi Pengadilan Agama. Melalui website ini kami menyajikan informasi layanan peradilan, transparansi keuangan, laporan kinerja SAKIP, dan dokumen pembangunan Zona Integritas secara terbuka kepada seluruh masyarakat pencari keadilan.',
         'sipp_url'             => 'https://sipp.pa-contoh.go.id/',
         'ecourt_url'           => 'https://ecourt.mahkamahagung.go.id/',
         'direktori_url'        => 'https://putusan3.mahkamahagung.go.id/',
@@ -161,7 +166,31 @@ function pa_sinova_static_seed_pages(): array {
 }
 
 /**
- * Seeder 1-Klik: membuat 23 halaman modul SINOVA + 17 halaman wajib/statis + Menu Utama.
+ * Konfigurasi Astra Free secara otomatis (full-width tanpa sidebar mengganggu).
+ */
+function pa_sinova_apply_astra_defaults(int $frontPageId = 0): void {
+    $astraSettings = get_option('astra-settings', array());
+    if (!is_array($astraSettings)) {
+        $astraSettings = array();
+    }
+    $defaults = array(
+        'site-content-width'         => 1200,
+        'site-sidebar-layout'        => 'no-sidebar',
+        'single-page-sidebar-layout' => 'no-sidebar',
+        'single-page-content-layout' => 'plain-container',
+    );
+    update_option('astra-settings', array_merge($astraSettings, $defaults), false);
+
+    if ($frontPageId > 0) {
+        update_post_meta($frontPageId, 'site-post-title', 'disabled');
+        update_post_meta($frontPageId, 'site-sidebar-layout', 'no-sidebar');
+        update_post_meta($frontPageId, 'site-content-layout', 'plain-container');
+        update_post_meta($frontPageId, 'ast-breadcrumbs-content', 'disabled');
+    }
+}
+
+/**
+ * Seeder 1-Klik: membuat 23 halaman modul SINOVA + 17 halaman wajib/statis + Beranda PA + Berita contoh + Menu Utama.
  */
 function pa_sinova_run_starter_seeder(): array {
     $seeded = get_option('pa_sinova_seeded_pages', array());
@@ -171,19 +200,19 @@ function pa_sinova_run_starter_seeder(): array {
 
     $createdCount = 0;
     $menuItemsPlan = array(
-        'Profil Pengadilan'       => array(),
-        'Kepaniteraan & Perkara'   => array(),
+        'Profil Pengadilan'         => array(),
+        'Kepaniteraan & Perkara'     => array(),
         'Kesekretariatan & Anggaran' => array(),
-        'Perencanaan & SAKIP'      => array(),
-        'Layanan Publik & PPID'    => array(),
-        'Publikasi'                => array(),
+        'Perencanaan & SAKIP'        => array(),
+        'Layanan Publik & PPID'      => array(),
+        'Publikasi'                  => array(),
     );
 
     $catToParent = array(
-        'Keuangan & Anggaran'             => 'Kesekretariatan & Anggaran',
-        'Kepaniteraan & Biaya Perkara'    => 'Kepaniteraan & Perkara',
-        'Perencanaan & SAKIP'             => 'Perencanaan & SAKIP',
-        'Layanan Publik, PPID & Kepatuhan'=> 'Layanan Publik & PPID',
+        'Keuangan & Anggaran'              => 'Kesekretariatan & Anggaran',
+        'Kepaniteraan & Biaya Perkara'     => 'Kepaniteraan & Perkara',
+        'Perencanaan & SAKIP'              => 'Perencanaan & SAKIP',
+        'Layanan Publik, PPID & Kepatuhan' => 'Layanan Publik & PPID',
     );
 
     $upsertPage = static function (string $key, string $title, string $slug, string $content) use (&$seeded, &$createdCount): int {
@@ -230,9 +259,7 @@ function pa_sinova_run_starter_seeder(): array {
         }
     }
 
-    update_option('pa_sinova_seeded_pages', $seeded, false);
-
-    // Susun Menu Utama jika belum ada menu 'Menu Utama SINOVA'
+    // Susun Menu Utama 'Menu Utama SINOVA' dan tautkan ke seluruh lokasi navigasi tema (Astra & Klasik)
     $menuName = 'Menu Utama SINOVA';
     $menuObj  = wp_get_nav_menu_object($menuName);
     $menuId   = $menuObj ? (int) $menuObj->term_id : (int) wp_create_nav_menu($menuName);
@@ -261,24 +288,26 @@ function pa_sinova_run_starter_seeder(): array {
                     $menuCreated++;
                     foreach ($children as $ch) {
                         wp_update_nav_menu_item($menuId, 0, array(
-                            'menu-item-object-id'   => (int) $ch['post_id'],
-                            'menu-item-object'      => 'page',
-                            'menu-item-type'        => 'post_type',
-                            'menu-item-status'      => 'publish',
-                            'menu-item-parent-id'   => (int) $parentItemId,
-                            'menu-item-position'    => $pos++,
+                            'menu-item-object-id' => (int) $ch['post_id'],
+                            'menu-item-object'    => 'page',
+                            'menu-item-type'      => 'post_type',
+                            'menu-item-status'    => 'publish',
+                            'menu-item-parent-id' => (int) $parentItemId,
+                            'menu-item-position'  => $pos++,
                         ));
                         $menuCreated++;
                     }
                 }
             }
-            $locations = get_theme_mod('nav_menu_locations', array());
-            if (!is_array($locations)) {
-                $locations = array();
-            }
-            $locations['primary'] = $menuId;
-            set_theme_mod('nav_menu_locations', $locations);
         }
+        $locations = get_theme_mod('nav_menu_locations', array());
+        if (!is_array($locations)) {
+            $locations = array();
+        }
+        foreach (array('primary', 'secondary_menu', 'mobile_menu') as $locKey) {
+            $locations[$locKey] = $menuId;
+        }
+        set_theme_mod('nav_menu_locations', $locations);
     }
 
     // Buat atau lengkapi Halaman Beranda Eksekutif (Bebas strip KSES) jika belum diatur
@@ -295,7 +324,7 @@ function pa_sinova_run_starter_seeder(): array {
         }
     }
     if ($frontHtml === '') {
-        $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h2 class=\"pa-hero-title\">Portal Resmi Informasi &amp; Layanan Peradilan</h2><p class=\"pa-hero-lead\">Akses transparan informasi perkara, anggaran, kinerja SAKIP, serta arsip dokumen standar SINOVA Ditjen Badilag.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Hasil Survei Pelayanan</a></div></section>\n</div>\n<!-- /wp:html -->";
+        $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Standar SK Dirjen Badilag 2722/2026</span><h2 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h2><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, biaya panjar, laporan kinerja SAKIP, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_welcome_section]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
     }
     $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
     if ($frontId <= 0 || !get_post_status($frontId)) {
@@ -323,12 +352,51 @@ function pa_sinova_run_starter_seeder(): array {
         }
         if ($frontId > 0) {
             $seeded['static:beranda'] = $frontId;
-            update_option('pa_sinova_seeded_pages', $seeded, false);
         }
     }
-    if ($frontId > 0 && get_option('show_on_front') !== 'page') {
-        update_option('show_on_front', 'page');
-        update_option('page_on_front', $frontId);
+
+    // Seed 3 berita sampel awal bila situs hanya memiliki artikel default
+    $postCounts = wp_count_posts('post');
+    $pubPosts   = isset($postCounts->publish) ? (int) $postCounts->publish : 0;
+    if ($pubPosts <= 1) {
+        $samplePosts = array(
+            array(
+                'slug'    => 'peningkatan-kualitas-layanan-ptsp-pengadilan-agama',
+                'title'   => 'Peningkatan Kualitas Layanan PTSP dan Keterbukaan Informasi Publik',
+                'content' => '<p>Pengadilan Agama terus meningkatkan standar pelayanan terpadu satu pintu (PTSP) guna memberikan pelayanan yang cepat, transparan, dan bebas biaya di luar ketentuan resmi kepada masyarakat pencari keadilan.</p>',
+            ),
+            array(
+                'slug'    => 'publikasi-laporan-realisasi-anggaran-dan-kinerja-sakip',
+                'title'   => 'Publikasi Berkala Laporan Realisasi Anggaran dan Kinerja SAKIP',
+                'content' => '<p>Seluruh dokumen laporan realisasi anggaran DIPA 01 dan DIPA 04 serta capaian indikator kinerja utama dapat diakses langsung oleh publik melalui menu Kesekretariatan dan SAKIP sesuai pedoman transparansi Badilag.</p>',
+            ),
+            array(
+                'slug'    => 'komitmen-bersama-pembangunan-zona-integritas-wbk-wbbm',
+                'title'   => 'Komitmen Bersama Pembangunan Zona Integritas Menuju WBK dan WBBM',
+                'content' => '<p>Pimpinan dan seluruh aparatur pengadilan menyatakan komitmen bersama menjaga integritas, menolak segala bentuk gratifikasi, serta mendukung penuh pengawasan publik melalui layanan pengaduan terpadu.</p>',
+            ),
+        );
+        foreach ($samplePosts as $sp) {
+            if (!get_page_by_path($sp['slug'], OBJECT, 'post')) {
+                wp_insert_post(array(
+                    'post_type'    => 'post',
+                    'post_status'  => 'publish',
+                    'post_title'   => $sp['title'],
+                    'post_name'    => $sp['slug'],
+                    'post_content' => $sp['content'],
+                ));
+            }
+        }
+    }
+
+    update_option('pa_sinova_seeded_pages', $seeded, false);
+
+    if ($frontId > 0) {
+        if (get_option('show_on_front') !== 'page') {
+            update_option('show_on_front', 'page');
+            update_option('page_on_front', $frontId);
+        }
+        pa_sinova_apply_astra_defaults($frontId);
     }
 
     return array('pages_created' => $createdCount, 'total_mapped' => count($seeded), 'menu_items' => $menuCreated);
@@ -383,6 +451,11 @@ function pa_sinova_render_admin_page(): void {
             $cur = pa_sinova_get_settings();
             $new = array(
                 'satker_name'          => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
+                'address'              => sanitize_text_field(wp_unslash((string) ($_POST['address'] ?? $cur['address']))),
+                'phone'                => sanitize_text_field(wp_unslash((string) ($_POST['phone'] ?? $cur['phone']))),
+                'email'                => sanitize_email(wp_unslash((string) ($_POST['email'] ?? $cur['email']))),
+                'leader_name'          => sanitize_text_field(wp_unslash((string) ($_POST['leader_name'] ?? $cur['leader_name']))),
+                'leader_welcome'       => sanitize_textarea_field(wp_unslash((string) ($_POST['leader_welcome'] ?? $cur['leader_welcome']))),
                 'sipp_url'             => esc_url_raw(wp_unslash((string) ($_POST['sipp_url'] ?? ''))),
                 'ecourt_url'           => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
                 'direktori_url'        => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
@@ -395,9 +468,15 @@ function pa_sinova_render_admin_page(): void {
                 $new['hmac_secret'] = bin2hex(random_bytes(32));
             }
             update_option('pa_sinova_starter_settings', $new, false);
+            if (function_exists('pa_home_page_cache_mark_stale')) {
+                pa_home_page_cache_mark_stale();
+            }
             $notice = 'Pengaturan Satker & API HMAC berhasil disimpan.';
         } elseif ($action === 'run_seeder') {
             $res = pa_sinova_run_starter_seeder();
+            if (function_exists('pa_home_page_cache_mark_stale')) {
+                pa_home_page_cache_mark_stale();
+            }
             $notice = sprintf(
                 'Seeder selesai: %d halaman baru dibuat (%d total halaman terpetakan), %d item menu ditambahkan.',
                 $res['pages_created'],
@@ -490,6 +569,11 @@ function pa_sinova_render_admin_page(): void {
                     <input type="hidden" name="pa_sinova_action" value="save_settings">
                     <table class="form-table">
                         <tr><th>Nama Satker</th><td><input type="text" name="satker_name" class="regular-text" value="<?php echo esc_attr($cfg['satker_name']); ?>"></td></tr>
+                        <tr><th>Alamat Kantor</th><td><input type="text" name="address" class="regular-text" value="<?php echo esc_attr($cfg['address']); ?>"></td></tr>
+                        <tr><th>Telepon / WA PTSP</th><td><input type="text" name="phone" class="regular-text" value="<?php echo esc_attr($cfg['phone']); ?>"></td></tr>
+                        <tr><th>Email Resmi</th><td><input type="email" name="email" class="regular-text" value="<?php echo esc_attr($cfg['email']); ?>"></td></tr>
+                        <tr><th>Nama Pimpinan / Jabatan</th><td><input type="text" name="leader_name" class="regular-text" value="<?php echo esc_attr($cfg['leader_name']); ?>"></td></tr>
+                        <tr><th>Teks Sambutan Beranda</th><td><textarea name="leader_welcome" rows="3" class="large-text"><?php echo esc_textarea($cfg['leader_welcome']); ?></textarea></td></tr>
                         <tr><th>URL SIPP</th><td><input type="url" name="sipp_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_url']); ?>"></td></tr>
                         <tr><th>URL e-Court</th><td><input type="url" name="ecourt_url" class="regular-text" value="<?php echo esc_attr($cfg['ecourt_url']); ?>"></td></tr>
                         <tr><th>URL Direktori Putusan</th><td><input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>"></td></tr>
@@ -502,12 +586,12 @@ function pa_sinova_render_admin_page(): void {
                 </form>
 
                 <hr>
-                <h2 style="color:#056e4f;">2. Seeder Halaman &amp; Menu SK 2722/2026</h2>
-                <p>Membuat otomatis <strong>23 halaman Arsip SINOVA</strong> (berisi <code>[pa_sinova_docs]</code> slot s.d. 2027), <strong>17 halaman wajib/statis</strong> bertanda <code>[LENGKAPI]</code>, dan menyusun Menu Utama.</p>
+                <h2 style="color:#056e4f;">2. Seeder Halaman, Beranda &amp; Menu SK 2722/2026</h2>
+                <p>Membuat otomatis <strong>23 halaman Arsip SINOVA</strong> (berisi <code>[pa_sinova_docs]</code> slot s.d. 2027), <strong>17 halaman wajib/statis</strong> bertanda <code>[LENGKAPI]</code>, halaman <strong>Beranda</strong>, berita awal, dan menyusun <strong>Menu Utama</strong> pada tema Astra / standar WordPress.</p>
                 <form method="post">
                     <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                     <input type="hidden" name="pa_sinova_action" value="run_seeder">
-                    <button type="submit" class="button button-secondary" style="border-color:#056e4f;color:#056e4f;font-weight:700;">Generate 40 Halaman &amp; Menu Utama (1-Klik)</button>
+                    <button type="submit" class="button button-secondary" style="border-color:#056e4f;color:#056e4f;font-weight:700;">Generate Halaman, Beranda &amp; Menu Utama (1-Klik)</button>
                 </form>
             </div>
 

@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: PA SINOVA Starter - Document Hub & HMAC Sync API
- * Description: Penyimpanan dokumen terstruktur 23 modul SINOVA (Rumah s.d. 2027), Shortcode SSR Hijau Gelap–Gold SK 2722/2026, serta REST API HMAC-SHA256 untuk sinkronisasi dengan portal internal (Laravel/Lawangsewu).
+ * Description: Penyimpanan dokumen terstruktur 23 modul SINOVA (Rumah s.d. 2027), Shortcode SSR Hijau Gelap–Gold SK 2722/2026, serta REST API HMAC-SHA256 untuk sinkronisasi dengan portal internal (Portal Internal Laravel).
  * Version: 2.1.0-starter
  */
 
