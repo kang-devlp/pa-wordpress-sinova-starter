@@ -61,6 +61,12 @@ function pa_home_page_cache_is_early_eligible(): bool {
     }
 
     $path = pa_home_page_cache_request_path();
+    if (function_exists('pa_sinova_custom_login_slug')) {
+        $customLoginSlug = pa_sinova_custom_login_slug();
+        if ($customLoginSlug !== '' && preg_match('#/' . preg_quote($customLoginSlug, '#') . '(?:/|$)#i', $path)) {
+            return false;
+        }
+    }
     if ($path !== '/') {
         if (substr($path, -1) !== '/') {
             return false;

@@ -22,6 +22,8 @@ function pa_sinova_get_settings(): array {
         'ecourt_url'           => 'https://ecourt.mahkamahagung.go.id/',
         'direktori_url'        => 'https://putusan3.mahkamahagung.go.id/',
         'survey_url'           => 'https://survei.badilag.net/',
+        'aco_url'              => 'https://cctv.badilag.net/',
+        'custom_login_slug'    => '',
         'hmac_secret'          => '',
         'turnstile_site_key'   => '',
         'turnstile_secret_key' => '',
@@ -35,6 +37,12 @@ function pa_sinova_get_settings(): array {
     if (defined('PA_SINOVA_SATKER_NAME') && PA_SINOVA_SATKER_NAME !== '') {
         $merged['satker_name'] = (string) PA_SINOVA_SATKER_NAME;
     }
+    if (defined('PA_ACO_URL') && PA_ACO_URL !== '') {
+        $merged['aco_url'] = (string) PA_ACO_URL;
+    }
+    if (defined('PA_CUSTOM_LOGIN_SLUG') && PA_CUSTOM_LOGIN_SLUG !== '') {
+        $merged['custom_login_slug'] = (string) PA_CUSTOM_LOGIN_SLUG;
+    }
     if (defined('PA_SINOVA_HMAC_SECRET') && PA_SINOVA_HMAC_SECRET !== '') {
         $merged['hmac_secret'] = (string) PA_SINOVA_HMAC_SECRET;
     }
@@ -46,6 +54,40 @@ function pa_sinova_get_settings(): array {
     }
 
     return $merged;
+}
+
+function pa_sinova_sanitize_login_slug(string $raw): array {
+    $clean = strtolower(sanitize_title(trim($raw, " /\t\n\r")));
+    if ($clean === '') {
+        return array('valid' => true, 'slug' => '', 'error' => '');
+    }
+    $reserved = array(
+        'wp-admin', 'wp-login', 'wp-login-php', 'wp-content', 'wp-includes',
+        'wp-json', 'wp-cron', 'xmlrpc', 'admin', 'login', 'dashboard',
+        'beranda', 'feed', 'author', 'search', 'robots', 'sitemap', 'lra', 'dipa',
+    );
+    if (!preg_match('/^[a-z0-9][a-z0-9-]{2,38}[a-z0-9]$/', $clean)) {
+        return array('valid' => false, 'slug' => '', 'error' => 'Slug login minimal 4 karakter, hanya huruf kecil, angka, dan tanda hubung (-).');
+    }
+    if (in_array($clean, $reserved, true)) {
+        return array('valid' => false, 'slug' => '', 'error' => 'Slug tersebut menggunakan nama tercadang sistem; pilih kata yang lebih unik.');
+    }
+    if (function_exists('get_page_by_path') && did_action('init')) {
+        $existingPage = get_page_by_path($clean);
+        if ($existingPage instanceof WP_Post && $existingPage->post_status === 'publish') {
+            return array('valid' => false, 'slug' => '', 'error' => 'Slug tersebut sudah dipakai halaman publik yang terbit; gunakan slug lain.');
+        }
+    }
+    return array('valid' => true, 'slug' => $clean, 'error' => '');
+}
+
+function pa_sinova_custom_login_slug(): string {
+    if (defined('PA_DISABLE_CUSTOM_LOGIN') && PA_DISABLE_CUSTOM_LOGIN) {
+        return '';
+    }
+    $cfg = pa_sinova_get_settings();
+    $res = pa_sinova_sanitize_login_slug((string) ($cfg['custom_login_slug'] ?? ''));
+    return $res['valid'] ? (string) $res['slug'] : '';
 }
 
 function pa_sinova_satker_name(): string {
@@ -890,6 +932,8 @@ function pa_sinova_render_admin_page(): void {
                 'ecourt_url'           => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
                 'direktori_url'        => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
                 'survey_url'           => esc_url_raw(wp_unslash((string) ($_POST['survey_url'] ?? ''))),
+                'aco_url'              => esc_url_raw(wp_unslash((string) ($_POST['aco_url'] ?? ($cur['aco_url'] ?? '')))),
+                'custom_login_slug'    => (string) ($cur['custom_login_slug'] ?? ''),
                 'hmac_secret'          => trim(sanitize_text_field(wp_unslash((string) ($_POST['hmac_secret'] ?? '')))),
                 'turnstile_site_key'   => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_site_key'] ?? '')))),
                 'turnstile_secret_key' => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_secret_key'] ?? '')))),
@@ -1136,6 +1180,28 @@ function pa_sinova_render_admin_page(): void {
                 pa_sinova_flush_caches_for_slug((string) $row['page_slug']);
                 $notice = 'Dokumen berhasil dihapus dari arsip.';
             }
+        } elseif ($action === 'save_login_hide') {
+            $activeTab = 'security';
+            $rawSlug   = wp_unslash((string) ($_POST['custom_login_slug'] ?? ''));
+            $check     = pa_sinova_sanitize_login_slug($rawSlug);
+            if (!$check['valid']) {
+                $notice = 'Gagal: ' . $check['error'];
+            } else {
+                $stored = get_option('pa_sinova_starter_settings', array());
+                if (!is_array($stored)) {
+                    $stored = array();
+                }
+                $stored['custom_login_slug'] = $check['slug'];
+                update_option('pa_sinova_starter_settings', $stored, false);
+                if (function_exists('pa_home_page_cache_mark_stale')) {
+                    pa_home_page_cache_mark_stale();
+                }
+                if ($check['slug'] !== '') {
+                    $notice = 'Halaman login berhasil disembunyikan. URL masuk baru: ' . trailingslashit(home_url('/' . $check['slug']));
+                } else {
+                    $notice = 'Penyembunyian URL login dinonaktifkan; WordPress kembali memakai /wp-login.php standar.';
+                }
+            }
         }
     }
 
@@ -1150,8 +1216,10 @@ function pa_sinova_render_admin_page(): void {
         <h1 style="color:#056e4f;font-weight:800;">SINOVA Hub — Panel Backend &amp; Kepatuhan (SK Dirjen Badilag 2722/2026)</h1>
         <p style="color:#475569;margin-top:2px;">Halaman backend khusus operator untuk memantau kesiapan 35 kriteria, mengunggah arsip PDF/Drive, serta menyalin URL bukti ke SINOVA. Istilah <em>SINOVA</em> tidak ditampilkan di halaman publik masyarakat.</p>
 
-        <?php if ($notice !== '') : ?>
-            <div class="notice notice-success is-dismissible"><p><strong><?php echo esc_html($notice); ?></strong></p></div>
+        <?php if ($notice !== '') :
+            $noticeClass = (stripos($notice, 'Gagal:') === 0) ? 'notice-error' : 'notice-success';
+        ?>
+            <div class="notice <?php echo esc_attr($noticeClass); ?> is-dismissible"><p><strong><?php echo esc_html($notice); ?></strong></p></div>
         <?php endif; ?>
 
         <h2 class="nav-tab-wrapper" style="margin:14px 0 18px;">
@@ -1481,6 +1549,7 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>URL e-Court</th><td><input type="url" name="ecourt_url" class="regular-text" value="<?php echo esc_attr($cfg['ecourt_url']); ?>"></td></tr>
                             <tr><th>URL Direktori Putusan</th><td><input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>"></td></tr>
                             <tr><th>URL Survei Badilag</th><td><input type="url" name="survey_url" class="regular-text" value="<?php echo esc_attr($cfg['survey_url']); ?>"></td></tr>
+                            <tr><th>URL CCTV Online (ACO)</th><td><input type="url" name="aco_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" placeholder="https://cctv.badilag.net/"><br><small style="color:#64748b;">Tautan Access CCTV Online Badilag / ruang PTSP Satker (kosongkan untuk menyembunyikan kartu ACO).</small></td></tr>
                             <tr><th>Secret Key HMAC API</th><td><input type="text" name="hmac_secret" class="regular-text" value="<?php echo esc_attr($cfg['hmac_secret']); ?>" placeholder="Minimal 32 karakter"><br><label><input type="checkbox" name="generate_hmac" value="1"> Generate Secret Key acak baru (64 hex)</label></td></tr>
                             <tr><th>Turnstile Site Key</th><td><input type="text" name="turnstile_site_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_site_key']); ?>"></td></tr>
                             <tr><th>Turnstile Secret Key</th><td><input type="password" name="turnstile_secret_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_secret_key']); ?>"></td></tr>
@@ -1501,13 +1570,37 @@ function pa_sinova_render_admin_page(): void {
             </div>
 
         <?php else :
-            $secLogs = get_option('pa_starter_security_logs', array());
+            $secLogs    = get_option('pa_starter_security_logs', array());
             if (!is_array($secLogs)) $secLogs = array();
-            $tsActive = function_exists('pa_starter_login_turnstile') && pa_starter_login_turnstile() !== null;
+            $tsActive   = function_exists('pa_starter_login_turnstile') && pa_starter_login_turnstile() !== null;
+            $hiddenSlug = pa_sinova_custom_login_slug();
         ?>
+            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;margin-bottom:18px;">
+                <h2 style="margin-top:0;color:#056e4f;">Sembunyikan Halaman Login Admin (Custom Login URL)</h2>
+                <p style="color:#475569;margin-top:0;">Lindungi halaman masuk operator dari serangan otomatis dengan memindahkan URL login dari <code>/wp-login.php</code> dan menyamarkan akses anonim <code>/wp-admin/</code> serta <code>/wp-login.php</code> dengan respon <strong>404 Not Found</strong>.</p>
+                <form method="post" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:10px;">
+                    <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                    <input type="hidden" name="pa_sinova_action" value="save_login_hide">
+                    <label style="font-weight:700;"><code><?php echo esc_html(trailingslashit(home_url('/'))); ?></code>
+                        <input type="text" name="custom_login_slug" value="<?php echo esc_attr($cfg['custom_login_slug'] ?? ''); ?>" placeholder="contoh: masuk-operator-pa" style="width:240px;margin-left:4px;">
+                    </label>
+                    <button type="submit" class="button button-primary">Simpan Pengaturan URL Login</button>
+                </form>
+                <p style="margin:0;font-size:12.5px;color:#334155;">
+                    <strong>Status saat ini:</strong>
+                    <?php if ($hiddenSlug !== '') : ?>
+                        <span style="color:#15803d;font-weight:700;">AKTIF TERSEMBUNYI</span> &rarr; URL login resmi: <code><?php echo esc_html(trailingslashit(home_url('/' . $hiddenSlug))); ?></code> (simpan alamat ini di bookmark).
+                    <?php else : ?>
+                        <span>Standar WordPress (<code><?php echo esc_html(site_url('wp-login.php')); ?></code>). Isi slug minimal 4 karakter untuk mengaktifkan, atau kosongkan untuk kembali ke standar.</span>
+                    <?php endif; ?>
+                </p>
+                <p style="margin:6px 0 0;font-size:12px;color:#64748b;"><em>Pemulihan darurat: jika lupa URL login baru, tambahkan <code>define('PA_DISABLE_CUSTOM_LOGIN', true);</code> di berkas <code>wp-config.php</code>.</em></p>
+            </div>
+
             <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
                 <h2 style="margin-top:0;color:#056e4f;">Status Pengamanan Aktif</h2>
                 <ul style="line-height:1.8;margin:0;padding-left:18px;">
+                    <li><strong>Halaman Login Admin:</strong> <?php echo $hiddenSlug !== '' ? 'Disembunyikan pada slug kustom (<code>/' . esc_html($hiddenSlug) . '/</code>), akses langsung <code>wp-login.php</code> &amp; <code>/wp-admin/</code> anonim diblokir 404' : 'Standar <code>/wp-login.php</code> (dapat disembunyikan melalui formulir di atas)'; ?></li>
                     <li><strong>File Editor WP Admin:</strong> Dinonaktifkan (<code>DISALLOW_FILE_EDIT = true</code>)</li>
                     <li><strong>XML-RPC &amp; User Enumeration REST/Author:</strong> Diblokir untuk pengguna anonim</li>
                     <li><strong>Brute-Force Rate Limiter Login:</strong> Aktif (blokir 15 menit setelah 5x gagal per IP ter-hash)</li>

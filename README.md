@@ -8,26 +8,37 @@ Seluruh fitur dikemas dalam 5 berkas `mu-plugins` tanpa ketergantungan plugin ko
 
 ## Pratinjau Tampilan
 
-### Beranda Portal (Mode Terang)
-![Tampilan Beranda Mode Terang](docs/screenshots/beranda-light.png)
+### 1. Beranda Portal (Mode Terang & Akses CCTV ACO)
+![Tampilan Beranda Mode Terang dan CCTV ACO](docs/screenshots/beranda-light.png)
 
-### Beranda Portal (Mode Gelap / Dark Mode)
+### 2. Beranda Portal (Mode Gelap / Dark Mode)
 ![Tampilan Beranda Mode Gelap](docs/screenshots/beranda-dark.png)
 
-### Halaman Arsip Dokumen Publik & Sidebar Navigasi
+### 3. Halaman Arsip Dokumen Publik & Sidebar Navigasi
 ![Tampilan Modul Arsip Dokumen Publik LRA](docs/screenshots/modul-sinova.png)
+
+### 4. Ruang Operator: Dashboard Kepatuhan 35 Kriteria
+![Tampilan Dashboard Kepatuhan 35 Kriteria di WP Admin](docs/screenshots/admin-dashboard-35.png)
+
+### 5. Ruang Operator: Alat Migrasi & Adopsi Situs Lama
+![Tampilan Tab Migrasi dan Adopsi Situs Lama](docs/screenshots/admin-migrasi-adopsi.png)
+
+### 6. Ruang Operator: Keamanan Berlapis & Sembunyikan Login Admin
+![Tampilan Pengaturan Keamanan dan Sembunyikan URL Login Admin](docs/screenshots/admin-keamanan-login.png)
 
 ---
 
 ## Ringkasan Kemampuan
 
-1. **Tampilan Publik Bersih & Formal:** Seluruh istilah teknis penilaian (seperti nama aplikasi evaluator, nomor SK, maupun kode kriteria `B1.1–W4.1`) hanya muncul di ruang admin operator (**WP Admin → SINOVA Hub**) dan tidak ditampilkan ke masyarakat. Dilengkapi **Mode Terang & Mode Gelap**, jam WIB langsung di kiri atas, kotak pencarian header, breadcrumb & sidebar halaman dalam, serta **Sarana Disabilitas** (perbesar/perkecil teks, kontras tinggi, dan pembaca suara Bahasa Indonesia).
+1. **Tampilan Publik Bersih & Formal:** Seluruh istilah teknis penilaian (seperti nama aplikasi evaluator, nomor SK, maupun kode kriteria `B1.1–W4.1`) hanya muncul di ruang admin operator (**WP Admin → SINOVA Hub**) dan tidak ditampilkan ke masyarakat. Dilengkapi **Mode Terang & Mode Gelap**, jam WIB langsung di kiri atas, kotak pencarian header, breadcrumb & sidebar halaman dalam, kartu **Access CCTV Online (ACO)** berlogo resmi, serta **Sarana Disabilitas** (perbesar/perkecil teks, kontras tinggi, dan pembaca suara Bahasa Indonesia).
 2. **Dashboard Kepatuhan 35 Kriteria di WP Admin:** Memeriksa otomatis kelengkapan `B1.1–W4.1`, menandai halaman yang masih memuat placeholder `[LENGKAPI]`, serta menyediakan tombol **Salin URL** dan pemetaan URL halaman lama.
 3. **23 Modul Arsip Dokumen Terstruktur (Slot s.d. 2027):** Mendukung pengunggahan **PDF langsung ke server** maupun penautan **Google Drive** berdasarkan tahun, kategori (DIPA 01/04, LIPA 7A/7B/7C), bulan, semester, atau triwulan (SKM/SPAK/SPKP) yang tertaut otomatis ke panel indeks survei Beranda.
 4. **Dukungan Migrasi & Adopsi Situs Lama (Non-Destruktif):**
    * **Mode Adopsi Situs Lama:** Memasang mesin arsip dokumen, keamanan WAF, cache halaman, dan pemantauan 35 kriteria tanpa menimpa header, menu, ataupun Beranda website WordPress yang sudah aktif.
    * **Alat Pindai & Impor Tautan:** Membaca tautan Google Drive/PDF dari halaman lama WordPress maupun artikel hasil impor Joomla ke dalam arsip terstruktur.
-5. **Pengamanan Berlapis & Performa:** Cache HTML statis halaman publik, penghitung kunjungan aman privasi (hash IP anonim harian), pembatasan login gagal (*Brute-Force Rate Limiter* 5x/15 menit), header keamanan OWASP (`Permissions-Policy`, `HSTS`, `nosniff`, `SAMEORIGIN`), proteksi folder unggahan `.htaccess`, blokir XML-RPC dan enumerasi pengguna, WAF konten/URI terlarang, serta CAPTCHA login ganda (**Cloudflare Turnstile** atau soal hitung offline).
+5. **Pengamanan Berlapis & Performa:**
+   * **Sembunyikan Halaman Login Admin (Custom Login URL):** Memindahkan halaman login operator ke slug khusus satker, menghapus tautan login publik di topbar, serta mengembalikan `404 Not Found` pada percobaan akses langsung `/wp-login.php`, `/wp-admin/` anonim, maupun `/admin`.
+   * **Proteksi Aktif:** Cache HTML statis halaman publik, penghitung kunjungan aman privasi (hash IP anonim harian), pembatasan login gagal (*Brute-Force Rate Limiter* 5x/15 menit), header keamanan OWASP (`Permissions-Policy`, `HSTS`, `nosniff`, `SAMEORIGIN`), proteksi folder unggahan `.htaccess`, blokir XML-RPC dan enumerasi pengguna, WAF konten/URI terlarang, serta CAPTCHA login ganda (**Cloudflare Turnstile** atau soal hitung offline).
 
 ---
 
@@ -73,13 +84,34 @@ Cocok bagi satuan kerja yang membangun portal dari awal di hosting cPanel/Direct
 
 ### Langkah 3: Isi Identitas Satker & Jalankan Seeder 1-Klik
 1. Buka **WP Admin → SINOVA Hub → tab Identitas Satker & Seeder 1-Klik**.
-2. Lengkapi **Nama Satker**, URL logo (opsional), alamat kantor, telepon/WA PTSP, email, jam sidang, sambutan pimpinan, serta tautan SIPP, e-Court, Direktori Putusan, dan Survei Pelayanan, lalu klik **Simpan Pengaturan**.
+2. Lengkapi **Nama Satker**, URL logo (opsional), alamat kantor, telepon/WA PTSP, email, jam sidang, sambutan pimpinan, serta tautan **SIPP**, **e-Court**, **Direktori Putusan**, **Survei Pelayanan**, dan **URL CCTV Online (ACO)** (`https://cctv.badilag.net/` atau tautan ruangan PTSP satker), lalu klik **Simpan Pengaturan**.
 3. Klik **"Generate Halaman, Beranda & Menu (1-Klik)"** untuk membuat 23 halaman modul dokumen, 17 halaman profil/wajib bertanda `[LENGKAPI]`, halaman Beranda, statistik pengunjung, 3 artikel awal, serta `Menu Utama` pada Astra.
 
 ### Langkah 4: Kelola Dokumen & Lengkapi Halaman Profil
 1. **Dokumen Rutin (Bulanan/Triwulanan/Tahunan):** Buka tab **Upload & Kelola Dokumen**, pilih modul dan periode slot (hingga 2027), unggah PDF (maks. 10 MB) atau tempel tautan Google Drive (*Anyone with the link*), lalu simpan.
 2. **Halaman Profil Statis:** Buka **WP Admin → Pages (Laman)**, sunting halaman yang bertanda `[LENGKAPI: ...]` (*Visi dan Misi*, *Struktur Organisasi*, *Wilayah Yurisdiksi*, *Prosedur Berperkara*, dll.). Pantau kemajuannya di tab **Dashboard 35 Kriteria**.
 3. **Tautan Zona Integritas Beranda:** Sunting halaman **Beranda** dan ganti `href="#ganti-link-area-1"` s.d. `area-6` ke folder Google Drive masing-masing area.
+
+---
+
+## Keamanan Lanjutan: Menyembunyikan Halaman Login Admin
+
+Secara bawaan, starter kit **tidak menampilkan tautan Login Admin** pada topbar publik website agar halaman masuk tidak terekspos secara terbuka. Untuk pengamanan tambahan dari serangan otomatis terhadap `/wp-login.php` maupun `/wp-admin/`, operator dapat memindahkan halaman masuk ke alamat rahasia milik satker:
+
+1. Buka **WP Admin → SINOVA Hub → tab Keamanan & Audit Log**.
+2. Pada panel **Sembunyikan Halaman Login Admin (Custom Login URL)**, ketikkan slug rahasia (minimal 4 karakter huruf kecil/angka/tanda hubung, misalnya `gerbang-operator-pa`), lalu klik **Simpan Pengaturan URL Login**.
+3. **Simpan (bookmark) URL baru tersebut** di peramban operator (misalnya `https://pa-satker.go.id/gerbang-operator-pa/`).
+4. Setelah aktif:
+   * Seluruh tautan masuk, keluar (*logout*), dan lupa kata sandi WordPress otomatis menggunakan slug rahasia tersebut.
+   * Permintaan langsung ke `/wp-login.php`, akses anonim ke `/wp-admin/`, serta pengalihan bawaan WordPress (`/admin`, `/login`) akan mengembalikan halaman **`404 Tidak Ditemukan`** sehingga tidak membocorkan letak halaman login.
+   * Rate limiter (5x gagal / 15 menit) dan CAPTCHA (Turnstile / soal matematika offline) tetap aktif pada URL login tersembunyi.
+5. **Cara Pemulihan Darurat (jika lupa slug login):**
+   * Masuk melalui *File Manager* cPanel, FTP, atau SSH, lalu buka berkas `wp-config.php`.
+   * Tambahkan baris berikut tepat di atas komentar `/* That's all, stop editing! */`:
+     ```php
+     define('PA_DISABLE_CUSTOM_LOGIN', true);
+     ```
+   * Login melalui `/wp-login.php`, buka kembali tab **Keamanan & Audit Log** untuk memperbarui atau mengosongkan slug, lalu hapus baris tersebut dari `wp-config.php`.
 
 ---
 

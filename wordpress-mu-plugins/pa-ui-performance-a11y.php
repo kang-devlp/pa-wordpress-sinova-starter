@@ -186,6 +186,43 @@ add_shortcode('pa_sinova_welcome_section', static function () {
     return (string) ob_get_clean();
 });
 
+// 3b. Shortcode [pa_sinova_aco_card]: Logo Resmi & Akses CCTV ACO Ditjen Badilag
+add_shortcode('pa_sinova_aco_card', static function () {
+    $cfg    = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $acoUrl = trim((string) ($cfg['aco_url'] ?? 'https://cctv.badilag.net/'));
+    if ($acoUrl === '') {
+        return '';
+    }
+    ob_start();
+    ?>
+    <section class="pa-aco-banner" aria-label="Access CCTV Online (ACO) Ditjen Badilag">
+        <div class="pa-aco-logo" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="60" height="60" rx="14" fill="#022c22" stroke="#E5C158" stroke-width="2.5"/>
+                <path d="M15 26L40 17L45 29L20 38L15 26Z" fill="#056e4f" stroke="#E5C158" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M45 22L51 20V28L45 26" fill="#C9A227"/>
+                <path d="M27 36V44H17" stroke="#E5C158" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="17" cy="44" r="2.5" fill="#E5C158"/>
+                <circle cx="49" cy="13" r="3.5" fill="#22c55e"/>
+                <text x="39" y="52" text-anchor="middle" fill="#E5C158" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="900" letter-spacing="0.8">ACO</text>
+            </svg>
+        </div>
+        <div class="pa-aco-body">
+            <div class="pa-aco-kicker-row">
+                <span class="pa-aco-pill"><span class="pa-aco-dot" aria-hidden="true"></span> LIVE MONITORING · ACO BADILAG</span>
+                <span class="pa-aco-std">Mahkamah Agung RI</span>
+            </div>
+            <h3>Access CCTV Online (ACO) — Transparansi Layanan Publik</h3>
+            <p>Pemantauan langsung ruang Pelayanan Terpadu Satu Pintu (PTSP) dan area layanan masyarakat sebagai wujud peradilan yang bersih dan transparan.</p>
+        </div>
+        <div class="pa-aco-cta">
+            <a class="pa-aco-btn" href="<?php echo esc_url($acoUrl); ?>" target="_blank" rel="noopener noreferrer">Pantau CCTV ACO ↗</a>
+        </div>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+});
+
 // 4. Shortcode [pa_sinova_latest_posts count="3"]: Berita & Pengumuman Terkini Dinamis
 add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     $cfgAtts = shortcode_atts(array('count' => 3), $atts, 'pa_sinova_latest_posts');
@@ -734,6 +771,37 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #fffff
 .pa-service-card span:last-child { font-size: 12.5px; line-height: 1.45; color: #4b5563; }
 .pa-welcome-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 32px; text-align: left; }
 @media (max-width: 860px) { .pa-welcome-grid { grid-template-columns: 1fr; } }
+
+/* Banner Resmi Access CCTV Online (ACO) Badilag */
+.pa-aco-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 18px;
+    padding: 18px 22px;
+    margin-bottom: 32px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #f4faf7 0%, #ffffff 55%, #fefce8 100%);
+    border: 1.5px solid #C9A227;
+    box-shadow: 0 8px 22px rgba(4, 57, 39, 0.08);
+    text-align: left;
+}
+.pa-aco-logo { flex: 0 0 64px; width: 64px; height: 64px; }
+.pa-aco-logo svg { width: 64px; height: 64px; display: block; }
+.pa-aco-body { flex: 1 1 320px; min-width: 0; }
+.pa-aco-kicker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.pa-aco-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #043927; color: #E5C158; font-size: 11px; font-weight: 800; letter-spacing: 0.03em; }
+.pa-aco-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
+.pa-aco-std { font-size: 11.5px; font-weight: 700; color: #056e4f; }
+.pa-aco-body h3 { margin: 0 0 4px; font-size: 1.08rem; font-weight: 800; color: #043927; }
+.pa-aco-body p { margin: 0; font-size: 0.89rem; line-height: 1.5; color: #475569; }
+.pa-aco-cta { flex: 0 0 auto; }
+.pa-aco-btn { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 10px; background: linear-gradient(135deg, #043927 0%, #056e4f 100%); border: 1.5px solid #C9A227; color: #E5C158 !important; font-size: 13px; font-weight: 800; text-decoration: none !important; box-shadow: 0 6px 14px rgba(4, 57, 39, 0.16); transition: transform 0.16s ease; }
+.pa-aco-btn:hover { transform: translateY(-2px); background: #022c22; }
+html[data-pa-theme="dark"] .pa-aco-banner { background: linear-gradient(135deg, #13221a 0%, #0f1c15 100%); border-color: #C9A227; }
+html[data-pa-theme="dark"] .pa-aco-body h3 { color: #E5C158; }
+html[data-pa-theme="dark"] .pa-aco-body p,
+html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
 .pa-welcome-card { padding: 22px; border-radius: 16px; background: #f4faf7; border: 1.5px solid #d5e6dc; border-left: 5px solid #056e4f; }
 .pa-wc-kicker { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
 .pa-welcome-card h3 { margin: 0 0 10px; color: #043927; font-size: 1.15rem; font-weight: 800; }
@@ -932,8 +1000,8 @@ add_action('wp_body_open', static function () {
             <span>PTSP: <?php echo esc_html($phone ?: 'Senin–Jumat'); ?></span>
             <a href="<?php echo esc_url($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'); ?>" target="_blank" rel="noopener noreferrer">SIPP</a>
             <a href="<?php echo esc_url($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer">e-Court</a>
+            <a href="<?php echo esc_url($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>CCTV ACO</a>
             <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Survei Pelayanan</a>
-            <a href="<?php echo esc_url(wp_login_url()); ?>">Login Admin</a>
             <button type="button" id="pa-topbar-theme-btn" class="pa-topbar-theme-btn" aria-pressed="false" title="Ubah Mode Terang/Gelap">🌙 Mode Gelap</button>
         </div>
     </div>
@@ -1050,6 +1118,7 @@ add_action('wp_footer', static function () {
             <ul>
                 <li><a href="https://www.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Mahkamah Agung RI</a></li>
                 <li><a href="https://badilag.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Ditjen Badilag MA RI</a></li>
+                <li><a href="<?php echo esc_url($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Access CCTV Online (ACO)</a></li>
                 <li><a href="https://siwas.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">SIWAS Mahkamah Agung</a></li>
             </ul>
             <div class="pa-footer-vis-box">

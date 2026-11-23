@@ -276,3 +276,119 @@ add_action('wp_login', static function () {
     delete_transient('pa_bf_fail_' . $ipHash);
     delete_transient('pa_bf_lock_' . $ipHash);
 });
+
+// Layer 4: Menyembunyikan Halaman Login Admin (Custom Login URL + Stealth 404 pada wp-login.php / wp-admin)
+function pa_starter_active_login_slug(): string {
+    if (defined('PA_DISABLE_CUSTOM_LOGIN') && PA_DISABLE_CUSTOM_LOGIN) {
+        return '';
+    }
+    if (function_exists('pa_sinova_custom_login_slug')) {
+        return pa_sinova_custom_login_slug();
+    }
+    return '';
+}
+
+function pa_starter_rel_request_path(): string {
+    $reqUri  = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+    $reqPath = trim((string) parse_url($reqUri, PHP_URL_PATH), '/');
+    $homeRaw = function_exists('get_option') ? (string) get_option('home', '/') : '/';
+    $base    = trim((string) parse_url($homeRaw, PHP_URL_PATH), '/');
+    if ($base !== '' && stripos($reqPath, $base) === 0) {
+        $reqPath = trim(substr($reqPath, strlen($base)), '/');
+    }
+    return strtolower($reqPath);
+}
+
+function pa_starter_rewrite_login_url(string $url, string $slug, ?string $scheme = null): string {
+    if ($slug === '' || strpos($url, 'wp-login.php') === false) {
+        return $url;
+    }
+    $target = trailingslashit(home_url('/' . $slug));
+    if ($scheme !== null && ($scheme === 'https' || $scheme === 'login' || $scheme === 'login_post') && is_ssl()) {
+        $target = set_url_scheme($target, 'https');
+    } elseif (stripos($url, 'https://') === 0) {
+        $target = set_url_scheme($target, 'https');
+    }
+    $query = (string) parse_url($url, PHP_URL_QUERY);
+    return $query !== '' ? ($target . '?' . $query) : $target;
+}
+
+function pa_starter_send_stealth_404(): void {
+    if (!headers_sent()) {
+        if (function_exists('nocache_headers')) {
+            nocache_headers();
+        }
+        if (function_exists('status_header')) {
+            status_header(404);
+        } else {
+            header('HTTP/1.1 404 Not Found', true, 404);
+        }
+        header('Content-Type: text/html; charset=UTF-8');
+    }
+    echo '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>404 Tidak Ditemukan</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e293b;display:flex;align-items:center;justify-content:center;min-height:90vh;margin:0}main{max-width:460px;padding:28px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;text-align:center}h1{margin:0 0 8px;font-size:22px;color:#043927}p{margin:0;color:#475569;font-size:14px}</style></head><body><main><h1>404 Halaman Tidak Ditemukan</h1><p>Tautan yang Anda tuju tidak tersedia pada portal ini.</p></main></body></html>';
+    exit;
+}
+
+add_action('init', static function () {
+    if (pa_starter_active_login_slug() !== '') {
+        remove_action('template_redirect', 'wp_redirect_admin_locations', 1000);
+    }
+}, 20);
+
+add_action('wp_loaded', static function () {
+    if (PHP_SAPI === 'cli' || (defined('DOING_CRON') && DOING_CRON)) {
+        return;
+    }
+    $slug = pa_starter_active_login_slug();
+    if ($slug === '') {
+        return;
+    }
+
+    $rel        = pa_starter_rel_request_path();
+    $scriptBase = strtolower(basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
+
+    if ($rel === $slug) {
+        defined('DONOTCACHEPAGE') || define('DONOTCACHEPAGE', true);
+        defined('PA_SERVING_CUSTOM_LOGIN') || define('PA_SERVING_CUSTOM_LOGIN', true);
+        global $pagenow, $error, $interim_login, $action, $user_login, $errors, $redirect_to;
+        $pagenow = 'wp-login.php';
+        if (!headers_sent()) {
+            nocache_headers();
+            status_header(200);
+        }
+        require_once ABSPATH . 'wp-login.php';
+        exit;
+    }
+
+    if (!defined('PA_SERVING_CUSTOM_LOGIN') && ($scriptBase === 'wp-login.php' || $rel === 'wp-login.php')) {
+        $reqAction = sanitize_key((string) ($_REQUEST['action'] ?? ''));
+        if (!in_array($reqAction, array('postpass', 'confirmaction'), true)) {
+            pa_starter_security_log('hidden-login-probe', (string) ($_SERVER['REQUEST_URI'] ?? '/wp-login.php'));
+            pa_starter_send_stealth_404();
+        }
+    }
+
+    if (!is_user_logged_in()) {
+        $allowedAdminScripts = array('admin-ajax.php', 'admin-post.php', 'install.php', 'upgrade.php');
+        $isWpAdminReq        = ((function_exists('is_admin') && is_admin()) || $rel === 'wp-admin' || strpos($rel, 'wp-admin/') === 0);
+        if ($isWpAdminReq && !wp_doing_ajax() && !in_array($scriptBase, $allowedAdminScripts, true)) {
+            pa_starter_security_log('hidden-admin-probe', (string) ($_SERVER['REQUEST_URI'] ?? '/wp-admin/'));
+            pa_starter_send_stealth_404();
+        }
+    }
+}, 1);
+
+add_filter('site_url', static function ($url, $path, $scheme) {
+    $slug = pa_starter_active_login_slug();
+    return $slug !== '' ? pa_starter_rewrite_login_url((string) $url, $slug, is_string($scheme) ? $scheme : null) : $url;
+}, 10, 3);
+
+add_filter('network_site_url', static function ($url, $path, $scheme) {
+    $slug = pa_starter_active_login_slug();
+    return $slug !== '' ? pa_starter_rewrite_login_url((string) $url, $slug, is_string($scheme) ? $scheme : null) : $url;
+}, 10, 3);
+
+add_filter('wp_redirect', static function ($location) {
+    $slug = pa_starter_active_login_slug();
+    return $slug !== '' ? pa_starter_rewrite_login_url((string) $location, $slug) : $location;
+}, 10, 1);
