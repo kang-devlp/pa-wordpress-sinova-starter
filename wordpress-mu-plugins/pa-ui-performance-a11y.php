@@ -11,8 +11,16 @@ defined('ABSPATH') || exit;
 add_filter('astra_google_fonts', '__return_empty_array', 999);
 add_filter('elementor/frontend/print_google_fonts', '__return_false', 999);
 
+function pa_sinova_is_adoption_mode(): bool {
+    if (!function_exists('pa_sinova_get_settings')) {
+        return false;
+    }
+    $cfg = pa_sinova_get_settings();
+    return !empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1';
+}
+
 add_filter('body_class', static function ($classes) {
-    if (is_admin()) {
+    if (is_admin() || pa_sinova_is_adoption_mode()) {
         return $classes;
     }
     $classes[] = 'pa-sinova-portal';
@@ -225,7 +233,7 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
 
 // 5. Tambahkan Logo Satker & Kotak Pencarian Internal ke Baris 1 Header Astra
 add_action('astra_render_header_column', static function ($row, $section) {
-    if ($row !== 'primary' || $section !== 'left' || is_admin()) {
+    if ($row !== 'primary' || $section !== 'left' || is_admin() || pa_sinova_is_adoption_mode()) {
         return;
     }
     $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
@@ -242,7 +250,7 @@ add_action('astra_render_header_column', static function ($row, $section) {
 
 // 6. Breadcrumb + Sidebar Navigasi Pilar Otomatis pada Halaman Dalam (!is_front_page() && is_page())
 add_filter('the_content', static function ($content) {
-    if (is_admin() || !is_page() || is_front_page() || !is_main_query() || !in_the_loop()) {
+    if (is_admin() || !is_page() || is_front_page() || !is_main_query() || !in_the_loop() || pa_sinova_is_adoption_mode()) {
         return $content;
     }
     $postId = (int) get_the_ID();
@@ -329,6 +337,7 @@ body, button, input, select, textarea {
     animation: none !important;
 }
 
+<?php if (!pa_sinova_is_adoption_mode()) : ?>
 body.pa-sinova-block-shell .wp-site-blocks > header.wp-block-template-part,
 body.pa-sinova-block-shell .wp-site-blocks > footer.wp-block-template-part,
 body.pa-sinova-block-shell header:has(.wp-block-page-list),
@@ -539,6 +548,7 @@ body.pa-sinova-classic-shell .ast-mobile-header-wrap .ast-primary-header-bar { p
 body.pa-sinova-classic-shell .ast-mobile-menu-buttons .menu-toggle { background: rgba(201, 162, 39, 0.2) !important; border-color: #C9A227 !important; color: #E5C158 !important; }
 body.pa-sinova-classic-shell .ast-mobile-popup-drawer .ast-mobile-popup-inner { background: #043927 !important; }
 body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #ffffff !important; border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important; }
+<?php endif; ?>
 
 /* Breadcrumb & Sidebar Halaman Dalam */
 .pa-breadcrumb {
@@ -899,7 +909,7 @@ html[data-pa-contrast="high"] a { color: #003d29 !important; text-decoration: un
 
 // 8. Topbar Institusional (Semua Tema) + Shell Header/Menu Saat Memakai Tema Blok WordPress
 add_action('wp_body_open', static function () {
-    if (is_admin()) {
+    if (is_admin() || pa_sinova_is_adoption_mode()) {
         return;
     }
     $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
@@ -1002,6 +1012,7 @@ add_action('wp_footer', static function () {
     $cfg    = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $satker = $cfg['satker_name'] ?? (get_bloginfo('name') ?: 'Pengadilan Agama');
     $vStats = pa_starter_get_visitor_stats();
+    if (!pa_sinova_is_adoption_mode()) :
     ?>
 <footer class="pa-shell-footer" role="contentinfo">
     <div class="pa-footer-grid">
@@ -1053,6 +1064,7 @@ add_action('wp_footer', static function () {
         <span class="pa-shell-render-pill">Rendering : <?php echo esc_html(timer_stop(0, 3)); ?> detik.</span>
     </div>
 </footer>
+    <?php endif; ?>
 <div id="pa-a11y-dock" role="region" aria-label="Sarana Aksesibilitas Website">
     <button type="button" id="pa-btn-dark" aria-pressed="false" title="Ubah Mode Terang/Gelap">Mode Gelap</button>
     <button type="button" id="pa-btn-contrast" aria-pressed="false" title="Kontras Tinggi WCAG">Kontras</button>

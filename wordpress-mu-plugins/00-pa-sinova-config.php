@@ -9,9 +9,10 @@ defined('ABSPATH') || exit;
 
 function pa_sinova_get_settings(): array {
     $defaults = array(
-        'satker_name'          => get_bloginfo('name') ?: 'Pengadilan Agama Contoh Kelas I-A',
-        'logo_url'             => '',
-        'address'              => 'Jl. Keadilan Raya No. 1, Kota Contoh',
+        'satker_name'              => get_bloginfo('name') ?: 'Pengadilan Agama Contoh Kelas I-A',
+        'logo_url'                 => '',
+        'preserve_existing_design' => '0',
+        'address'                  => 'Jl. Keadilan Raya No. 1, Kota Contoh',
         'phone'                => '(000) 123-4567 · WA PTSP 0811-0000-0000',
         'email'                => 'info@pa-contoh.go.id',
         'hearing_hours'        => 'Senin–Kamis 09.00 WIB s.d. selesai',
@@ -55,6 +56,33 @@ function pa_sinova_satker_name(): string {
 function pa_sinova_get_secret_key(): string {
     $cfg = pa_sinova_get_settings();
     return trim((string) ($cfg['hmac_secret'] ?? ''));
+}
+
+function pa_sinova_get_custom_map(): array {
+    $map = get_option('pa_sinova_custom_page_map', array());
+    return is_array($map) ? $map : array();
+}
+
+/**
+ * Cari halaman terbit baik di root maupun sebagai sub-halaman (nested slug) agar tidak menduplikasi halaman WP lama.
+ */
+function pa_sinova_find_existing_page(string $slug): ?WP_Post {
+    $direct = get_page_by_path($slug);
+    if ($direct instanceof WP_Post && $direct->post_status === 'publish') {
+        return $direct;
+    }
+    global $wpdb;
+    $id = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT ID FROM `{$wpdb->posts}` WHERE post_type = 'page' AND post_status = 'publish' AND post_name = %s ORDER BY ID ASC LIMIT 1",
+        $slug
+    ));
+    if ($id > 0) {
+        $p = get_post($id);
+        if ($p instanceof WP_Post) {
+            return $p;
+        }
+    }
+    return null;
 }
 
 /**
@@ -228,15 +256,36 @@ function pa_sinova_wp_compliance_report(): array {
         array('W4.1', 'wajib', 'Standar dan Maklumat Pelayanan', 'standar-maklumat-pelayanan', 'page'),
     );
 
-    $items   = array();
-    $counts  = array('lengkap' => 0, 'perhatian' => 0, 'kosong' => 0);
-    $bPts    = 0;
-    $wPts    = 0;
+    $items     = array();
+    $counts    = array('lengkap' => 0, 'perhatian' => 0, 'kosong' => 0);
+    $bPts      = 0;
+    $wPts      = 0;
+    $customMap = pa_sinova_get_custom_map();
 
     foreach ($specs as $sp) {
         list($code, $group, $label, $slug, $mode) = $sp;
-        $pageObj = get_page_by_path($slug);
-        $url     = $pageObj instanceof WP_Post ? get_permalink($pageObj->ID) : pa_sinova_resolve_page_url($slug);
+        $mapped = (isset($customMap[$code]) && is_array($customMap[$code])) ? $customMap[$code] : array();
+        $mapPid = !empty($mapped['post_id']) ? (int) $mapped['post_id'] : 0;
+        $mapUrl = !empty($mapped['custom_url']) ? trim((string) $mapped['custom_url']) : '';
+
+        $pageObj = null;
+        if ($mapPid > 0) {
+            $candidate = get_post($mapPid);
+            if ($candidate instanceof WP_Post && $candidate->post_status === 'publish') {
+                $pageObj = $candidate;
+            }
+        }
+        if (!$pageObj instanceof WP_Post) {
+            $pageObj = pa_sinova_find_existing_page($slug);
+        }
+
+        if ($mapUrl !== '') {
+            $url = $mapUrl;
+        } elseif ($pageObj instanceof WP_Post) {
+            $url = (string) get_permalink($pageObj->ID);
+        } else {
+            $url = pa_sinova_resolve_page_url($slug);
+        }
         $editUrl = $pageObj instanceof WP_Post ? admin_url('post.php?post=' . $pageObj->ID . '&action=edit') : admin_url('admin.php?page=pa-sinova-starter&tab=upload');
 
         $status = 'kosong';
@@ -309,12 +358,16 @@ function pa_sinova_wp_compliance_report(): array {
                 } elseif (strlen(trim(wp_strip_all_tags($rawContent))) >= 20 || stripos($rawContent, '[pa_') !== false) {
                     $status = 'lengkap';
                     $pts    = 10;
-                    $note   = 'Halaman resmi terpublikasi (HTTP 200).';
+                    $note   = $mapPid > 0 ? 'Tertaut ke halaman situs lama (pemetaan kustom).' : 'Halaman resmi terpublikasi (HTTP 200).';
                 } else {
                     $status = 'perhatian';
                     $pts    = 5;
                     $note   = 'Konten halaman masih terlalu singkat.';
                 }
+            } elseif ($mapUrl !== '') {
+                $status = 'lengkap';
+                $pts    = 10;
+                $note   = 'Tertaut ke URL kustom pemetaan situs lama.';
             }
         }
 
@@ -373,10 +426,13 @@ function pa_sinova_apply_astra_defaults(int $frontPageId = 0): void {
 }
 
 /**
- * Seeder 1-Klik: membuat 23 halaman modul + 17 halaman wajib/statis + Beranda PA + Berita contoh + Menu Utama.
+ * Seeder 1-Klik: membuat halaman modul & wajib yang belum ada.
+ * Jika mode adopsi situs lama aktif ($forcePreserve = true), tema, menu eksisting, dan Beranda lama tidak diubah.
  */
-function pa_sinova_run_starter_seeder(): array {
-    $seeded = get_option('pa_sinova_seeded_pages', array());
+function pa_sinova_run_starter_seeder(?bool $forcePreserve = null): array {
+    $cfg      = pa_sinova_get_settings();
+    $preserve = $forcePreserve ?? (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1');
+    $seeded   = get_option('pa_sinova_seeded_pages', array());
     if (!is_array($seeded)) {
         $seeded = array();
     }
@@ -403,7 +459,7 @@ function pa_sinova_run_starter_seeder(): array {
         if ($existingId > 0 && get_post_status($existingId)) {
             return $existingId;
         }
-        $byPath = get_page_by_path($slug);
+        $byPath = pa_sinova_find_existing_page($slug);
         if ($byPath instanceof WP_Post) {
             $seeded[$key] = (int) $byPath->ID;
             return (int) $byPath->ID;
@@ -432,154 +488,162 @@ function pa_sinova_run_starter_seeder(): array {
     }
 
     if (function_exists('pa_sinova_module_catalog')) {
-        foreach (pa_sinova_module_catalog() as $slug => $cfg) {
+        foreach (pa_sinova_module_catalog() as $slug => $cfgMod) {
             $shortcode = '[pa_sinova_docs slug="' . esc_attr($slug) . '"]';
-            $pid = $upsertPage('mod:' . $slug, $cfg['title'], $slug, $shortcode);
+            $pid = $upsertPage('mod:' . $slug, $cfgMod['title'], $slug, $shortcode);
             if ($pid > 0) {
-                $parentName = ($slug === 'mou') ? 'Publikasi' : ($catToParent[$cfg['category']] ?? 'Layanan Publik & PPID');
-                $menuItemsPlan[$parentName][] = array('title' => $cfg['title'], 'post_id' => $pid);
+                $parentName = ($slug === 'mou') ? 'Publikasi' : ($catToParent[$cfgMod['category']] ?? 'Layanan Publik & PPID');
+                $menuItemsPlan[$parentName][] = array('title' => $cfgMod['title'], 'post_id' => $pid);
             }
         }
     }
 
-    $menuName = 'Menu Utama SINOVA';
-    $menuObj  = wp_get_nav_menu_object($menuName);
-    $menuId   = $menuObj ? (int) $menuObj->term_id : (int) wp_create_nav_menu($menuName);
     $menuCreated = 0;
 
-    if ($menuId > 0) {
-        $existingItems = wp_get_nav_menu_items($menuId);
-        if (empty($existingItems)) {
-            $pos = 1;
-            wp_update_nav_menu_item($menuId, 0, array(
-                'menu-item-title'    => 'Beranda',
-                'menu-item-url'      => home_url('/'),
-                'menu-item-type'     => 'custom',
-                'menu-item-status'   => 'publish',
-                'menu-item-position' => $pos++,
-            ));
-            foreach ($menuItemsPlan as $parentTitle => $children) {
-                $parentItemId = wp_update_nav_menu_item($menuId, 0, array(
-                    'menu-item-title'    => $parentTitle,
-                    'menu-item-url'      => '#top-' . sanitize_title($parentTitle),
+    if (!$preserve) {
+        $menuName = 'Menu Utama SINOVA';
+        $menuObj  = wp_get_nav_menu_object($menuName);
+        $menuId   = $menuObj ? (int) $menuObj->term_id : (int) wp_create_nav_menu($menuName);
+
+        if ($menuId > 0) {
+            $existingItems = wp_get_nav_menu_items($menuId);
+            if (empty($existingItems)) {
+                $pos = 1;
+                wp_update_nav_menu_item($menuId, 0, array(
+                    'menu-item-title'    => 'Beranda',
+                    'menu-item-url'      => home_url('/'),
                     'menu-item-type'     => 'custom',
                     'menu-item-status'   => 'publish',
                     'menu-item-position' => $pos++,
                 ));
-                if (!is_wp_error($parentItemId) && $parentItemId > 0) {
-                    $menuCreated++;
-                    foreach ($children as $ch) {
-                        wp_update_nav_menu_item($menuId, 0, array(
-                            'menu-item-object-id' => (int) $ch['post_id'],
-                            'menu-item-object'    => 'page',
-                            'menu-item-type'      => 'post_type',
-                            'menu-item-status'    => 'publish',
-                            'menu-item-parent-id' => (int) $parentItemId,
-                            'menu-item-position'  => $pos++,
-                        ));
+                foreach ($menuItemsPlan as $parentTitle => $children) {
+                    $parentItemId = wp_update_nav_menu_item($menuId, 0, array(
+                        'menu-item-title'    => $parentTitle,
+                        'menu-item-url'      => '#top-' . sanitize_title($parentTitle),
+                        'menu-item-type'     => 'custom',
+                        'menu-item-status'   => 'publish',
+                        'menu-item-position' => $pos++,
+                    ));
+                    if (!is_wp_error($parentItemId) && $parentItemId > 0) {
                         $menuCreated++;
+                        foreach ($children as $ch) {
+                            wp_update_nav_menu_item($menuId, 0, array(
+                                'menu-item-object-id' => (int) $ch['post_id'],
+                                'menu-item-object'    => 'page',
+                                'menu-item-type'      => 'post_type',
+                                'menu-item-status'    => 'publish',
+                                'menu-item-parent-id' => (int) $parentItemId,
+                                'menu-item-position'  => $pos++,
+                            ));
+                            $menuCreated++;
+                        }
                     }
                 }
             }
-        }
-        $locations = get_theme_mod('nav_menu_locations', array());
-        if (!is_array($locations)) {
-            $locations = array();
-        }
-        foreach (array('primary', 'secondary_menu', 'mobile_menu') as $locKey) {
-            $locations[$locKey] = $menuId;
-        }
-        set_theme_mod('nav_menu_locations', $locations);
-    }
-
-    $frontSlug = 'beranda';
-    $tplPaths  = array(
-        ABSPATH . 'sinova-starter-kit/wordpress-templates/beranda-blocks-starter.html',
-        dirname(__DIR__) . '/wordpress-templates/beranda-blocks-starter.html',
-    );
-    $frontHtml = '';
-    foreach ($tplPaths as $tp) {
-        if (is_file($tp)) {
-            $frontHtml = (string) file_get_contents($tp);
-            break;
-        }
-    }
-    if ($frontHtml === '') {
-        $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h2 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h2><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_welcome_section]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
-    }
-    $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
-    if ($frontId <= 0 || !get_post_status($frontId)) {
-        $existingFront = get_page_by_path($frontSlug);
-        $wasKses = has_filter('content_save_pre', 'wp_filter_post_kses');
-        if ($wasKses && function_exists('kses_remove_filters')) {
-            kses_remove_filters();
-        }
-        if ($existingFront instanceof WP_Post) {
-            $frontId = (int) $existingFront->ID;
-        } else {
-            $frontId = (int) wp_insert_post(array(
-                'post_type'    => 'page',
-                'post_status'  => 'publish',
-                'post_title'   => 'Beranda',
-                'post_name'    => $frontSlug,
-                'post_content' => $frontHtml,
-            ));
-            if ($frontId > 0) {
-                $createdCount++;
+            $locations = get_theme_mod('nav_menu_locations', array());
+            if (!is_array($locations)) {
+                $locations = array();
             }
+            foreach (array('primary', 'secondary_menu', 'mobile_menu') as $locKey) {
+                $locations[$locKey] = $menuId;
+            }
+            set_theme_mod('nav_menu_locations', $locations);
         }
-        if ($wasKses && function_exists('kses_init_filters')) {
-            kses_init_filters();
-        }
-        if ($frontId > 0) {
-            $seeded['static:beranda'] = $frontId;
-        }
-    }
 
-    $postCounts = wp_count_posts('post');
-    $pubPosts   = isset($postCounts->publish) ? (int) $postCounts->publish : 0;
-    if ($pubPosts <= 1) {
-        $samplePosts = array(
-            array(
-                'slug'    => 'peningkatan-kualitas-layanan-ptsp-pengadilan-agama',
-                'title'   => 'Peningkatan Kualitas Layanan PTSP dan Keterbukaan Informasi Publik',
-                'content' => '<p>Pengadilan Agama terus meningkatkan standar pelayanan terpadu satu pintu (PTSP) guna memberikan pelayanan yang cepat, transparan, dan bebas biaya di luar ketentuan resmi kepada masyarakat pencari keadilan.</p>',
-            ),
-            array(
-                'slug'    => 'publikasi-laporan-realisasi-anggaran-dan-kinerja-sakip',
-                'title'   => 'Publikasi Berkala Laporan Realisasi Anggaran dan Kinerja SAKIP',
-                'content' => '<p>Seluruh dokumen laporan realisasi anggaran DIPA 01 dan DIPA 04 serta capaian indikator kinerja utama dapat diakses langsung oleh publik melalui menu Kesekretariatan dan SAKIP sesuai pedoman transparansi Badilag.</p>',
-            ),
-            array(
-                'slug'    => 'komitmen-bersama-pembangunan-zona-integritas-wbk-wbbm',
-                'title'   => 'Komitmen Bersama Pembangunan Zona Integritas Menuju WBK dan WBBM',
-                'content' => '<p>Pimpinan dan seluruh aparatur pengadilan menyatakan komitmen bersama menjaga integritas, menolak segala bentuk gratifikasi, serta mendukung penuh pengawasan publik melalui layanan pengaduan terpadu.</p>',
-            ),
+        $frontSlug = 'beranda';
+        $tplPaths  = array(
+            ABSPATH . 'sinova-starter-kit/wordpress-templates/beranda-blocks-starter.html',
+            dirname(__DIR__) . '/wordpress-templates/beranda-blocks-starter.html',
         );
-        foreach ($samplePosts as $sp) {
-            if (!get_page_by_path($sp['slug'], OBJECT, 'post')) {
-                wp_insert_post(array(
-                    'post_type'    => 'post',
-                    'post_status'  => 'publish',
-                    'post_title'   => $sp['title'],
-                    'post_name'    => $sp['slug'],
-                    'post_content' => $sp['content'],
-                ));
+        $frontHtml = '';
+        foreach ($tplPaths as $tp) {
+            if (is_file($tp)) {
+                $frontHtml = (string) file_get_contents($tp);
+                break;
             }
+        }
+        if ($frontHtml === '') {
+            $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h2 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h2><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_welcome_section]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
+        }
+        $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
+        if ($frontId <= 0 || !get_post_status($frontId)) {
+            $existingFront = get_page_by_path($frontSlug);
+            $wasKses = has_filter('content_save_pre', 'wp_filter_post_kses');
+            if ($wasKses && function_exists('kses_remove_filters')) {
+                kses_remove_filters();
+            }
+            if ($existingFront instanceof WP_Post) {
+                $frontId = (int) $existingFront->ID;
+            } else {
+                $frontId = (int) wp_insert_post(array(
+                    'post_type'    => 'page',
+                    'post_status'  => 'publish',
+                    'post_title'   => 'Beranda',
+                    'post_name'    => $frontSlug,
+                    'post_content' => $frontHtml,
+                ));
+                if ($frontId > 0) {
+                    $createdCount++;
+                }
+            }
+            if ($wasKses && function_exists('kses_init_filters')) {
+                kses_init_filters();
+            }
+            if ($frontId > 0) {
+                $seeded['static:beranda'] = $frontId;
+            }
+        }
+
+        $postCounts = wp_count_posts('post');
+        $pubPosts   = isset($postCounts->publish) ? (int) $postCounts->publish : 0;
+        if ($pubPosts <= 1) {
+            $samplePosts = array(
+                array(
+                    'slug'    => 'peningkatan-kualitas-layanan-ptsp-pengadilan-agama',
+                    'title'   => 'Peningkatan Kualitas Layanan PTSP dan Keterbukaan Informasi Publik',
+                    'content' => '<p>Pengadilan Agama terus meningkatkan standar pelayanan terpadu satu pintu (PTSP) guna memberikan pelayanan yang cepat, transparan, dan bebas biaya di luar ketentuan resmi kepada masyarakat pencari keadilan.</p>',
+                ),
+                array(
+                    'slug'    => 'publikasi-laporan-realisasi-anggaran-dan-kinerja-sakip',
+                    'title'   => 'Publikasi Berkala Laporan Realisasi Anggaran dan Kinerja SAKIP',
+                    'content' => '<p>Seluruh dokumen laporan realisasi anggaran DIPA 01 dan DIPA 04 serta capaian indikator kinerja utama dapat diakses langsung oleh publik melalui menu Kesekretariatan dan SAKIP sesuai pedoman transparansi Badilag.</p>',
+                ),
+                array(
+                    'slug'    => 'komitmen-bersama-pembangunan-zona-integritas-wbk-wbbm',
+                    'title'   => 'Komitmen Bersama Pembangunan Zona Integritas Menuju WBK dan WBBM',
+                    'content' => '<p>Pimpinan dan seluruh aparatur pengadilan menyatakan komitmen bersama menjaga integritas, menolak segala bentuk gratifikasi, serta mendukung penuh pengawasan publik melalui layanan pengaduan terpadu.</p>',
+                ),
+            );
+            foreach ($samplePosts as $sp) {
+                if (!get_page_by_path($sp['slug'], OBJECT, 'post')) {
+                    wp_insert_post(array(
+                        'post_type'    => 'post',
+                        'post_status'  => 'publish',
+                        'post_title'   => $sp['title'],
+                        'post_name'    => $sp['slug'],
+                        'post_content' => $sp['content'],
+                    ));
+                }
+            }
+        }
+
+        if ($frontId > 0) {
+            if (get_option('show_on_front') !== 'page') {
+                update_option('show_on_front', 'page');
+                update_option('page_on_front', $frontId);
+            }
+            pa_sinova_apply_astra_defaults($frontId);
         }
     }
 
     update_option('pa_sinova_seeded_pages', $seeded, false);
 
-    if ($frontId > 0) {
-        if (get_option('show_on_front') !== 'page') {
-            update_option('show_on_front', 'page');
-            update_option('page_on_front', $frontId);
-        }
-        pa_sinova_apply_astra_defaults($frontId);
-    }
-
-    return array('pages_created' => $createdCount, 'total_mapped' => count($seeded), 'menu_items' => $menuCreated);
+    return array(
+        'pages_created' => $createdCount,
+        'total_mapped'  => count($seeded),
+        'menu_items'    => $menuCreated,
+        'preserve_mode' => $preserve ? 1 : 0,
+    );
 }
 
 /**
@@ -597,12 +661,185 @@ function pa_sinova_resolve_page_url(string $slug, string $fallbackPath = ''): st
             if ($u) return $u;
         }
     }
-    $page = get_page_by_path($slug);
+    $page = pa_sinova_find_existing_page($slug);
     if ($page instanceof WP_Post) {
         $u = get_permalink($page->ID);
         if ($u) return $u;
     }
     return home_url('/' . ltrim($fallbackPath ?: $slug . '/', '/'));
+}
+
+/**
+ * Ekstrak tautan dokumen (PDF / Google Drive / URL arsip) dari konten halaman atau pos lama.
+ */
+function pa_sinova_extract_links_from_post(int $postId, string $modSlug = '', int $defaultYear = 0, string $defaultSub = ''): array {
+    $post = get_post($postId);
+    if (!$post instanceof WP_Post) {
+        return array();
+    }
+
+    $fallbackYear = ($defaultYear >= 2017 && $defaultYear <= 2027) ? $defaultYear : (int) wp_date('Y');
+    $modCfg       = ($modSlug !== '' && function_exists('pa_sinova_module_config')) ? pa_sinova_module_config($modSlug) : null;
+    $subGroups    = ($modCfg && !empty($modCfg['sub_groups']) && is_array($modCfg['sub_groups'])) ? $modCfg['sub_groups'] : array('DOKUMEN');
+    $fallbackSub  = trim($defaultSub) !== '' ? trim($defaultSub) : (string) $subGroups[0];
+    $periodsMap   = function_exists('pa_sinova_all_periods_map') ? pa_sinova_all_periods_map() : array();
+    $modPeriods   = (is_array($modCfg) && function_exists('pa_sinova_module_periods')) ? pa_sinova_module_periods($modCfg) : $periodsMap;
+    $defaultPer   = !empty($modPeriods) ? (string) array_key_first($modPeriods) : 'TAHUNAN';
+
+    $content = (string) $post->post_content;
+    if (!preg_match_all('/<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)<\/a>/is', $content, $matches, PREG_OFFSET_CAPTURE)) {
+        return array();
+    }
+
+    $monthPatterns = array(
+        'JAN' => '/\bjan(?:uari|uary)?\b/i',
+        'FEB' => '/\b(?:feb|peb)(?:ruari|ruary)?\b/i',
+        'MAR' => '/\bmar(?:et|ch)?\b/i',
+        'APR' => '/\bapr(?:il)?\b/i',
+        'MEI' => '/\b(?:mei|may)\b/i',
+        'JUN' => '/\bjun(?:i|e)?\b/i',
+        'JUL' => '/\bjul(?:i|y)?\b/i',
+        'AGT' => '/\b(?:agt|ags|agustus|august|aug)\b/i',
+        'SEP' => '/\bsep(?:t(?:ember)?)?\b/i',
+        'OKT' => '/\b(?:okt|oct)(?:ober)?\b/i',
+        'NOV' => '/\b(?:nov|nop)(?:ember)?\b/i',
+        'DES' => '/\b(?:des|dec)(?:ember)?\b/i',
+    );
+    $quarterPatterns = array(
+        'TW4' => '/\b(?:triwulan|tw)\s*(?:iv|4|empat)\b/i',
+        'TW3' => '/\b(?:triwulan|tw)\s*(?:iii|3|tiga)\b/i',
+        'TW2' => '/\b(?:triwulan|tw)\s*(?:ii|2|dua)\b/i',
+        'TW1' => '/\b(?:triwulan|tw)\s*(?:i|1|satu)\b/i',
+        'SEM2' => '/\b(?:semester|sem)\s*(?:ii|2|genap)\b/i',
+        'SEM1' => '/\b(?:semester|sem)\s*(?:i|1|ganjil)\b/i',
+        'REVISI' => '/\brevisi\b/i',
+        'REVIU'  => '/\b(?:reviu|review)\b/i',
+        'TAHUNAN' => '/\btahunan\b/i',
+    );
+
+    $results = array();
+    $seenUrl = array();
+
+    foreach ($matches[2] as $idx => $hrefMatch) {
+        $rawHref = html_entity_decode(trim((string) $hrefMatch[0]), ENT_QUOTES, 'UTF-8');
+        if ($rawHref === '' || strpos($rawHref, '#') === 0 || preg_match('#^(?:javascript|mailto|tel|data):#i', $rawHref)) {
+            continue;
+        }
+        if (strpos($rawHref, '/') === 0 && strpos($rawHref, '//') !== 0) {
+            $rawHref = home_url($rawHref);
+        } elseif (!preg_match('#^https?://#i', $rawHref) && strpos($rawHref, '//') !== 0) {
+            $rawHref = home_url('/' . ltrim($rawHref, '/'));
+        }
+        $cleanUrl = esc_url_raw($rawHref, array('http', 'https'));
+        if ($cleanUrl === '' || !preg_match('#^https?://#i', $cleanUrl)) {
+            continue;
+        }
+        $dedupKey = strtolower($cleanUrl);
+        if (isset($seenUrl[$dedupKey])) {
+            continue;
+        }
+        $seenUrl[$dedupKey] = true;
+
+        $anchorRaw  = (string) ($matches[3][$idx][0] ?? '');
+        $anchorText = trim((string) preg_replace('/\s+/', ' ', wp_strip_all_tags(html_entity_decode($anchorRaw, ENT_QUOTES, 'UTF-8'))));
+        $offset     = (int) ($matches[0][$idx][1] ?? 0);
+        $beforeHtml = substr($content, max(0, $offset - 350), min(350, $offset));
+        $beforeClean = (string) preg_replace('/<a\b[^>]*>.*?<\/a>/is', ' ', $beforeHtml);
+        $nearText   = trim((string) preg_replace('/\s+/', ' ', wp_strip_all_tags(html_entity_decode($beforeClean, ENT_QUOTES, 'UTF-8'))));
+        $urlPath    = (string) wp_parse_url($cleanUrl, PHP_URL_PATH);
+
+        $yr = $fallbackYear;
+        foreach (array($anchorText, $urlPath, substr($nearText, -160)) as $src) {
+            if (preg_match('/(?<!\d)(201[7-9]|202[0-7])(?!\d)/', $src, $ym)) {
+                $yr = (int) $ym[1];
+                break;
+            }
+        }
+
+        $linkOwnText = trim($anchorText . ' ' . urldecode($urlPath));
+        $nearTail    = substr($nearText, -140);
+        $perKey      = '';
+        foreach (array($linkOwnText, $nearTail) as $scopeText) {
+            if ($scopeText === '') {
+                continue;
+            }
+            foreach ($quarterPatterns as $pk => $rx) {
+                if (preg_match($rx, $scopeText)) {
+                    $perKey = $pk;
+                    break 2;
+                }
+            }
+            foreach ($monthPatterns as $pk => $rx) {
+                if (preg_match($rx, $scopeText)) {
+                    $perKey = $pk;
+                    break 2;
+                }
+            }
+        }
+        if ($perKey === '' || !isset($periodsMap[$perKey])) {
+            $perKey = $defaultPer;
+        }
+        $perOrder = (int) ($periodsMap[$perKey]['order'] ?? 1);
+
+        $detectedSub = '';
+        foreach (array($linkOwnText, $nearTail) as $scopeText) {
+            if ($scopeText === '') {
+                continue;
+            }
+            foreach ($subGroups as $sg) {
+                $sgNorm = preg_quote((string) $sg, '/');
+                $sgFlex = str_replace('\ ', '\s*', $sgNorm);
+                if (preg_match('/' . $sgFlex . '/i', $scopeText)) {
+                    $detectedSub = (string) $sg;
+                    break 2;
+                }
+            }
+            if (preg_match('/(?:dipa\s*0?1|\bbua\b)/i', $scopeText)) {
+                foreach ($subGroups as $sg) {
+                    if (strpos((string) $sg, '01') !== false) {
+                        $detectedSub = (string) $sg;
+                        break 2;
+                    }
+                }
+            } elseif (preg_match('/(?:dipa\s*0?4|badilag)/i', $scopeText)) {
+                foreach ($subGroups as $sg) {
+                    if (strpos((string) $sg, '04') !== false) {
+                        $detectedSub = (string) $sg;
+                        break 2;
+                    }
+                }
+            }
+        }
+        if ($detectedSub === '') {
+            $detectedSub = $fallbackSub;
+        }
+
+        $isLocalPdf = (stripos($cleanUrl, home_url()) === 0 && preg_match('/\.pdf(?:$|\?)/i', $cleanUrl));
+        $sourceType = $isLocalPdf ? 'wp_pdf' : 'external';
+
+        $isGeneric  = ($anchorText === '' || preg_match('/^(?:download|unduh|klik(?:\s+di\s*sini)?|lihat|buka|pdf|file|dokumen)$/i', $anchorText));
+        $trimmedTxt = function_exists('mb_substr') ? mb_substr($anchorText, 0, 180) : substr($anchorText, 0, 180);
+        $title      = $isGeneric
+            ? trim($detectedSub . ' ' . ($periodsMap[$perKey]['label'] ?? $perKey) . ' ' . $yr)
+            : $trimmedTxt;
+
+        $isDocHost  = (bool) preg_match('/(?:\.(?:pdf|docx?|xlsx?|zip)(?:$|\?)|drive\.google\.com|docs\.google\.com|\/uploads\/|\/images\/|download)/i', $cleanUrl);
+        $suggested  = $isDocHost || $perKey !== $defaultPer;
+
+        $results[] = array(
+            'year'         => $yr,
+            'sub_group'    => $detectedSub,
+            'period_key'   => $perKey,
+            'period_order' => $perOrder,
+            'title'        => $title,
+            'source_type'  => $sourceType,
+            'doc_url'      => $cleanUrl,
+            'anchor_text'  => $anchorText,
+            'suggested'    => $suggested,
+        );
+    }
+
+    return $results;
 }
 
 add_action('admin_menu', static function () {
@@ -622,9 +859,13 @@ function pa_sinova_render_admin_page(): void {
         return;
     }
 
-    $notice = '';
-    $activeTab = isset($_GET['tab']) ? sanitize_key((string) $_GET['tab']) : 'compliance';
-    if (!in_array($activeTab, array('compliance', 'settings', 'upload', 'security'), true)) {
+    $notice          = '';
+    $scannedLinks    = array();
+    $scanPostId      = 0;
+    $scanTargetSlug  = 'lra';
+    $scanDefaultYear = (int) wp_date('Y');
+    $activeTab       = isset($_GET['tab']) ? sanitize_key((string) $_GET['tab']) : 'compliance';
+    if (!in_array($activeTab, array('compliance', 'upload', 'migration', 'settings', 'security'), true)) {
         $activeTab = 'compliance';
     }
 
@@ -636,9 +877,10 @@ function pa_sinova_render_admin_page(): void {
             $activeTab = 'settings';
             $cur = pa_sinova_get_settings();
             $new = array(
-                'satker_name'          => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
-                'logo_url'             => esc_url_raw(wp_unslash((string) ($_POST['logo_url'] ?? ''))),
-                'address'              => sanitize_text_field(wp_unslash((string) ($_POST['address'] ?? $cur['address']))),
+                'satker_name'              => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
+                'logo_url'                 => esc_url_raw(wp_unslash((string) ($_POST['logo_url'] ?? ''))),
+                'preserve_existing_design' => isset($_POST['preserve_existing_design']) ? (!empty($_POST['preserve_existing_design']) ? '1' : '0') : ((string) ($cur['preserve_existing_design'] ?? '0')),
+                'address'                  => sanitize_text_field(wp_unslash((string) ($_POST['address'] ?? $cur['address']))),
                 'phone'                => sanitize_text_field(wp_unslash((string) ($_POST['phone'] ?? $cur['phone']))),
                 'email'                => sanitize_email(wp_unslash((string) ($_POST['email'] ?? $cur['email']))),
                 'hearing_hours'        => sanitize_text_field(wp_unslash((string) ($_POST['hearing_hours'] ?? $cur['hearing_hours']))),
@@ -666,12 +908,154 @@ function pa_sinova_render_admin_page(): void {
             if (function_exists('pa_home_page_cache_mark_stale')) {
                 pa_home_page_cache_mark_stale();
             }
-            $notice = sprintf(
-                'Seeder selesai: %d halaman baru dibuat (%d total halaman terpetakan), %d item menu ditambahkan.',
-                $res['pages_created'],
-                $res['total_mapped'],
-                $res['menu_items']
-            );
+            $notice = !empty($res['preserve_mode'])
+                ? sprintf(
+                    'Seeder aman selesai: %d halaman kurang dibuat (%d total halaman terpetakan). Tema, menu, & beranda lama tetap dipertahankan.',
+                    $res['pages_created'],
+                    $res['total_mapped']
+                )
+                : sprintf(
+                    'Seeder selesai: %d halaman baru dibuat (%d total halaman terpetakan), %d item menu ditambahkan.',
+                    $res['pages_created'],
+                    $res['total_mapped'],
+                    $res['menu_items']
+                );
+        } elseif ($action === 'save_adoption_mode' || $action === 'save_and_seed_safe') {
+            $activeTab = 'migration';
+            $stored    = get_option('pa_sinova_starter_settings', array());
+            if (!is_array($stored)) {
+                $stored = array();
+            }
+            $stored['preserve_existing_design'] = !empty($_POST['preserve_existing_design']) ? '1' : '0';
+            update_option('pa_sinova_starter_settings', $stored, false);
+            if ($action === 'save_and_seed_safe') {
+                $res = pa_sinova_run_starter_seeder(true);
+                $notice = sprintf(
+                    'Mode Adopsi Non-Destruktif disimpan (%s). Seeder aman selesai: %d halaman kurang dibuat (%d total terpetakan). Tema, menu, & beranda lama tetap dipertahankan.',
+                    $stored['preserve_existing_design'] === '1' ? 'AKTIF' : 'NONAKTIF',
+                    $res['pages_created'],
+                    $res['total_mapped']
+                );
+            } else {
+                $notice = $stored['preserve_existing_design'] === '1'
+                    ? 'Mode Adopsi Situs Lama DIAKTIFKAN: tema, menu utama, & halaman beranda eksisting tetap dipertahankan.'
+                    : 'Mode Adopsi Situs Lama DINONAKTIFKAN: tata letak header dan beranda standar paket aktif kembali.';
+            }
+            if (function_exists('pa_home_page_cache_mark_stale')) {
+                pa_home_page_cache_mark_stale();
+            }
+        } elseif ($action === 'save_custom_map') {
+            $activeTab = 'migration';
+            $postIds   = isset($_POST['map_post_id']) && is_array($_POST['map_post_id']) ? $_POST['map_post_id'] : array();
+            $customUrl = isset($_POST['map_custom_url']) && is_array($_POST['map_custom_url']) ? $_POST['map_custom_url'] : array();
+            $newMap    = array();
+            foreach (array_unique(array_merge(array_keys($postIds), array_keys($customUrl))) as $rawCode) {
+                $code = strtoupper(preg_replace('/[^A-Za-z0-9.]/', '', (string) $rawCode));
+                if ($code === '') {
+                    continue;
+                }
+                $pid = isset($postIds[$rawCode]) ? max(0, (int) $postIds[$rawCode]) : 0;
+                $url = isset($customUrl[$rawCode]) ? esc_url_raw(trim(wp_unslash((string) $customUrl[$rawCode])), array('http', 'https')) : '';
+                if ($pid > 0 || $url !== '') {
+                    $newMap[$code] = array(
+                        'post_id'    => $pid,
+                        'custom_url' => $url,
+                    );
+                }
+            }
+            update_option('pa_sinova_custom_page_map', $newMap, false);
+            if (function_exists('pa_home_page_cache_mark_stale')) {
+                pa_home_page_cache_mark_stale();
+            }
+            $notice = sprintf('Pemetaan kustom %d kriteria situs lama berhasil disimpan.', count($newMap));
+        } elseif ($action === 'scan_links') {
+            $activeTab       = 'migration';
+            $scanPostId      = max(0, (int) ($_POST['scan_post_id'] ?? 0));
+            $scanTargetSlug  = sanitize_key((string) ($_POST['scan_target_slug'] ?? 'lra'));
+            $scanDefaultYear = max(2017, min(2027, (int) ($_POST['scan_default_year'] ?? wp_date('Y'))));
+            if ($scanPostId > 0) {
+                $scannedLinks = pa_sinova_extract_links_from_post($scanPostId, $scanTargetSlug, $scanDefaultYear);
+                $notice = sprintf('Pemindaian selesai: ditemukan %d tautan unik pada halaman/pos sumber.', count($scannedLinks));
+            } else {
+                $notice = 'Pilih halaman atau pos sumber terlebih dahulu untuk dipindai.';
+            }
+        } elseif ($action === 'import_links' && function_exists('pa_sinova_ensure_table')) {
+            $activeTab = 'migration';
+            pa_sinova_ensure_table();
+            global $wpdb;
+            $table      = pa_sinova_table_name();
+            $periodsMap = pa_sinova_all_periods_map();
+            $catalogMap = function_exists('pa_sinova_module_catalog') ? pa_sinova_module_catalog() : array();
+            $targetSlug = sanitize_key((string) ($_POST['import_target_slug'] ?? 'lra'));
+            if (!isset($catalogMap[$targetSlug])) {
+                $targetSlug = 'lra';
+            }
+            $selectedIdx = isset($_POST['import_rows']) && is_array($_POST['import_rows']) ? $_POST['import_rows'] : array();
+            $years       = isset($_POST['row_year']) && is_array($_POST['row_year']) ? $_POST['row_year'] : array();
+            $subs        = isset($_POST['row_sub']) && is_array($_POST['row_sub']) ? $_POST['row_sub'] : array();
+            $pers        = isset($_POST['row_period']) && is_array($_POST['row_period']) ? $_POST['row_period'] : array();
+            $titles      = isset($_POST['row_title']) && is_array($_POST['row_title']) ? $_POST['row_title'] : array();
+            $urls        = isset($_POST['row_url']) && is_array($_POST['row_url']) ? $_POST['row_url'] : array();
+            $srcs        = isset($_POST['row_src']) && is_array($_POST['row_src']) ? $_POST['row_src'] : array();
+            $importedCnt = 0;
+            $now         = current_time('mysql');
+            $author      = wp_get_current_user()->display_name ?: 'WP Admin (Migrasi)';
+
+            foreach ($selectedIdx as $rawIdx) {
+                $idx      = (int) $rawIdx;
+                $rawUrl   = isset($urls[$idx]) ? trim(wp_unslash((string) $urls[$idx])) : '';
+                $cleanUrl = esc_url_raw($rawUrl, array('http', 'https'));
+                if ($cleanUrl === '' || !preg_match('#^https?://#i', $cleanUrl)) {
+                    continue;
+                }
+                $yr  = max(2017, min(2035, (int) ($years[$idx] ?? wp_date('Y'))));
+                $sub = sanitize_text_field(wp_unslash((string) ($subs[$idx] ?? 'DOKUMEN')));
+                if ($sub === '') {
+                    $sub = 'DOKUMEN';
+                }
+                $per = strtoupper(sanitize_key((string) ($pers[$idx] ?? 'TAHUNAN')));
+                if (!isset($periodsMap[$per])) {
+                    $per = 'TAHUNAN';
+                }
+                $ord = (int) ($periodsMap[$per]['order'] ?? 1);
+                $ttl = sanitize_text_field(wp_unslash((string) ($titles[$idx] ?? '')));
+                if ($ttl === '') {
+                    $ttl = trim("{$sub} " . ($periodsMap[$per]['label'] ?? $per) . " {$yr}");
+                }
+                $src = (isset($srcs[$idx]) && $srcs[$idx] === 'wp_pdf') ? 'wp_pdf' : 'external';
+
+                $existingId = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM `{$table}` WHERE page_slug = %s AND year = %d AND sub_group = %s AND period_key = %s",
+                    $targetSlug, $yr, $sub, $per
+                ));
+                $data = array(
+                    'page_slug'    => $targetSlug,
+                    'year'         => $yr,
+                    'sub_group'    => $sub,
+                    'period_key'   => $per,
+                    'period_order' => $ord,
+                    'title'        => $ttl,
+                    'source_type'  => $src,
+                    'doc_url'      => $cleanUrl,
+                    'file_size_kb' => null,
+                    'updated_by'   => $author,
+                    'status'       => 'published',
+                    'updated_at'   => $now,
+                );
+                if ($existingId > 0) {
+                    $wpdb->update($table, $data, array('id' => $existingId));
+                } else {
+                    $data['created_at'] = $now;
+                    $wpdb->insert($table, $data);
+                }
+                $importedCnt++;
+            }
+            if ($importedCnt > 0) {
+                pa_sinova_flush_caches_for_slug($targetSlug);
+                $notice = sprintf('%d dokumen berhasil diimpor ke modul %s dan langsung tersinkron ke Dashboard 35 Kriteria.', $importedCnt, $targetSlug);
+            } else {
+                $notice = 'Tidak ada baris tautan valid yang dipilih untuk diimpor.';
+            }
         } elseif ($action === 'upload_doc' && function_exists('pa_sinova_ensure_table')) {
             $activeTab = 'upload';
             pa_sinova_ensure_table();
@@ -773,6 +1157,7 @@ function pa_sinova_render_admin_page(): void {
         <h2 class="nav-tab-wrapper" style="margin:14px 0 18px;">
             <a href="<?php echo esc_url($tabBaseUrl . 'compliance'); ?>" class="nav-tab <?php echo $activeTab === 'compliance' ? 'nav-tab-active' : ''; ?>">Dashboard 35 Kriteria (<?php echo esc_html((string) $report['total']); ?>%)</a>
             <a href="<?php echo esc_url($tabBaseUrl . 'upload'); ?>" class="nav-tab <?php echo $activeTab === 'upload' ? 'nav-tab-active' : ''; ?>">Upload &amp; Kelola Dokumen</a>
+            <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>" class="nav-tab <?php echo $activeTab === 'migration' ? 'nav-tab-active' : ''; ?>">Migrasi &amp; Adopsi</a>
             <a href="<?php echo esc_url($tabBaseUrl . 'settings'); ?>" class="nav-tab <?php echo $activeTab === 'settings' ? 'nav-tab-active' : ''; ?>">Identitas Satker &amp; Seeder 1-Klik</a>
             <a href="<?php echo esc_url($tabBaseUrl . 'security'); ?>" class="nav-tab <?php echo $activeTab === 'security' ? 'nav-tab-active' : ''; ?>">Keamanan &amp; Audit Log</a>
         </h2>
@@ -912,13 +1297,177 @@ function pa_sinova_render_admin_page(): void {
                 </div>
             </div>
 
-        <?php elseif ($activeTab === 'settings') : ?>
+        <?php elseif ($activeTab === 'migration') :
+            $isAdoption     = (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1');
+            $customMap      = pa_sinova_get_custom_map();
+            $publishedPages = get_pages(array('post_status' => 'publish', 'sort_column' => 'post_title', 'sort_order' => 'ASC'));
+            $sourcePosts    = get_posts(array(
+                'post_type'      => array('page', 'post'),
+                'post_status'    => 'publish',
+                'posts_per_page' => 300,
+                'orderby'        => 'title',
+                'order'          => 'ASC',
+            ));
+        ?>
+            <div style="display:grid;grid-template-columns:1fr;gap:20px;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
+                    <h2 style="margin-top:0;color:#056e4f;">1. Mode Adopsi Situs Lama (Non-Destruktif)</h2>
+                    <p style="color:#475569;margin-top:0;">Cocok bagi Satker yang <strong>sudah memiliki website WordPress aktif</strong> atau baru saja mengimpor konten artikel dari <strong>Joomla</strong> dan ingin mempertahankan tema, susunan menu, serta halaman Beranda lama.</p>
+                    <form method="post">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <label style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:14px;">
+                            <input type="checkbox" name="preserve_existing_design" value="1" <?php checked($isAdoption); ?> style="margin-top:3px;">
+                            <span>
+                                <strong>Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)</strong><br>
+                                <small style="color:#475569;">Jika diaktifkan: header, navbar, dan tampilan depan situs lama Anda tidak disentuh. Hanya fitur backend (23 Modul Dokumen <code>[pa_sinova_docs]</code>, Dashboard 35 Kriteria, Keamanan WAF/Rate Limit, &amp; Cache) yang bekerja.</small>
+                            </span>
+                        </label>
+                        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                            <button type="submit" name="pa_sinova_action" value="save_adoption_mode" class="button button-secondary">Simpan Pengaturan Mode Adopsi</button>
+                            <button type="submit" name="pa_sinova_action" value="save_and_seed_safe" class="button button-primary">Simpan Mode &amp; Jalankan Seeder Aman</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
+                    <h2 style="margin-top:0;color:#056e4f;">2. Ekstrak &amp; Impor Tautan Dokumen dari Halaman/Pos Lama</h2>
+                    <p style="color:#475569;margin-top:0;">Pindai daftar tautan PDF atau Google Drive yang sudah tertulis pada halaman/berita lama (termasuk hasil migrasi Joomla) untuk dimasukkan langsung ke tabel modul arsip.</p>
+                    <form method="post" style="display:grid;grid-template-columns:1.4fr 1.2fr 120px auto;gap:12px;align-items:end;margin-bottom:16px;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="scan_links">
+                        <div>
+                            <label style="display:block;font-weight:700;font-size:12px;margin-bottom:4px;">Halaman / Pos Sumber</label>
+                            <select name="scan_post_id" style="width:100%;">
+                                <option value="0">-- Pilih Halaman atau Pos --</option>
+                                <?php foreach ($sourcePosts as $sp) : ?>
+                                    <option value="<?php echo esc_attr((string) $sp->ID); ?>" <?php selected($scanPostId, (int) $sp->ID); ?>><?php echo esc_html('[' . strtoupper((string) $sp->post_type) . '] ' . ($sp->post_title ?: '(Tanpa Judul)')); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-weight:700;font-size:12px;margin-bottom:4px;">Modul Arsip Tujuan</label>
+                            <select name="scan_target_slug" style="width:100%;">
+                                <?php foreach ($catalog as $slug => $m) : ?>
+                                    <option value="<?php echo esc_attr($slug); ?>" <?php selected($scanTargetSlug, $slug); ?>><?php echo esc_html($m['title'] . ' (' . $slug . ')'); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-weight:700;font-size:12px;margin-bottom:4px;">Tahun Bawaan</label>
+                            <input type="number" name="scan_default_year" min="2017" max="2027" value="<?php echo esc_attr((string) $scanDefaultYear); ?>" style="width:100%;">
+                        </div>
+                        <div>
+                            <button type="submit" class="button button-primary">Pindai Tautan</button>
+                        </div>
+                    </form>
+
+                    <?php if (!empty($scannedLinks)) : ?>
+                        <form method="post">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="import_links">
+                            <input type="hidden" name="import_target_slug" value="<?php echo esc_attr($scanTargetSlug); ?>">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                <strong>Pratinjau Hasil Pindai (<?php echo esc_html((string) count($scannedLinks)); ?> tautan ditemukan) &rarr; Modul: <code><?php echo esc_html($scanTargetSlug); ?></code></strong>
+                                <button type="button" class="button button-small" onclick="document.querySelectorAll('.pa-mig-chk').forEach(function(c){c.checked=!c.checked;});">Balik Pilihan</button>
+                            </div>
+                            <table class="widefat striped" style="margin-bottom:12px;">
+                                <thead>
+                                    <tr>
+                                        <th style="width:32px;">Pilih</th>
+                                        <th style="width:82px;">Tahun</th>
+                                        <th style="width:130px;">Sub-Kelompok</th>
+                                        <th style="width:140px;">Periode</th>
+                                        <th>Judul Dokumen &amp; URL Sumber</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($scannedLinks as $idx => $row) : ?>
+                                        <tr>
+                                            <td><input type="checkbox" class="pa-mig-chk" name="import_rows[]" value="<?php echo esc_attr((string) $idx); ?>" <?php checked(!empty($row['suggested'])); ?>></td>
+                                            <td><input type="number" name="row_year[<?php echo esc_attr((string) $idx); ?>]" min="2017" max="2027" value="<?php echo esc_attr((string) $row['year']); ?>" style="width:74px;"></td>
+                                            <td><input type="text" name="row_sub[<?php echo esc_attr((string) $idx); ?>]" value="<?php echo esc_attr($row['sub_group']); ?>" style="width:120px;"></td>
+                                            <td>
+                                                <select name="row_period[<?php echo esc_attr((string) $idx); ?>]" style="width:132px;">
+                                                    <?php foreach ($periods as $pk => $pv) : ?>
+                                                        <option value="<?php echo esc_attr($pk); ?>" <?php selected($row['period_key'], $pk); ?>><?php echo esc_html($pk . ' — ' . $pv['label']); ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input type="text" name="row_title[<?php echo esc_attr((string) $idx); ?>]" value="<?php echo esc_attr($row['title']); ?>" class="large-text" style="margin-bottom:4px;">
+                                                <input type="hidden" name="row_url[<?php echo esc_attr((string) $idx); ?>]" value="<?php echo esc_attr($row['doc_url']); ?>">
+                                                <input type="hidden" name="row_src[<?php echo esc_attr((string) $idx); ?>]" value="<?php echo esc_attr($row['source_type']); ?>">
+                                                <small style="color:#475569;word-break:break-all;"><a href="<?php echo esc_url($row['doc_url']); ?>" target="_blank"><?php echo esc_html($row['doc_url']); ?></a></small>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                            <button type="submit" class="button button-primary">Impor Terpilih ke Arsip Dokumen</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
+                    <h2 style="margin-top:0;color:#056e4f;">3. Pemetaan Halaman Lama untuk 35 Kriteria</h2>
+                    <p style="color:#475569;margin-top:0;">Jika halaman pada website lama memakai URL/slug berbeda (misal <code>/profil/visi-misi/</code> atau hasil migrasi Joomla), tautkan di sini agar Dashboard Kepatuhan &amp; tombol <strong>Salin URL</strong> mengarah ke halaman lama tanpa mengubah tautan publik.</p>
+                    <form method="post">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="save_custom_map">
+                        <table class="widefat striped" style="margin-bottom:14px;">
+                            <thead>
+                                <tr>
+                                    <th style="width:65px;">Kode</th>
+                                    <th>Kriteria</th>
+                                    <th style="width:260px;">Pilih Halaman WP Eksisting</th>
+                                    <th style="width:280px;">Atau URL Kustom Eksisting</th>
+                                    <th>URL Terbaca Saat Ini</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($report['items'] as $it) :
+                                    $code   = (string) $it['code'];
+                                    $curMap = (isset($customMap[$code]) && is_array($customMap[$code])) ? $customMap[$code] : array();
+                                    $curPid = (int) ($curMap['post_id'] ?? 0);
+                                    $curUrl = (string) ($curMap['custom_url'] ?? '');
+                                ?>
+                                    <tr>
+                                        <td><strong><?php echo esc_html($code); ?></strong></td>
+                                        <td><?php echo esc_html($it['label']); ?><br><small style="color:#64748b;">Slug baku: <code><?php echo esc_html($it['slug']); ?></code></small></td>
+                                        <td>
+                                            <select name="map_post_id[<?php echo esc_attr($code); ?>]" style="width:100%;">
+                                                <option value="0">-- Otomatis (Slug <?php echo esc_html($it['slug']); ?>) --</option>
+                                                <?php foreach ($publishedPages as $pg) : ?>
+                                                    <option value="<?php echo esc_attr((string) $pg->ID); ?>" <?php selected($curPid, (int) $pg->ID); ?>><?php echo esc_html(($pg->post_title ?: '(Tanpa Judul)') . ' (/' . $pg->post_name . '/)'); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                        <td><input type="url" name="map_custom_url[<?php echo esc_attr($code); ?>]" value="<?php echo esc_attr($curUrl); ?>" placeholder="https://pa-satker.go.id/halaman-lama/" style="width:100%;"></td>
+                                        <td><small style="word-break:break-all;"><a href="<?php echo esc_url($it['url']); ?>" target="_blank"><?php echo esc_html($it['url']); ?></a></small></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        <button type="submit" class="button button-primary">Simpan Pemetaan 35 Kriteria</button>
+                    </form>
+                </div>
+            </div>
+
+        <?php elseif ($activeTab === 'settings') :
+            $isAdoption = (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1');
+        ?>
+            <?php if ($isAdoption) : ?>
+                <div class="notice notice-info inline" style="margin:0 0 16px;padding:10px 14px;">
+                    <strong>Mode Adopsi Situs Lama sedang AKTIF:</strong> Seeder 1-Klik hanya melengkapi halaman yang belum tersedia tanpa mengubah tema, menu, maupun halaman Beranda eksisting. Kelola melalui tab <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>">Migrasi &amp; Adopsi</a>.
+                </div>
+            <?php endif; ?>
             <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:start;">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
                     <h2 style="margin-top:0;color:#056e4f;">Konfigurasi Identitas Satker &amp; API</h2>
                     <form method="post">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="save_settings">
+                        <input type="hidden" name="preserve_existing_design" value="<?php echo $isAdoption ? '1' : '0'; ?>">
                         <table class="form-table">
                             <tr><th>Nama Satker</th><td><input type="text" name="satker_name" class="regular-text" value="<?php echo esc_attr($cfg['satker_name']); ?>"></td></tr>
                             <tr><th>URL Logo Resmi</th><td><input type="url" name="logo_url" class="regular-text" value="<?php echo esc_attr($cfg['logo_url'] ?? ''); ?>" placeholder="https://.../logo-pa.png"></td></tr>
