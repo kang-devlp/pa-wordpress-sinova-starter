@@ -30,15 +30,17 @@ Seluruh fitur dikemas dalam 5 berkas `mu-plugins` tanpa ketergantungan plugin ko
 
 ## Ringkasan Kemampuan
 
-1. **Tampilan Publik Bersih, Modern & Formal:** Seluruh istilah teknis penilaian (seperti nama aplikasi evaluator, nomor SK, maupun kode kriteria `B1.1–W4.1`) hanya muncul di ruang admin operator (**WP Admin → SINOVA Hub**) dan tidak ditampilkan ke masyarakat. Keterangan kartu, kutipan berita, dan tooltip navigasi **tampil ringkas saat sorot/hover atau fokus keyboard** sehingga beranda tetap lega dan rapi, disertai **efek parallax ringan berbasis GPU saat digulir**, **Mode Terang & Mode Gelap**, jam WIB langsung beserta **indikator status jam buka PTSP**, kotak pencarian header, breadcrumb & sidebar halaman dalam, kartu **Access CCTV Online (ACO)** berlogo resmi, indikator progres baca & tombol kembali ke atas, mode cetak rapi, serta **Sarana Disabilitas** (perbesar/perkecil teks, kontras tinggi, dan pembaca suara Bahasa Indonesia).
-2. **Dashboard Kepatuhan 35 Kriteria di WP Admin:** Memeriksa otomatis kelengkapan `B1.1–W4.1`, menandai halaman yang masih memuat placeholder `[LENGKAPI]`, serta menyediakan tombol **Salin URL** dan pemetaan URL halaman lama.
-3. **23 Modul Arsip Dokumen Terstruktur (Slot s.d. 2027):** Mendukung pengunggahan **PDF langsung ke server** maupun penautan **Google Drive** berdasarkan tahun, kategori (DIPA 01/04, LIPA 7A/7B/7C), bulan, semester, atau triwulan (SKM/SPAK/SPKP) yang tertaut otomatis ke panel indeks survei Beranda.
-4. **Dukungan Migrasi & Adopsi Situs Lama (Non-Destruktif):**
+1. **Tampilan Publik Bersih, Modern, Formal & Independen CDN:** Seluruh istilah teknis penilaian hanya muncul di ruang admin operator (**WP Admin → SINOVA Hub**) dan tidak ditampilkan ke masyarakat. Tampilan mengusung **6 Menu Utama Standar** (*Beranda*, *Profil Pengadilan*, *Layanan Hukum*, *Transparansi*, *Layanan Publik & Pengaduan*, *Berita & Publikasi*), keterangan hover-clean & **efek parallax ringan berbasis GPU**, **Mode Terang & Mode Gelap**, jam WIB + **indikator status PTSP**, kotak pencarian & **Command Palette `Ctrl+K`** instan, **Pratinjau Dokumen PDF/Drive di Halaman (Modal)**, **JSON-LD (`GovernmentOrganization`, `WebSite`, `BreadcrumbList`) + Open Graph**, jam font sistem **tanpa ketergantungan Google Fonts CDN eksternal**, kartu **Access CCTV Online (ACO)** berlogo resmi, halaman khusus **`/disabilitas/`**, serta **Sarana Aksesibilitas Web** (pembesar teks, kontras tinggi, & pembaca suara).
+2. **Umpan RSS Resmi Mahkamah Agung RI & Ditjen Badilag (`[pa_official_announcements]`):** Menampilkan 2 kolom pengumuman resmi terbaru dari Kepaniteraan Mahkamah Agung RI dan Ditjen Badilag secara otomatis dengan perlindungan **SSRF-safe** (pembatasan domain resmi `.mahkamahagung.go.id` serta blokir IP privat/loopback/link-local) dan pembaruan terjadwal setiap 6 jam.
+3. **Data Operasional Terstruktur & Integrasi Read-Only SIPP Opsional:** Mengelola **Jadwal Sidang Harian** (`[pa_jadwal_sidang]`), **Direktori Hakim & Pegawai** (`[pa_pegawai_grid]`), **Panggilan Ghaib Pasal 27** (`[pa_panggilan_ghaib]`), serta **Statistik Perkara Bulanan** (`[pa_statistik_perkara]`) melalui tabel database terstruktur, lengkap dengan filter instan di frontend serta dukungan opsional pembacaan *read-only* langsung dari database SIPP (`PA_SIPP_DB_*`).
+4. **Dashboard Kepatuhan 35 Kriteria & 23 Modul Arsip s.d. 2027:** Memeriksa otomatis kelengkapan `B1.1–W4.1` serta entri data operasional, menyediakan tombol **Salin URL** dan pemetaan URL lama, mendukung unggahan PDF langsung atau tautan Google Drive terverifikasi ke survei SKM/SPAK/SPKP, serta pembagian **3 peran operator RBAC** (`pa_kepaniteraan`, `pa_kesekretariatan`, `pa_humas`).
+5. **Dukungan Migrasi & Adopsi Situs Lama (Non-Destruktif):**
    * **Mode Adopsi Situs Lama:** Memasang mesin arsip dokumen, keamanan WAF, cache halaman, dan pemantauan 35 kriteria tanpa menimpa header, menu, ataupun Beranda website WordPress yang sudah aktif.
    * **Alat Pindai & Impor Tautan:** Membaca tautan Google Drive/PDF dari halaman lama WordPress maupun artikel hasil impor Joomla ke dalam arsip terstruktur.
-5. **Pengamanan Berlapis & Performa:**
-   * **Sembunyikan Halaman Login Admin (Custom Login URL):** Memindahkan halaman login operator ke slug khusus satker, menghapus tautan login publik di topbar, serta mengembalikan `404 Not Found` pada percobaan akses langsung `/wp-login.php`, `/wp-admin/` anonim, maupun `/admin`.
-   * **Proteksi Aktif:** Cache HTML statis halaman publik, penghitung kunjungan aman privasi (hash IP anonim harian), pembatasan login gagal (*Brute-Force Rate Limiter* 5x/15 menit), header keamanan OWASP (`Permissions-Policy`, `HSTS`, `nosniff`, `SAMEORIGIN`), proteksi folder unggahan `.htaccess`, blokir XML-RPC dan enumerasi pengguna, WAF konten/URI terlarang, serta CAPTCHA login ganda (**Cloudflare Turnstile** atau soal hitung offline).
+6. **Pengamanan Berlapis & Autentikasi Dua Faktor (MFA TOTP Bawaan):**
+   * **MFA TOTP RFC 6238 Bawaan + 8 Kode Cadangan:** Menghasilkan kode QR **SVG lokal** (rahasia TOTP tidak pernah dikirim ke layanan QR pihak ketiga), perlindungan anti-replay OTP, opsi pengingat wajib MFA, dan flag darurat `PA_DISABLE_CUSTOM_MFA`.
+   * **Sembunyikan Halaman Login Admin & Session Hardening:** Memindahkan halaman masuk ke slug khusus satker dengan respon `404 Not Found` pada `/wp-login.php` dan `/wp-admin/` anonim, pembatasan sesi diam admin otomatis **60 menit**, serta kebijakan kata sandi operator minimal **10 karakter** campuran huruf, angka, dan simbol.
+   * **Proteksi Aktif:** Cache HTML statis halaman publik, penghitung kunjungan aman privasi (hash IP anonim harian), pembatasan login gagal (*Brute-Force Rate Limiter* 5x/15 menit), header keamanan OWASP, proteksi `.htaccess` unggahan PDF, blokir XML-RPC dan enumerasi pengguna, WAF URI/DB, serta anti-bot (**Cloudflare Turnstile** atau soal matematika HMAC offline + honeypot).
 
 ---
 
@@ -49,12 +51,13 @@ sinova-starter-kit/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
-├── wordpress-mu-plugins/                  # Salin ke wp-content/mu-plugins/
-│   ├── 00-pa-sinova-config.php            # Pengaturan satker, Seeder 1-Klik, Dashboard 35 Kriteria, & Alat Migrasi
-│   ├── pa-sinova-hub.php                  # Mesin 23 modul dokumen, shortcode [pa_sinova_docs], & REST API HMAC
+├── wordpress-mu-plugins/                  # Salin semua 6 berkas ke wp-content/mu-plugins/
+│   ├── 00-pa-sinova-config.php            # Konfigurasi satker, Seeder 6 Menu, RBAC, Data Operasional, & Dashboard
+│   ├── pa-sinova-hub.php                  # Mesin 23 modul dokumen, modal pratinjau PDF/Drive, & REST API HMAC
+│   ├── pa-official-feeds-and-data.php     # Umpan RSS resmi MA RI & Badilag (SSRF-safe), tabel operasional, & SEO JSON-LD
 │   ├── pa-home-page-cache.php             # Cache HTML halaman publik & shortcode [waktu_render]
-│   ├── pa-ui-performance-a11y.php         # Tema portal Astra/blok, statistik pengunjung, & sarana disabilitas
-│   └── pa-security-hardening.php          # Rate limiter, OWASP headers, WAF, proteksi upload, & CAPTCHA login
+│   ├── pa-ui-performance-a11y.php         # Desain portal zero-CDN, Command Palette Ctrl+K, & sarana disabilitas
+│   └── pa-security-hardening.php          # MFA TOTP RFC 6238, sesi 60 menit, custom login URL, WAF, & OWASP headers
 ├── wordpress-templates/
 │   └── beranda-blocks-starter.html        # Kerangka HTML halaman Beranda standar Pengadilan Agama
 ├── docs/
@@ -94,11 +97,16 @@ Cocok bagi satuan kerja yang membangun portal dari awal di hosting cPanel/Direct
 
 ---
 
-## Keamanan Lanjutan: Menyembunyikan Halaman Login Admin
+## Keamanan Lanjutan: MFA TOTP Bawaan & Sembunyikan Login
+
+1. **Mengaktifkan MFA TOTP (Autentikasi Dua Faktor) Operator:**
+   * Buka **WP Admin → SINOVA Hub → tab Keamanan, MFA & Audit**.
+   * Klik **Mulai Pengaturan MFA TOTP (Generate QR Lokal)**. Pindai kode QR (dihasilkan lokal dalam format SVG) menggunakan Google Authenticator, Aegis, atau FreeOTP, lalu masukkan kode OTP 6 digit untuk mengaktifkan.
+   * Simpan **8 kode cadangan pemulihan** yang ditampilkan satu kali. Pemulihan darurat bila kehilangan perangkat maupun kode cadangan dapat dilakukan lewat `define('PA_DISABLE_CUSTOM_MFA', true);` di `wp-config.php`.
 
 Secara bawaan, starter kit **tidak menampilkan tautan Login Admin** pada topbar publik website agar halaman masuk tidak terekspos secara terbuka. Untuk pengamanan tambahan dari serangan otomatis terhadap `/wp-login.php` maupun `/wp-admin/`, operator dapat memindahkan halaman masuk ke alamat rahasia milik satker:
 
-1. Buka **WP Admin → SINOVA Hub → tab Keamanan & Audit Log**.
+1. Buka **WP Admin → SINOVA Hub → tab Keamanan, MFA & Audit**.
 2. Pada panel **Sembunyikan Halaman Login Admin (Custom Login URL)**, ketikkan slug rahasia (minimal 4 karakter huruf kecil/angka/tanda hubung, misalnya `gerbang-operator-pa`), lalu klik **Simpan Pengaturan URL Login**.
 3. **Simpan (bookmark) URL baru tersebut** di peramban operator (misalnya `https://pa-satker.go.id/gerbang-operator-pa/`).
 4. Setelah aktif:
@@ -111,7 +119,7 @@ Secara bawaan, starter kit **tidak menampilkan tautan Login Admin** pada topbar 
      ```php
      define('PA_DISABLE_CUSTOM_LOGIN', true);
      ```
-   * Login melalui `/wp-login.php`, buka kembali tab **Keamanan & Audit Log** untuk memperbarui atau mengosongkan slug, lalu hapus baris tersebut dari `wp-config.php`.
+   * Login melalui `/wp-login.php`, buka kembali tab **Keamanan, MFA & Audit** untuk memperbarui atau mengosongkan slug, lalu hapus baris tersebut dari `wp-config.php`.
 
 ---
 

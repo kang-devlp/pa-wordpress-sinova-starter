@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, & Panel Kepatuhan WP Admin
- * Description: Pengaturan dinamis Satker, generator Secret Key HMAC-SHA256, Seeder 1-Klik halaman & Menu Utama SK Dirjen Badilag 2722/2026, konfigurasi Astra Free, Dashboard Kepatuhan 35 Kriteria Lampiran II + Salin URL, Upload Dokumen, & Audit Keamanan di WP Admin.
- * Version: 1.3.0-starter
+ * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
+ * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen, & Audit Keamanan + MFA di WP Admin.
+ * Version: 1.5.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -13,20 +13,23 @@ function pa_sinova_get_settings(): array {
         'logo_url'                 => '',
         'preserve_existing_design' => '0',
         'address'                  => 'Jl. Keadilan Raya No. 1, Kota Contoh',
-        'phone'                => '(000) 123-4567 · WA PTSP 0811-0000-0000',
-        'email'                => 'info@pa-contoh.go.id',
-        'hearing_hours'        => 'Senin–Kamis 09.00 WIB s.d. selesai',
-        'leader_name'          => 'Ketua Pengadilan Agama',
-        'leader_welcome'       => 'Selamat datang di portal resmi Pengadilan Agama. Melalui website ini kami menyajikan informasi layanan peradilan, transparansi keuangan, laporan kinerja, dan dokumen pembangunan Zona Integritas secara terbuka kepada seluruh masyarakat pencari keadilan.',
-        'sipp_url'             => 'https://sipp.pa-contoh.go.id/',
-        'ecourt_url'           => 'https://ecourt.mahkamahagung.go.id/',
-        'direktori_url'        => 'https://putusan3.mahkamahagung.go.id/',
-        'survey_url'           => 'https://survei.badilag.net/',
-        'aco_url'              => 'https://cctv.badilag.net/',
-        'custom_login_slug'    => '',
-        'hmac_secret'          => '',
-        'turnstile_site_key'   => '',
-        'turnstile_secret_key' => '',
+        'phone'                    => '(000) 123-4567 · WA PTSP 0811-0000-0000',
+        'email'                    => 'info@pa-contoh.go.id',
+        'hearing_hours'            => 'Senin–Kamis 09.00 WIB s.d. selesai',
+        'leader_name'              => 'Ketua Pengadilan Agama',
+        'leader_welcome'           => 'Selamat datang di portal resmi Pengadilan Agama. Melalui website ini kami menyajikan informasi layanan peradilan, transparansi keuangan, laporan kinerja, dan dokumen pembangunan Zona Integritas secara terbuka kepada seluruh masyarakat pencari keadilan.',
+        'sipp_url'                 => 'https://sipp.pa-contoh.go.id/',
+        'ecourt_url'               => 'https://ecourt.mahkamahagung.go.id/',
+        'direktori_url'            => 'https://putusan3.mahkamahagung.go.id/',
+        'survey_url'               => 'https://survei.badilag.net/',
+        'aco_url'                  => 'https://cctv.badilag.net/',
+        'rss_ma_url'               => 'https://kepaniteraan.mahkamahagung.go.id/?format=feed&type=rss',
+        'rss_badilag_url'          => 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik?format=feed&type=rss',
+        'custom_login_slug'        => '',
+        'enforce_mfa'              => '0',
+        'hmac_secret'              => '',
+        'turnstile_site_key'       => '',
+        'turnstile_secret_key'     => '',
     );
     $saved = get_option('pa_sinova_starter_settings', array());
     if (!is_array($saved)) {
@@ -54,6 +57,78 @@ function pa_sinova_get_settings(): array {
     }
 
     return $merged;
+}
+
+function pa_sinova_register_roles(): void {
+    $adminRole = get_role('administrator');
+    if ($adminRole && !$adminRole->has_cap('pa_access_sinova_hub')) {
+        $adminRole->add_cap('pa_access_sinova_hub');
+    }
+
+    $ver = '1.0';
+    if (get_option('pa_sinova_roles_ver') === $ver) {
+        return;
+    }
+
+    $defs = array(
+        'pa_kepaniteraan' => array(
+            'label' => 'Operator Kepaniteraan',
+            'caps'  => array('read' => true, 'upload_files' => true, 'edit_pages' => true, 'edit_others_pages' => true, 'publish_pages' => true, 'pa_access_sinova_hub' => true, 'pa_manage_kepaniteraan' => true),
+        ),
+        'pa_kesekretariatan' => array(
+            'label' => 'Operator Kesekretariatan',
+            'caps'  => array('read' => true, 'upload_files' => true, 'edit_pages' => true, 'edit_others_pages' => true, 'publish_pages' => true, 'pa_access_sinova_hub' => true, 'pa_manage_kesekretariatan' => true),
+        ),
+        'pa_humas' => array(
+            'label' => 'Operator Humas & Berita',
+            'caps'  => array('read' => true, 'upload_files' => true, 'edit_posts' => true, 'edit_others_posts' => true, 'publish_posts' => true, 'delete_posts' => true, 'pa_access_sinova_hub' => true, 'pa_manage_humas' => true),
+        ),
+    );
+
+    foreach ($defs as $slug => $cfg) {
+        $roleObj = get_role($slug);
+        if (!$roleObj) {
+            add_role($slug, $cfg['label'], $cfg['caps']);
+        } else {
+            foreach ($cfg['caps'] as $cap => $grant) {
+                if ($grant && !$roleObj->has_cap($cap)) {
+                    $roleObj->add_cap($cap);
+                }
+            }
+        }
+    }
+    update_option('pa_sinova_roles_ver', $ver, false);
+}
+add_action('init', 'pa_sinova_register_roles', 5);
+
+function pa_sinova_user_allowed_tabs(): array {
+    if (current_user_can('manage_options')) {
+        return array('compliance', 'upload', 'data', 'migration', 'settings', 'security');
+    }
+    if (current_user_can('pa_manage_kepaniteraan') || current_user_can('pa_manage_kesekretariatan')) {
+        return array('compliance', 'upload', 'data', 'security');
+    }
+    if (current_user_can('pa_manage_humas')) {
+        return array('compliance', 'data', 'security');
+    }
+    return array();
+}
+
+function pa_sinova_user_allowed_module_slugs(): array {
+    if (current_user_can('manage_options')) {
+        return array();
+    }
+    $slugs = array();
+    if (current_user_can('pa_manage_kepaniteraan')) {
+        $slugs = array_merge($slugs, array('biaya-perkara', 'sisa-panjar', 'biaya-prodeo', 'hak-kepaniteraan', 'akses-informasi', 'rekap-pengaduan'));
+    }
+    if (current_user_can('pa_manage_kesekretariatan')) {
+        $slugs = array_merge($slugs, array('lra', 'pnbp', 'neraca', 'calk', 'dipa', 'aset', 'pbj', 'lkjip', 'iku', 'pk', 'rkt', 'rencana-aksi', 'renstra', 'mou', 'lhkpn', 'lhkasn', 'survei-pelayanan'));
+    }
+    if (current_user_can('pa_manage_humas')) {
+        $slugs = array_merge($slugs, array('survei-pelayanan', 'mou'));
+    }
+    return array_values(array_unique($slugs));
 }
 
 function pa_sinova_sanitize_login_slug(string $raw): array {
@@ -160,7 +235,7 @@ function pa_sinova_static_seed_pages(): array {
             'title'   => 'Profil Pejabat dan Pegawai',
             'parent'  => 'Profil Pengadilan',
             'code'    => 'W3.1',
-            'content' => '<h2>Daftar Pejabat Struktural, Fungsional, Hakim &amp; Pegawai</h2><p>[LENGKAPI: Tabel/kartu profil pimpinan, hakim, panitera, sekretaris, dan ASN.]</p>',
+            'content' => '<h2>Daftar Pejabat Struktural, Fungsional, Hakim &amp; Pegawai</h2><p>Berikut direktori resmi pimpinan, hakim, pejabat kepaniteraan, pejabat kesekretariatan, dan aparatur pengadilan.</p>[pa_pegawai_grid]',
         ),
         'alamat-dan-kontak' => array(
             'title'   => 'Alamat dan Kontak Resmi',
@@ -170,69 +245,81 @@ function pa_sinova_static_seed_pages(): array {
         ),
         'e-court' => array(
             'title'   => 'Informasi e-Court',
-            'parent'  => 'Kepaniteraan & Perkara',
+            'parent'  => 'Layanan Hukum',
             'code'    => 'W2.1',
             'content' => '<h2>Pendaftaran Perkara Elektronik (e-Court)</h2><p>[LENGKAPI panduan pendaftaran e-Filing, e-Payment, e-Summons, &amp; e-Litigation beserta tautan ke ecourt.mahkamahagung.go.id.]</p>',
         ),
         'direktori-putusan' => array(
             'title'   => 'Direktori Putusan Satker',
-            'parent'  => 'Kepaniteraan & Perkara',
+            'parent'  => 'Layanan Hukum',
             'code'    => 'W2.2',
             'content' => '<h2>Direktori Putusan Mahkamah Agung RI</h2><p>[LENGKAPI tautan langsung halaman Direktori Putusan satker pada domain putusan3.mahkamahagung.go.id.]</p>',
         ),
         'prosedur-berperkara' => array(
             'title'   => 'Prosedur Berperkara',
-            'parent'  => 'Kepaniteraan & Perkara',
+            'parent'  => 'Layanan Hukum',
             'code'    => 'W2.3',
             'content' => '<h2>Alur &amp; Prosedur Berperkara (Tingkat Pertama, Banding, Kasasi, PK)</h2><p>[LENGKAPI syarat dan alur 6 jenis prosedur berperkara.]</p>',
         ),
         'biaya-proses-berperkara' => array(
             'title'   => 'Biaya Proses Berperkara & Radius',
-            'parent'  => 'Kepaniteraan & Perkara',
+            'parent'  => 'Layanan Hukum',
             'code'    => 'W2.4',
             'content' => '<h2>SK Panjar Biaya Perkara &amp; Radius Panggilan</h2><p>[LENGKAPI tabel SK Ketua tentang Panjar Biaya Perkara &amp; Radius Panggilan Jurusita.]</p>',
         ),
         'agenda-jadwal-persidangan' => array(
             'title'   => 'Agenda dan Jadwal Persidangan',
-            'parent'  => 'Kepaniteraan & Perkara',
+            'parent'  => 'Layanan Hukum',
             'code'    => 'B2.2',
-            'content' => '<h2>Jadwal Sidang Harian (SIPP)</h2><p>[LENGKAPI tautan atau sematan jadwal persidangan dari SIPP.]</p>',
+            'content' => '<h2>Jadwal Sidang Harian</h2><p>Informasi agenda persidangan terbuka untuk umum pada satuan kerja.</p>[pa_jadwal_sidang]',
         ),
         'statistik-perkara' => array(
             'title'   => 'Statistik Perkara',
-            'parent'  => 'Kepaniteraan & Perkara',
+            'parent'  => 'Layanan Hukum',
             'code'    => 'B2.3',
-            'content' => '<h2>Laporan Statistik Perkara Bulanan</h2><p>[LENGKAPI tabel/grafik perkara diterima, diputus, sisa per bulan.]</p>',
+            'content' => '<h2>Laporan Statistik Perkara Bulanan</h2><p>Rekapitulasi perkara diterima, diputus, dicabut, dan sisa pada satuan kerja.</p>[pa_statistik_perkara]',
         ),
         'panggilan-ghaib' => array(
             'title'   => 'Daftar Panggilan Ghaib',
-            'parent'  => 'Kepaniteraan & Perkara',
+            'parent'  => 'Layanan Hukum',
             'code'    => 'B2.4',
-            'content' => '<h2>Pengumuman Panggilan Ghaib (Pasal 27 PP 9/1975)</h2><p>[LENGKAPI daftar atau kategori pengumuman panggilan pihak yang tidak diketahui tempat tinggalnya.]</p>',
+            'content' => '<h2>Pengumuman Panggilan Ghaib (Pasal 27 PP 9/1975)</h2><p>Daftar resmi pengumuman panggilan sidang bagi pihak berperkara yang tidak diketahui tempat tinggalnya.</p>[pa_panggilan_ghaib]',
         ),
         'laporan-tahunan' => array(
             'title'   => 'Laporan Tahunan & Program Kerja',
-            'parent'  => 'Perencanaan & SAKIP',
+            'parent'  => 'Transparansi',
             'code'    => 'B1.2',
             'content' => '<h2>Arsip Laporan Tahunan &amp; Program Kerja</h2><p>[LENGKAPI tautan dokumen Laporan Tahunan 5 tahun terakhir.]</p>',
         ),
         'standar-maklumat-pelayanan' => array(
             'title'   => 'Standar dan Maklumat Pelayanan',
-            'parent'  => 'Layanan Publik & PPID',
+            'parent'  => 'Layanan Publik & Pengaduan',
             'code'    => 'W4.1',
             'content' => '<h2>Standar &amp; Maklumat Pelayanan Publik</h2><p>[LENGKAPI SK Standar Pelayanan, Maklumat Pelayanan PTSP, SOP PPID, dan Layanan Kelompok Rentan/Disabilitas.]</p>',
         ),
+        'disabilitas' => array(
+            'title'   => 'Layanan Kelompok Rentan & Disabilitas',
+            'parent'  => 'Layanan Publik & Pengaduan',
+            'code'    => 'W4.1',
+            'content' => '<h2>Layanan Inklusif Bagi Penyandang Disabilitas &amp; Kelompok Rentan</h2><p>Satuan kerja menyediakan sarana ramah disabilitas di area Pelayanan Terpadu Satu Pintu (PTSP) dan ruang sidang: jalur landai kursi roda (ramp), parkir prioritas, toilet aksesibel, kursi tunggu khusus, loket prioritas, pendampingan petugas PTSP, formulir informasi Braille/cetak besar, serta layanan bantuan juru bahasa isyarat atas permintaan.</p><h2>Aksesibilitas Digital Portal Website</h2><p>Portal ini dilengkapi bilah alat aksesibilitas pada bagian kanan bawah (tombol Pembesar/Pengecil Teks, Mode Kontras Tinggi, Mode Gelap, serta Pembaca Suara <em>Text-to-Speech</em> berbahasa Indonesia) dan navigasi papan ketik penuh untuk mendukung pembaca layar.</p>',
+        ),
         'hukuman-disiplin' => array(
             'title'   => 'Hukuman Disiplin Hasil Pengawasan',
-            'parent'  => 'Layanan Publik & PPID',
+            'parent'  => 'Layanan Publik & Pengaduan',
             'code'    => 'B4.3',
             'content' => '<h2>Publikasi Hasil Pengawasan &amp; Hukuman Disiplin</h2><p>[LENGKAPI rekapitulasi hasil pengawasan atau keterangan Nihil pada periode berjalan.]</p>',
         ),
         'statistik-kunjungan' => array(
             'title'   => 'Statistik Kunjungan Website',
-            'parent'  => 'Publikasi',
+            'parent'  => 'Layanan Publik & Pengaduan',
             'code'    => 'B5.1',
             'content' => '<h2>Statistik Pengunjung Website Resmi</h2>[pa_visitor_stats]',
+        ),
+        'pengumuman-resmi' => array(
+            'title'   => 'Pengumuman MA RI & Badilag',
+            'parent'  => 'Berita & Publikasi',
+            'code'    => 'B5.1',
+            'content' => '<h2>Siaran Resmi Mahkamah Agung RI &amp; Ditjen Badilag</h2><p>Pembaruan pengumuman, surat edaran, dan informasi kelembagaan langsung dari umpan RSS resmi Mahkamah Agung RI dan Direktorat Jenderal Badan Peradilan Agama.</p>[pa_official_announcements limit="10"]',
         ),
     );
 }
@@ -256,6 +343,22 @@ function pa_sinova_wp_compliance_report(): array {
         $docStats[$s]['total']      = ($docStats[$s]['total'] ?? 0) + 1;
         $docStats[$s]['years'][$y]  = ($docStats[$s]['years'][$y] ?? 0) + 1;
     }
+
+    $recStats = array();
+    if (function_exists('pa_portal_records_table') && function_exists('pa_portal_records_ensure_table')) {
+        pa_portal_records_ensure_table();
+        $rTable = pa_portal_records_table();
+        $rRows  = $wpdb->get_results("SELECT record_type, COUNT(*) AS c FROM `{$rTable}` WHERE status = 'published' GROUP BY record_type", ARRAY_A);
+        foreach ((array) $rRows as $rr) {
+            $recStats[(string) $rr['record_type']] = (int) $rr['c'];
+        }
+    }
+    $slugToRecType = array(
+        'profil-pegawai'            => 'pegawai',
+        'agenda-jadwal-persidangan' => 'jadwal',
+        'statistik-perkara'         => 'statistik',
+        'panggilan-ghaib'           => 'ghaib',
+    );
 
     $curY  = (int) date('Y');
     $specs = array(
@@ -393,7 +496,20 @@ function pa_sinova_wp_compliance_report(): array {
         } else {
             if ($pageObj instanceof WP_Post && $pageObj->post_status === 'publish') {
                 $rawContent = (string) $pageObj->post_content;
-                if (stripos($rawContent, '[LENGKAPI') !== false) {
+                $recType    = $slugToRecType[$slug] ?? '';
+                if ($recType !== '' && stripos($rawContent, '[pa_') !== false) {
+                    $recCnt = (int) ($recStats[$recType] ?? 0);
+                    if ($recCnt > 0) {
+                        $status = 'lengkap';
+                        $pts    = 10;
+                        $note   = "Halaman & data terstruktur aktif ({$recCnt} entri terpublikasi).";
+                    } else {
+                        $status = 'perhatian';
+                        $pts    = 5;
+                        $note   = 'Halaman siap dengan shortcode dinamis, namun entri Data Operasional masih 0.';
+                    }
+                    $editUrl = admin_url('admin.php?page=pa-sinova-starter&tab=data&rec_type=' . rawurlencode($recType));
+                } elseif (stripos($rawContent, '[LENGKAPI') !== false) {
                     $status = 'perhatian';
                     $pts    = 5;
                     $note   = 'Halaman sudah ada, masih berisi penanda [LENGKAPI].';
@@ -434,12 +550,15 @@ function pa_sinova_wp_compliance_report(): array {
     $wPct = round(($wPts / 110) * 100, 1);
     $tPct = round((($bPts + $wPts) / 350) * 100, 1);
 
+    $disabPage = pa_sinova_find_existing_page('disabilitas');
+
     return array(
-        'items'   => $items,
-        'counts'  => $counts,
-        'berkala' => $bPct,
-        'wajib'   => $wPct,
-        'total'   => $tPct,
+        'items'              => $items,
+        'counts'             => $counts,
+        'berkala'            => $bPct,
+        'wajib'              => $wPct,
+        'total'              => $tPct,
+        'disabilitas_active' => ($disabPage instanceof WP_Post && $disabPage->post_status === 'publish'),
     );
 }
 
@@ -471,7 +590,7 @@ function pa_sinova_apply_astra_defaults(int $frontPageId = 0): void {
  * Seeder 1-Klik: membuat halaman modul & wajib yang belum ada.
  * Jika mode adopsi situs lama aktif ($forcePreserve = true), tema, menu eksisting, dan Beranda lama tidak diubah.
  */
-function pa_sinova_run_starter_seeder(?bool $forcePreserve = null): array {
+function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuildMenu = false): array {
     $cfg      = pa_sinova_get_settings();
     $preserve = $forcePreserve ?? (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1');
     $seeded   = get_option('pa_sinova_seeded_pages', array());
@@ -479,21 +598,20 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null): array {
         $seeded = array();
     }
 
-    $createdCount = 0;
+    $createdCount  = 0;
     $menuItemsPlan = array(
         'Profil Pengadilan'         => array(),
-        'Kepaniteraan & Perkara'     => array(),
-        'Kesekretariatan & Anggaran' => array(),
-        'Perencanaan & SAKIP'        => array(),
-        'Layanan Publik & PPID'      => array(),
-        'Publikasi'                  => array(),
+        'Layanan Hukum'              => array(),
+        'Transparansi'               => array(),
+        'Layanan Publik & Pengaduan' => array(),
+        'Berita & Publikasi'         => array(),
     );
 
     $catToParent = array(
-        'Keuangan & Anggaran'              => 'Kesekretariatan & Anggaran',
-        'Kepaniteraan & Biaya Perkara'     => 'Kepaniteraan & Perkara',
-        'Perencanaan & SAKIP'              => 'Perencanaan & SAKIP',
-        'Layanan Publik, PPID & Kepatuhan' => 'Layanan Publik & PPID',
+        'Keuangan & Anggaran'              => 'Transparansi',
+        'Perencanaan & SAKIP'              => 'Transparansi',
+        'Kepaniteraan & Biaya Perkara'     => 'Layanan Hukum',
+        'Layanan Publik, PPID & Kepatuhan' => 'Layanan Publik & Pengaduan',
     );
 
     $upsertPage = static function (string $key, string $title, string $slug, string $content) use (&$seeded, &$createdCount): int {
@@ -525,6 +643,9 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null): array {
         $pid = $upsertPage('static:' . $slug, $meta['title'], $slug, $meta['content']);
         if ($pid > 0) {
             $parentName = $meta['parent'];
+            if (!isset($menuItemsPlan[$parentName])) {
+                $parentName = 'Layanan Publik & Pengaduan';
+            }
             $menuItemsPlan[$parentName][] = array('title' => $meta['title'], 'post_id' => $pid);
         }
     }
@@ -534,21 +655,38 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null): array {
             $shortcode = '[pa_sinova_docs slug="' . esc_attr($slug) . '"]';
             $pid = $upsertPage('mod:' . $slug, $cfgMod['title'], $slug, $shortcode);
             if ($pid > 0) {
-                $parentName = ($slug === 'mou') ? 'Publikasi' : ($catToParent[$cfgMod['category']] ?? 'Layanan Publik & PPID');
+                if ($slug === 'mou') {
+                    $parentName = 'Berita & Publikasi';
+                } elseif (in_array($slug, array('lhkpn', 'lhkasn'), true)) {
+                    $parentName = 'Transparansi';
+                } else {
+                    $parentName = $catToParent[$cfgMod['category']] ?? 'Layanan Publik & Pengaduan';
+                }
                 $menuItemsPlan[$parentName][] = array('title' => $cfgMod['title'], 'post_id' => $pid);
             }
         }
     }
 
+    $menuItemsPlan['Berita & Publikasi'][] = array(
+        'title' => 'Berita & Artikel',
+        'url'   => home_url('/?post_type=post'),
+    );
+
     $menuCreated = 0;
 
-    if (!$preserve) {
+    if (!$preserve || $rebuildMenu) {
         $menuName = 'Menu Utama SINOVA';
         $menuObj  = wp_get_nav_menu_object($menuName);
         $menuId   = $menuObj ? (int) $menuObj->term_id : (int) wp_create_nav_menu($menuName);
 
         if ($menuId > 0) {
             $existingItems = wp_get_nav_menu_items($menuId);
+            if ($rebuildMenu && is_array($existingItems) && !empty($existingItems)) {
+                foreach ($existingItems as $oldItem) {
+                    wp_delete_post((int) $oldItem->ID, true);
+                }
+                $existingItems = array();
+            }
             if (empty($existingItems)) {
                 $pos = 1;
                 wp_update_nav_menu_item($menuId, 0, array(
@@ -558,6 +696,7 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null): array {
                     'menu-item-status'   => 'publish',
                     'menu-item-position' => $pos++,
                 ));
+                $menuCreated++;
                 foreach ($menuItemsPlan as $parentTitle => $children) {
                     $parentItemId = wp_update_nav_menu_item($menuId, 0, array(
                         'menu-item-title'    => $parentTitle,
@@ -569,14 +708,25 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null): array {
                     if (!is_wp_error($parentItemId) && $parentItemId > 0) {
                         $menuCreated++;
                         foreach ($children as $ch) {
-                            wp_update_nav_menu_item($menuId, 0, array(
-                                'menu-item-object-id' => (int) $ch['post_id'],
-                                'menu-item-object'    => 'page',
-                                'menu-item-type'      => 'post_type',
-                                'menu-item-status'    => 'publish',
-                                'menu-item-parent-id' => (int) $parentItemId,
-                                'menu-item-position'  => $pos++,
-                            ));
+                            if (!empty($ch['post_id'])) {
+                                wp_update_nav_menu_item($menuId, 0, array(
+                                    'menu-item-object-id' => (int) $ch['post_id'],
+                                    'menu-item-object'    => 'page',
+                                    'menu-item-type'      => 'post_type',
+                                    'menu-item-status'    => 'publish',
+                                    'menu-item-parent-id' => (int) $parentItemId,
+                                    'menu-item-position'  => $pos++,
+                                ));
+                            } else {
+                                wp_update_nav_menu_item($menuId, 0, array(
+                                    'menu-item-title'     => (string) ($ch['title'] ?? 'Tautan'),
+                                    'menu-item-url'       => (string) ($ch['url'] ?? home_url('/')),
+                                    'menu-item-type'      => 'custom',
+                                    'menu-item-status'    => 'publish',
+                                    'menu-item-parent-id' => (int) $parentItemId,
+                                    'menu-item-position'  => $pos++,
+                                ));
+                            }
                             $menuCreated++;
                         }
                     }
@@ -591,6 +741,9 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null): array {
             }
             set_theme_mod('nav_menu_locations', $locations);
         }
+    }
+
+    if (!$preserve) {
 
         $frontSlug = 'beranda';
         $tplPaths  = array(
@@ -888,7 +1041,7 @@ add_action('admin_menu', static function () {
     add_menu_page(
         'SINOVA Hub (Kepatuhan SK 2722/2026)',
         'SINOVA Hub',
-        'manage_options',
+        'pa_access_sinova_hub',
         'pa-sinova-starter',
         'pa_sinova_render_admin_page',
         'dashicons-awards',
@@ -896,26 +1049,238 @@ add_action('admin_menu', static function () {
     );
 });
 
+/**
+ * Menghasilkan matriks & SVG QR Code ISO/IEC 18004 (Version 5-L, <=106 byte, 1 blok RS) secara lokal.
+ */
+function pa_sinova_totp_qr_svg(string $payload): string {
+    $bytes = array_values(unpack('C*', $payload));
+    $len   = count($bytes);
+    if ($len === 0 || $len > 106) {
+        return '';
+    }
+    $size = 37; // Version 5
+
+    // 1. Bitstream: Mode 0100 (Byte), 8-bit count, data, terminator, padding 0xEC/0x11 hingga 108 byte
+    $bits = array(0, 1, 0, 0);
+    for ($i = 7; $i >= 0; $i--) {
+        $bits[] = ($len >> $i) & 1;
+    }
+    foreach ($bytes as $b) {
+        for ($i = 7; $i >= 0; $i--) {
+            $bits[] = ($b >> $i) & 1;
+        }
+    }
+    $maxBits = 108 * 8;
+    for ($i = 0; $i < 4 && count($bits) < $maxBits; $i++) {
+        $bits[] = 0;
+    }
+    while (count($bits) % 8 !== 0) {
+        $bits[] = 0;
+    }
+    $padBytes = array(0xEC, 0x11);
+    $pIdx     = 0;
+    while (count($bits) < $maxBits) {
+        $pb = $padBytes[$pIdx % 2];
+        $pIdx++;
+        for ($i = 7; $i >= 0; $i--) {
+            $bits[] = ($pb >> $i) & 1;
+        }
+    }
+    $dataCw = array();
+    for ($i = 0; $i < 108; $i++) {
+        $v = 0;
+        for ($j = 0; $j < 8; $j++) {
+            $v = ($v << 1) | $bits[$i * 8 + $j];
+        }
+        $dataCw[] = $v;
+    }
+
+    // 2. GF(256) poly 0x11D Reed-Solomon (26 EC codewords)
+    $exp = array_fill(0, 512, 0);
+    $log = array_fill(0, 256, 0);
+    $x   = 1;
+    for ($i = 0; $i < 255; $i++) {
+        $exp[$i]     = $x;
+        $exp[$i + 255] = $x;
+        $log[$x]     = $i;
+        $x <<= 1;
+        if ($x & 0x100) {
+            $x ^= 0x11D;
+        }
+    }
+    $gfMul = static function (int $a, int $b) use ($exp, $log): int {
+        return ($a === 0 || $b === 0) ? 0 : $exp[$log[$a] + $log[$b]];
+    };
+    $ecLen = 26;
+    $gen   = array(1);
+    for ($i = 0; $i < $ecLen; $i++) {
+        $next = array_fill(0, count($gen) + 1, 0);
+        $a    = $exp[$i];
+        foreach ($gen as $idx => $coef) {
+            $next[$idx]     ^= $coef;
+            $next[$idx + 1] ^= $gfMul($coef, $a);
+        }
+        $gen = $next;
+    }
+    $msg = array_merge($dataCw, array_fill(0, $ecLen, 0));
+    for ($i = 0; $i < 108; $i++) {
+        $coef = $msg[$i];
+        if ($coef !== 0) {
+            for ($j = 1; $j <= $ecLen; $j++) {
+                $msg[$i + $j] ^= $gfMul($gen[$j], $coef);
+            }
+        }
+    }
+    $allCw = array_merge($dataCw, array_slice($msg, 108));
+    $stream = array();
+    foreach ($allCw as $cw) {
+        for ($i = 7; $i >= 0; $i--) {
+            $stream[] = ($cw >> $i) & 1;
+        }
+    }
+    for ($i = 0; $i < 7; $i++) {
+        $stream[] = 0; // Version 5 remainder bits
+    }
+
+    // 3. Matriks modul & pola fungsi
+    $grid = array_fill(0, $size, array_fill(0, $size, null));
+    $func = array_fill(0, $size, array_fill(0, $size, false));
+    $setFunc = static function (int $r, int $c, bool $dark) use (&$grid, &$func, $size): void {
+        if ($r >= 0 && $c >= 0 && $r < $size && $c < $size) {
+            $grid[$r][$c] = $dark;
+            $func[$r][$c] = true;
+        }
+    };
+    $drawFinder = static function (int $top, int $left) use ($setFunc): void {
+        for ($dr = -1; $dr <= 7; $dr++) {
+            for ($dc = -1; $dc <= 7; $dc++) {
+                $dark = ($dr >= 0 && $dr <= 6 && $dc >= 0 && $dc <= 6)
+                    && ($dr === 0 || $dr === 6 || $dc === 0 || $dc === 6 || ($dr >= 2 && $dr <= 4 && $dc >= 2 && $dc <= 4));
+                $setFunc($top + $dr, $left + $dc, $dark);
+            }
+        }
+    };
+    $drawFinder(0, 0);
+    $drawFinder(0, $size - 7);
+    $drawFinder($size - 7, 0);
+    // Alignment (30, 30)
+    for ($dr = -2; $dr <= 2; $dr++) {
+        for ($dc = -2; $dc <= 2; $dc++) {
+            $setFunc(30 + $dr, 30 + $dc, max(abs($dr), abs($dc)) !== 1);
+        }
+    }
+    // Timing
+    for ($i = 8; $i < $size - 8; $i++) {
+        $setFunc(6, $i, $i % 2 === 0);
+        $setFunc($i, 6, $i % 2 === 0);
+    }
+    // Dark module & reserve format info
+    $setFunc($size - 8, 8, true);
+    for ($i = 0; $i <= 8; $i++) {
+        if ($i !== 6) {
+            $setFunc(8, $i, false);
+            $setFunc($i, 8, false);
+        }
+    }
+    for ($i = $size - 8; $i < $size; $i++) {
+        $setFunc(8, $i, false);
+        if ($i > $size - 8) {
+            $setFunc($i, 8, false);
+        }
+    }
+
+    // 4. Penempatan data zig-zag
+    $bitIdx = 0;
+    $up     = true;
+    for ($right = $size - 1; $right >= 1; $right -= 2) {
+        if ($right === 6) {
+            $right = 5;
+        }
+        for ($step = 0; $step < $size; $step++) {
+            $r = $up ? ($size - 1 - $step) : $step;
+            for ($dx = 0; $dx < 2; $dx++) {
+                $c = $right - $dx;
+                if (!$func[$r][$c]) {
+                    $grid[$r][$c] = (bool) ($stream[$bitIdx++] ?? 0);
+                }
+            }
+        }
+        $up = !$up;
+    }
+
+    // 5. Terapkan mask 0 ((r+c)%2===0) + format info ECC Level L (01)
+    for ($r = 0; $r < $size; $r++) {
+        for ($c = 0; $c < $size; $c++) {
+            if (!$func[$r][$c] && (($r + $c) % 2 === 0)) {
+                $grid[$r][$c] = !$grid[$r][$c];
+            }
+        }
+    }
+    $fmtData = (0b01 << 3) | 0; // ECC L, Mask 0
+    $rem     = $fmtData << 10;
+    for ($i = 4; $i >= 0; $i--) {
+        if (($rem >> ($i + 10)) & 1) {
+            $rem ^= (0x537 << $i);
+        }
+    }
+    $fmt = (($fmtData << 10) | $rem) ^ 0x5412;
+    for ($i = 0; $i < 15; $i++) {
+        $b = (bool) (($fmt >> $i) & 1);
+        if ($i < 6) $grid[8][$i] = $b;
+        elseif ($i < 8) $grid[8][$i + 1] = $b;
+        else $grid[8][$size - 15 + $i] = $b;
+
+        if ($i < 8) $grid[$size - 1 - $i][8] = $b;
+        elseif ($i < 9) $grid[7][8] = $b;
+        else $grid[14 - $i][8] = $b;
+    }
+
+    $paths = '';
+    for ($r = 0; $r < $size; $r++) {
+        for ($c = 0; $c < $size; $c++) {
+            if (!empty($grid[$r][$c])) {
+                $paths .= 'M' . ($c + 2) . ',' . ($r + 2) . 'h1v1h-1z';
+            }
+        }
+    }
+    $vb = $size + 4;
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $vb . ' ' . $vb . '" width="180" height="180" shape-rendering="crispEdges" role="img" aria-label="Kode QR Autentikator TOTP"><rect width="' . $vb . '" height="' . $vb . '" fill="#ffffff"/><path d="' . $paths . '" fill="#0f172a"/></svg>';
+}
+
 function pa_sinova_render_admin_page(): void {
-    if (!current_user_can('manage_options')) {
+    if (!current_user_can('pa_access_sinova_hub')) {
         return;
     }
 
+    $allowedTabs = pa_sinova_user_allowed_tabs();
+    if (empty($allowedTabs)) {
+        $allowedTabs = array('compliance');
+    }
+
     $notice          = '';
+    $mfaRecoveryOnce = array();
     $scannedLinks    = array();
     $scanPostId      = 0;
     $scanTargetSlug  = 'lra';
     $scanDefaultYear = (int) wp_date('Y');
-    $activeTab       = isset($_GET['tab']) ? sanitize_key((string) $_GET['tab']) : 'compliance';
-    if (!in_array($activeTab, array('compliance', 'upload', 'migration', 'settings', 'security'), true)) {
-        $activeTab = 'compliance';
+    $activeTab       = isset($_GET['tab']) ? sanitize_key((string) $_GET['tab']) : $allowedTabs[0];
+    if (!in_array($activeTab, $allowedTabs, true)) {
+        $activeTab = $allowedTabs[0];
     }
+
+    $requireAdmin = static function () use (&$notice): bool {
+        if (!current_user_can('manage_options')) {
+            $notice = 'Gagal: Aksi ini hanya diizinkan untuk Administrator Satker.';
+            return false;
+        }
+        return true;
+    };
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pa_sinova_action'])) {
         check_admin_referer('pa_sinova_starter_nonce');
         $action = sanitize_key((string) $_POST['pa_sinova_action']);
 
-        if ($action === 'save_settings') {
+        if ($action === 'save_settings' && $requireAdmin()) {
             $activeTab = 'settings';
             $cur = pa_sinova_get_settings();
             $new = array(
@@ -933,6 +1298,9 @@ function pa_sinova_render_admin_page(): void {
                 'direktori_url'        => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
                 'survey_url'           => esc_url_raw(wp_unslash((string) ($_POST['survey_url'] ?? ''))),
                 'aco_url'              => esc_url_raw(wp_unslash((string) ($_POST['aco_url'] ?? ($cur['aco_url'] ?? '')))),
+                'rss_ma_url'           => esc_url_raw(wp_unslash((string) ($_POST['rss_ma_url'] ?? ($cur['rss_ma_url'] ?? '')))),
+                'rss_badilag_url'      => esc_url_raw(wp_unslash((string) ($_POST['rss_badilag_url'] ?? ($cur['rss_badilag_url'] ?? '')))),
+                'enforce_mfa'          => (string) ($cur['enforce_mfa'] ?? '0'),
                 'custom_login_slug'    => (string) ($cur['custom_login_slug'] ?? ''),
                 'hmac_secret'          => trim(sanitize_text_field(wp_unslash((string) ($_POST['hmac_secret'] ?? '')))),
                 'turnstile_site_key'   => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_site_key'] ?? '')))),
@@ -945,8 +1313,8 @@ function pa_sinova_render_admin_page(): void {
             if (function_exists('pa_home_page_cache_mark_stale')) {
                 pa_home_page_cache_mark_stale();
             }
-            $notice = 'Pengaturan Satker & API HMAC berhasil disimpan.';
-        } elseif ($action === 'run_seeder') {
+            $notice = 'Pengaturan Satker, Umpan RSS, & API HMAC berhasil disimpan.';
+        } elseif ($action === 'run_seeder' && $requireAdmin()) {
             $activeTab = 'settings';
             $res = pa_sinova_run_starter_seeder();
             if (function_exists('pa_home_page_cache_mark_stale')) {
@@ -964,7 +1332,127 @@ function pa_sinova_render_admin_page(): void {
                     $res['total_mapped'],
                     $res['menu_items']
                 );
-        } elseif ($action === 'save_adoption_mode' || $action === 'save_and_seed_safe') {
+        } elseif ($action === 'rebuild_6menu' && $requireAdmin()) {
+            $activeTab = 'settings';
+            $res = pa_sinova_run_starter_seeder(false, true);
+            if (function_exists('pa_home_page_cache_mark_stale')) {
+                pa_home_page_cache_mark_stale();
+            }
+            $notice = sprintf('Struktur 6 menu utama standar berhasil disusun ulang (%d item menu terbit).', $res['menu_items']);
+        } elseif ($action === 'refresh_rss' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            if (function_exists('pa_portal_refresh_official_feeds')) {
+                $feedData = pa_portal_refresh_official_feeds();
+                $maCnt    = count((array) ($feedData['ma'] ?? array()));
+                $bdCnt    = count((array) ($feedData['badilag'] ?? array()));
+                $notice   = "Sinkronisasi RSS resmi selesai: MA RI ({$maCnt} item) dan Ditjen Badilag ({$bdCnt} item).";
+            } else {
+                $notice = 'Gagal: Modul umpan RSS belum dimuat.';
+            }
+        } elseif ($action === 'add_record' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            if (function_exists('pa_portal_records_ensure_table') && function_exists('pa_portal_records_table')) {
+                pa_portal_records_ensure_table();
+                global $wpdb;
+                $recType = sanitize_key((string) ($_POST['rec_type'] ?? 'jadwal'));
+                if (!in_array($recType, array('pegawai', 'jadwal', 'ghaib', 'statistik'), true)) {
+                    $recType = 'jadwal';
+                }
+                $recTitle = sanitize_text_field(wp_unslash((string) ($_POST['rec_title'] ?? '')));
+                $recSub   = sanitize_text_field(wp_unslash((string) ($_POST['rec_subtitle'] ?? '')));
+                $recCat   = sanitize_text_field(wp_unslash((string) ($_POST['rec_category'] ?? '')));
+                $recM1    = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_1'] ?? '')));
+                $recM2    = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_2'] ?? '')));
+                $recM3    = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_3'] ?? '')));
+                $recDate  = sanitize_text_field(wp_unslash((string) ($_POST['rec_date'] ?? '')));
+                $recOrder = (int) ($_POST['rec_sort_order'] ?? 0);
+                if ($recTitle === '') {
+                    $notice = 'Gagal: Judul / nama entri wajib diisi.';
+                } else {
+                    if ($recType === 'pegawai') {
+                        $metaArr = array('nip' => $recM1, 'gol' => $recM2, 'edu' => $recM3);
+                    } elseif ($recType === 'ghaib') {
+                        $metaArr = array('pihak' => ($recM1 !== '' ? $recM1 : $recSub), 'doc_url' => esc_url_raw($recM2, array('http', 'https')));
+                    } elseif ($recType === 'statistik') {
+                        $metaArr = array('diterima' => (int) $recM1, 'diputus' => (int) $recM2, 'sisa' => (int) $recM3);
+                    } else {
+                        $metaArr = array('jam' => ($recM1 !== '' ? $recM1 : '09.00 WIB'));
+                    }
+                    $metaJson = wp_json_encode($metaArr);
+                    $now      = current_time('mysql');
+                    $wpdb->insert(pa_portal_records_table(), array(
+                        'record_type' => $recType,
+                        'title'       => $recTitle,
+                        'subtitle'    => $recSub,
+                        'category'    => $recCat,
+                        'event_date'  => preg_match('/^\d{4}-\d{2}-\d{2}$/', $recDate) ? $recDate : null,
+                        'meta_json'   => $metaJson ?: '{}',
+                        'sort_order'  => $recOrder,
+                        'status'      => 'published',
+                        'updated_at'  => $now,
+                    ));
+                    if (function_exists('pa_home_page_cache_mark_stale')) {
+                        pa_home_page_cache_mark_stale();
+                    }
+                    $notice = "Entri Data Operasional ({$recType}) berhasil ditambahkan.";
+                }
+            }
+        } elseif ($action === 'delete_record' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            if (function_exists('pa_portal_records_table')) {
+                global $wpdb;
+                $rid = (int) ($_POST['rec_id'] ?? 0);
+                if ($rid > 0) {
+                    $wpdb->delete(pa_portal_records_table(), array('id' => $rid));
+                    $notice = 'Entri data operasional berhasil dihapus.';
+                }
+            }
+        } elseif ($action === 'mfa_setup_start' && in_array('security', $allowedTabs, true)) {
+            $activeTab = 'security';
+            if (function_exists('pa_starter_totp_generate_secret')) {
+                $uid = get_current_user_id();
+                $pending = pa_starter_totp_generate_secret(20);
+                update_user_meta($uid, 'pa_totp_pending_secret', $pending);
+                $notice = 'Kunci TOTP baru dibuat. Pindai kode QR pada aplikasi autentikator lalu masukkan kode 6 digit untuk mengaktifkan.';
+            }
+        } elseif ($action === 'mfa_activate' && in_array('security', $allowedTabs, true)) {
+            $activeTab = 'security';
+            if (function_exists('pa_starter_totp_verify') && function_exists('pa_starter_totp_generate_recovery_codes')) {
+                $uid     = get_current_user_id();
+                $pending = (string) get_user_meta($uid, 'pa_totp_pending_secret', true);
+                $otp     = trim((string) ($_POST['mfa_verify_code'] ?? ''));
+                if ($pending === '' || !pa_starter_totp_verify($pending, $otp, 1, $uid)) {
+                    $notice = 'Gagal: Kode verifikasi 6 digit tidak sesuai atau kedaluwarsa. Pastikan jam perangkat akurat.';
+                } else {
+                    $rec = pa_starter_totp_generate_recovery_codes(8);
+                    update_user_meta($uid, 'pa_totp_secret', $pending);
+                    update_user_meta($uid, 'pa_totp_enabled', '1');
+                    update_user_meta($uid, 'pa_totp_recovery_hashes', $rec['hashes']);
+                    delete_user_meta($uid, 'pa_totp_pending_secret');
+                    $mfaRecoveryOnce = $rec['plain'];
+                    $notice = 'Autentikasi Dua Faktor (MFA TOTP) berhasil diaktifkan pada akun Anda. Simpan 8 kode cadangan di tempat aman.';
+                }
+            }
+        } elseif ($action === 'mfa_disable' && in_array('security', $allowedTabs, true)) {
+            $activeTab = 'security';
+            $uid = get_current_user_id();
+            delete_user_meta($uid, 'pa_totp_secret');
+            delete_user_meta($uid, 'pa_totp_enabled');
+            delete_user_meta($uid, 'pa_totp_recovery_hashes');
+            delete_user_meta($uid, 'pa_totp_pending_secret');
+            $notice = 'Autentikasi Dua Faktor (MFA TOTP) pada akun Anda telah dinonaktifkan.';
+        } elseif ($action === 'mfa_policy' && $requireAdmin()) {
+            $activeTab = 'security';
+            $stored = get_option('pa_sinova_starter_settings', array());
+            if (!is_array($stored)) {
+                $stored = array();
+            }
+            $stored['enforce_mfa'] = !empty($_POST['enforce_mfa']) ? '1' : '0';
+            update_option('pa_sinova_starter_settings', $stored, false);
+            $notice = $stored['enforce_mfa'] === '1'
+                ? 'Kebijakan kewajiban MFA TOTP diaktifkan (menampilkan pengingat wajib kepada operator yang belum mengaktifkan 2FA).'
+                : 'Kebijakan pengingat wajib MFA TOTP dinonaktifkan.';
+        } elseif (($action === 'save_adoption_mode' || $action === 'save_and_seed_safe') && $requireAdmin()) {
             $activeTab = 'migration';
             $stored    = get_option('pa_sinova_starter_settings', array());
             if (!is_array($stored)) {
@@ -988,7 +1476,7 @@ function pa_sinova_render_admin_page(): void {
             if (function_exists('pa_home_page_cache_mark_stale')) {
                 pa_home_page_cache_mark_stale();
             }
-        } elseif ($action === 'save_custom_map') {
+        } elseif ($action === 'save_custom_map' && $requireAdmin()) {
             $activeTab = 'migration';
             $postIds   = isset($_POST['map_post_id']) && is_array($_POST['map_post_id']) ? $_POST['map_post_id'] : array();
             $customUrl = isset($_POST['map_custom_url']) && is_array($_POST['map_custom_url']) ? $_POST['map_custom_url'] : array();
@@ -1012,7 +1500,7 @@ function pa_sinova_render_admin_page(): void {
                 pa_home_page_cache_mark_stale();
             }
             $notice = sprintf('Pemetaan kustom %d kriteria situs lama berhasil disimpan.', count($newMap));
-        } elseif ($action === 'scan_links') {
+        } elseif ($action === 'scan_links' && $requireAdmin()) {
             $activeTab       = 'migration';
             $scanPostId      = max(0, (int) ($_POST['scan_post_id'] ?? 0));
             $scanTargetSlug  = sanitize_key((string) ($_POST['scan_target_slug'] ?? 'lra'));
@@ -1023,7 +1511,7 @@ function pa_sinova_render_admin_page(): void {
             } else {
                 $notice = 'Pilih halaman atau pos sumber terlebih dahulu untuk dipindai.';
             }
-        } elseif ($action === 'import_links' && function_exists('pa_sinova_ensure_table')) {
+        } elseif ($action === 'import_links' && $requireAdmin() && function_exists('pa_sinova_ensure_table')) {
             $activeTab = 'migration';
             pa_sinova_ensure_table();
             global $wpdb;
@@ -1100,13 +1588,17 @@ function pa_sinova_render_admin_page(): void {
             } else {
                 $notice = 'Tidak ada baris tautan valid yang dipilih untuk diimpor.';
             }
-        } elseif ($action === 'upload_doc' && function_exists('pa_sinova_ensure_table')) {
+        } elseif ($action === 'upload_doc' && in_array('upload', $allowedTabs, true) && function_exists('pa_sinova_ensure_table')) {
             $activeTab = 'upload';
             pa_sinova_ensure_table();
             global $wpdb;
-            $table   = pa_sinova_table_name();
-            $periods = pa_sinova_all_periods_map();
-            $slug    = sanitize_key((string) ($_POST['doc_slug'] ?? 'lra'));
+            $table        = pa_sinova_table_name();
+            $periods      = pa_sinova_all_periods_map();
+            $slug         = sanitize_key((string) ($_POST['doc_slug'] ?? 'lra'));
+            $allowedSlugs = pa_sinova_user_allowed_module_slugs();
+            if (!empty($allowedSlugs) && !in_array($slug, $allowedSlugs, true)) {
+                $notice = 'Gagal: Peran akun Anda tidak berwenang mengunggah ke modul "' . esc_html($slug) . '".';
+            } else {
             $year    = max(2017, min(2035, (int) ($_POST['doc_year'] ?? date('Y'))));
             $sub     = sanitize_text_field(wp_unslash((string) ($_POST['doc_subgroup'] ?? 'DOKUMEN')));
             $per     = strtoupper(sanitize_key((string) ($_POST['doc_period'] ?? 'JAN')));
@@ -1166,13 +1658,17 @@ function pa_sinova_render_admin_page(): void {
             } elseif ($notice === '') {
                 $notice = 'Silakan unggah berkas PDF atau masukkan tautan HTTPS yang valid.';
             }
-        } elseif ($action === 'delete_doc' && !empty($_POST['doc_id'])) {
+            }
+        } elseif ($action === 'delete_doc' && in_array('upload', $allowedTabs, true) && !empty($_POST['doc_id'])) {
             $activeTab = 'upload';
             global $wpdb;
-            $table = pa_sinova_table_name();
-            $did   = (int) $_POST['doc_id'];
-            $row   = $wpdb->get_row($wpdb->prepare("SELECT * FROM `{$table}` WHERE id = %d", $did), ARRAY_A);
-            if ($row) {
+            $table        = pa_sinova_table_name();
+            $did          = (int) $_POST['doc_id'];
+            $row          = $wpdb->get_row($wpdb->prepare("SELECT * FROM `{$table}` WHERE id = %d", $did), ARRAY_A);
+            $allowedSlugs = pa_sinova_user_allowed_module_slugs();
+            if ($row && (!empty($allowedSlugs) && !in_array((string) $row['page_slug'], $allowedSlugs, true))) {
+                $notice = 'Gagal: Peran akun Anda tidak berwenang menghapus dokumen modul tersebut.';
+            } elseif ($row) {
                 if (($row['source_type'] ?? '') === 'wp_pdf' && function_exists('pa_sinova_safe_unlink_local_pdf')) {
                     pa_sinova_safe_unlink_local_pdf((string) $row['doc_url']);
                 }
@@ -1180,7 +1676,7 @@ function pa_sinova_render_admin_page(): void {
                 pa_sinova_flush_caches_for_slug((string) $row['page_slug']);
                 $notice = 'Dokumen berhasil dihapus dari arsip.';
             }
-        } elseif ($action === 'save_login_hide') {
+        } elseif ($action === 'save_login_hide' && $requireAdmin()) {
             $activeTab = 'security';
             $rawSlug   = wp_unslash((string) ($_POST['custom_login_slug'] ?? ''));
             $check     = pa_sinova_sanitize_login_slug($rawSlug);
@@ -1205,16 +1701,35 @@ function pa_sinova_render_admin_page(): void {
         }
     }
 
-    $cfg        = pa_sinova_get_settings();
-    $catalog    = function_exists('pa_sinova_module_catalog') ? pa_sinova_module_catalog() : array();
+    $cfg          = pa_sinova_get_settings();
+    $catalog      = function_exists('pa_sinova_module_catalog') ? pa_sinova_module_catalog() : array();
+    $allowedSlugs = pa_sinova_user_allowed_module_slugs();
+    $uploadCatalog = empty($allowedSlugs)
+        ? $catalog
+        : array_intersect_key($catalog, array_flip($allowedSlugs));
+    if (empty($uploadCatalog)) {
+        $uploadCatalog = $catalog;
+    }
     $periods    = function_exists('pa_sinova_all_periods_map') ? pa_sinova_all_periods_map() : array();
     $report     = pa_sinova_wp_compliance_report();
-    $preSlug    = isset($_GET['doc_slug']) ? sanitize_key((string) $_GET['doc_slug']) : 'lra';
+    $uploadKeys = array_keys($uploadCatalog);
+    $preSlug    = isset($_GET['doc_slug']) ? sanitize_key((string) $_GET['doc_slug']) : ($uploadKeys[0] ?? 'lra');
+    if (!isset($uploadCatalog[$preSlug]) && !empty($uploadKeys)) {
+        $preSlug = $uploadKeys[0];
+    }
     $tabBaseUrl = admin_url('admin.php?page=pa-sinova-starter&tab=');
+    $tabLabels  = array(
+        'compliance' => 'Dashboard 35 Kriteria (' . $report['total'] . '%)',
+        'upload'     => 'Upload &amp; Kelola Dokumen',
+        'data'       => 'Data Operasional &amp; RSS',
+        'migration'  => 'Migrasi &amp; Adopsi',
+        'settings'   => 'Identitas Satker &amp; Seeder',
+        'security'   => 'Keamanan, MFA &amp; Audit',
+    );
     ?>
     <div class="wrap">
         <h1 style="color:#056e4f;font-weight:800;">SINOVA Hub — Panel Backend &amp; Kepatuhan (SK Dirjen Badilag 2722/2026)</h1>
-        <p style="color:#475569;margin-top:2px;">Halaman backend khusus operator untuk memantau kesiapan 35 kriteria, mengunggah arsip PDF/Drive, serta menyalin URL bukti ke SINOVA. Istilah <em>SINOVA</em> tidak ditampilkan di halaman publik masyarakat.</p>
+        <p style="color:#475569;margin-top:2px;">Halaman backend khusus operator untuk memantau kesiapan 35 kriteria, mengunggah arsip PDF/Drive, serta mengelola data operasional &amp; keamanan. Istilah <em>SINOVA</em> tidak ditampilkan di halaman publik masyarakat.</p>
 
         <?php if ($notice !== '') :
             $noticeClass = (stripos($notice, 'Gagal:') === 0) ? 'notice-error' : 'notice-success';
@@ -1223,11 +1738,13 @@ function pa_sinova_render_admin_page(): void {
         <?php endif; ?>
 
         <h2 class="nav-tab-wrapper" style="margin:14px 0 18px;">
-            <a href="<?php echo esc_url($tabBaseUrl . 'compliance'); ?>" class="nav-tab <?php echo $activeTab === 'compliance' ? 'nav-tab-active' : ''; ?>">Dashboard 35 Kriteria (<?php echo esc_html((string) $report['total']); ?>%)</a>
-            <a href="<?php echo esc_url($tabBaseUrl . 'upload'); ?>" class="nav-tab <?php echo $activeTab === 'upload' ? 'nav-tab-active' : ''; ?>">Upload &amp; Kelola Dokumen</a>
-            <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>" class="nav-tab <?php echo $activeTab === 'migration' ? 'nav-tab-active' : ''; ?>">Migrasi &amp; Adopsi</a>
-            <a href="<?php echo esc_url($tabBaseUrl . 'settings'); ?>" class="nav-tab <?php echo $activeTab === 'settings' ? 'nav-tab-active' : ''; ?>">Identitas Satker &amp; Seeder 1-Klik</a>
-            <a href="<?php echo esc_url($tabBaseUrl . 'security'); ?>" class="nav-tab <?php echo $activeTab === 'security' ? 'nav-tab-active' : ''; ?>">Keamanan &amp; Audit Log</a>
+            <?php foreach ($tabLabels as $tKey => $tLabel) :
+                if (!in_array($tKey, $allowedTabs, true)) {
+                    continue;
+                }
+            ?>
+                <a href="<?php echo esc_url($tabBaseUrl . $tKey); ?>" class="nav-tab <?php echo $activeTab === $tKey ? 'nav-tab-active' : ''; ?>"><?php echo $tLabel; ?></a>
+            <?php endforeach; ?>
         </h2>
 
         <?php if ($activeTab === 'compliance') : ?>
@@ -1295,7 +1812,12 @@ function pa_sinova_render_admin_page(): void {
         <?php elseif ($activeTab === 'upload') :
             global $wpdb;
             $table = function_exists('pa_sinova_table_name') ? pa_sinova_table_name() : ($wpdb->prefix . 'pa_sinova_documents');
-            $recentDocs = $wpdb->get_results("SELECT * FROM `{$table}` ORDER BY updated_at DESC, id DESC LIMIT 25", ARRAY_A);
+            if (!empty($allowedSlugs)) {
+                $placeholders = implode(',', array_fill(0, count($allowedSlugs), '%s'));
+                $recentDocs   = $wpdb->get_results($wpdb->prepare("SELECT * FROM `{$table}` WHERE page_slug IN ({$placeholders}) ORDER BY updated_at DESC, id DESC LIMIT 25", ...$allowedSlugs), ARRAY_A);
+            } else {
+                $recentDocs = $wpdb->get_results("SELECT * FROM `{$table}` ORDER BY updated_at DESC, id DESC LIMIT 25", ARRAY_A);
+            }
         ?>
             <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:20px;align-items:start;">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
@@ -1306,13 +1828,13 @@ function pa_sinova_render_admin_page(): void {
                         <table class="form-table">
                             <tr><th>Modul</th><td>
                                 <select name="doc_slug" id="pa-doc-slug-select" class="regular-text">
-                                    <?php foreach ($catalog as $slug => $m) : ?>
+                                    <?php foreach ($uploadCatalog as $slug => $m) : ?>
                                         <option value="<?php echo esc_attr($slug); ?>" data-sub="<?php echo esc_attr((string) ($m['sub_groups'][0] ?? 'DOKUMEN')); ?>" <?php selected($preSlug, $slug); ?>><?php echo esc_html($m['title'] . ' (' . $slug . ')'); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </td></tr>
                             <tr><th>Tahun</th><td><input type="number" name="doc_year" min="2017" max="2027" value="<?php echo esc_attr((string) date('Y')); ?>"></td></tr>
-                            <tr><th>Sub-Kelompok</th><td><input type="text" name="doc_subgroup" id="pa-doc-subgroup-input" class="regular-text" value="<?php echo esc_attr((string) ($catalog[$preSlug]['sub_groups'][0] ?? 'SERAPAN 01')); ?>"></td></tr>
+                            <tr><th>Sub-Kelompok</th><td><input type="text" name="doc_subgroup" id="pa-doc-subgroup-input" class="regular-text" value="<?php echo esc_attr((string) ($uploadCatalog[$preSlug]['sub_groups'][0] ?? 'SERAPAN 01')); ?>"></td></tr>
                             <tr><th>Periode Slot</th><td>
                                 <select name="doc_period">
                                     <?php foreach ($periods as $pk => $pv) : ?>
@@ -1355,6 +1877,109 @@ function pa_sinova_render_admin_page(): void {
                                             <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                                             <input type="hidden" name="pa_sinova_action" value="delete_doc">
                                             <input type="hidden" name="doc_id" value="<?php echo esc_attr((string) $rd['id']); ?>">
+                                            <button type="submit" class="button button-small" style="color:#b91c1c;">Hapus</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        <?php elseif ($activeTab === 'data') :
+            if (function_exists('pa_portal_records_ensure_table')) {
+                pa_portal_records_ensure_table();
+            }
+            global $wpdb;
+            $rTable   = function_exists('pa_portal_records_table') ? pa_portal_records_table() : ($wpdb->prefix . 'pa_portal_records');
+            $recTypes = array(
+                'jadwal'    => 'Jadwal Sidang Harian',
+                'pegawai'   => 'Profil Hakim & Pegawai',
+                'ghaib'     => 'Panggilan Ghaib (Pasal 27)',
+                'statistik' => 'Statistik Perkara Bulanan',
+            );
+            $filterRecType = isset($_GET['rec_type']) ? sanitize_key((string) $_GET['rec_type']) : 'all';
+            if ($filterRecType !== 'all' && !isset($recTypes[$filterRecType])) {
+                $filterRecType = 'all';
+            }
+            $recRows = ($filterRecType !== 'all')
+                ? $wpdb->get_results($wpdb->prepare("SELECT * FROM `{$rTable}` WHERE record_type = %s ORDER BY sort_order ASC, event_date DESC, id DESC LIMIT 60", $filterRecType), ARRAY_A)
+                : $wpdb->get_results("SELECT * FROM `{$rTable}` ORDER BY record_type ASC, sort_order ASC, id DESC LIMIT 80", ARRAY_A);
+            $feedCache = function_exists('pa_portal_get_official_feeds') ? pa_portal_get_official_feeds(false) : array();
+            $feedMaCnt = count((array) ($feedCache['ma'] ?? array()));
+            $feedBdCnt = count((array) ($feedCache['badilag'] ?? array()));
+            $feedUpd   = !empty($feedCache['updated_at']) ? wp_date('d M Y H:i', (int) $feedCache['updated_at']) . ' WIB' : 'Belum disinkronkan';
+        ?>
+            <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #056e4f;border-radius:10px;padding:14px 18px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                <div>
+                    <strong style="color:#056e4f;">Umpan RSS Resmi (MA RI &amp; Ditjen Badilag)</strong><br>
+                    <small style="color:#475569;">
+                        MA RI: <?php echo esc_html((string) $feedMaCnt); ?> pengumuman ·
+                        Badilag: <?php echo esc_html((string) $feedBdCnt); ?> pengumuman ·
+                        Terakhir disinkronkan: <?php echo esc_html($feedUpd); ?>
+                    </small>
+                </div>
+                <form method="post">
+                    <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                    <input type="hidden" name="pa_sinova_action" value="refresh_rss">
+                    <button type="submit" class="button button-secondary">Sinkronkan RSS Resmi Sekarang</button>
+                </form>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
+                    <h2 style="margin-top:0;color:#056e4f;">Tambah Data Operasional Terstruktur</h2>
+                    <p style="font-size:12.5px;color:#475569;margin-top:0;">Entri langsung tampil pada halaman <code>/profil-pegawai/</code>, <code>/agenda-jadwal-persidangan/</code>, <code>/panggilan-ghaib/</code>, dan <code>/statistik-perkara/</code>.</p>
+                    <form method="post">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="add_record">
+                        <table class="form-table">
+                            <tr><th>Jenis Data</th><td>
+                                <select name="rec_type" class="regular-text">
+                                    <?php foreach ($recTypes as $rk => $rl) : ?>
+                                        <option value="<?php echo esc_attr($rk); ?>" <?php selected($filterRecType !== 'all' ? $filterRecType : 'jadwal', $rk); ?>><?php echo esc_html($rl); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </td></tr>
+                            <tr><th>Judul / Nama / No. Perkara</th><td><input type="text" name="rec_title" class="regular-text" required placeholder="Contoh: 1201/Pdt.G/2026/PA.Sm"></td></tr>
+                            <tr><th>Subjudul / Jabatan / Agenda</th><td><input type="text" name="rec_subtitle" class="regular-text" placeholder="Contoh: Sidang Pertama / Ketua Pengadilan Agama"></td></tr>
+                            <tr><th>Kategori / Ruang / Tahun</th><td><input type="text" name="rec_category" class="regular-text" placeholder="Contoh: Ruang Sidang 1 / Pimpinan / 2026"></td></tr>
+                            <tr><th>Jam / NIP / Pihak / Diterima</th><td><input type="text" name="rec_meta_1" class="regular-text" placeholder="Contoh: 09.00 WIB atau NIP atau Nama Pihak atau 145"></td></tr>
+                            <tr><th>Golongan / URL Relaas / Diputus</th><td><input type="text" name="rec_meta_2" class="regular-text" placeholder="Contoh: Pembina (IV/a) atau https://... atau 138"></td></tr>
+                            <tr><th>Pendidikan / Sisa</th><td><input type="text" name="rec_meta_3" class="regular-text" placeholder="Contoh: S2 Hukum Islam atau 42"></td></tr>
+                            <tr><th>Tanggal (Opsional)</th><td><input type="date" name="rec_date" value="<?php echo esc_attr(wp_date('Y-m-d')); ?>"></td></tr>
+                            <tr><th>Urutan Tampil</th><td><input type="number" name="rec_sort_order" value="10" style="width:90px;"></td></tr>
+                        </table>
+                        <p><button type="submit" class="button button-primary">Simpan Data Operasional</button></p>
+                    </form>
+                </div>
+
+                <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                        <h2 style="margin:0;color:#056e4f;">Daftar Entri Terpublikasi (<?php echo count((array) $recRows); ?>)</h2>
+                        <div>
+                            <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=all'); ?>" class="button button-small <?php echo $filterRecType === 'all' ? 'button-primary' : ''; ?>">Semua</a>
+                            <?php foreach ($recTypes as $rk => $rl) : ?>
+                                <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=' . $rk); ?>" class="button button-small <?php echo $filterRecType === $rk ? 'button-primary' : ''; ?>"><?php echo esc_html(ucfirst($rk)); ?></a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <table class="widefat striped">
+                        <thead><tr><th>Tipe</th><th>Judul / Entitas</th><th>Tanggal</th><th>Aksi</th></tr></thead>
+                        <tbody>
+                            <?php if (empty($recRows)) : ?>
+                                <tr><td colspan="4">Belum ada data operasional. Tambahkan melalui formulir di samping.</td></tr>
+                            <?php else : foreach ($recRows as $rr) : ?>
+                                <tr>
+                                    <td><code><?php echo esc_html((string) $rr['record_type']); ?></code></td>
+                                    <td><strong><?php echo esc_html((string) $rr['title']); ?></strong><br><small style="color:#64748b;"><?php echo esc_html((string) $rr['subtitle'] . (!empty($rr['category']) ? ' · ' . $rr['category'] : '')); ?></small></td>
+                                    <td><?php echo esc_html((string) ($rr['event_date'] ?: '-')); ?></td>
+                                    <td>
+                                        <form method="post" onsubmit="return confirm('Hapus entri data ini?');">
+                                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                                            <input type="hidden" name="pa_sinova_action" value="delete_record">
+                                            <input type="hidden" name="rec_id" value="<?php echo esc_attr((string) $rr['id']); ?>">
                                             <button type="submit" class="button button-small" style="color:#b91c1c;">Hapus</button>
                                         </form>
                                     </td>
@@ -1550,6 +2175,8 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>URL Direktori Putusan</th><td><input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>"></td></tr>
                             <tr><th>URL Survei Badilag</th><td><input type="url" name="survey_url" class="regular-text" value="<?php echo esc_attr($cfg['survey_url']); ?>"></td></tr>
                             <tr><th>URL CCTV Online (ACO)</th><td><input type="url" name="aco_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" placeholder="https://cctv.badilag.net/"><br><small style="color:#64748b;">Tautan Access CCTV Online Badilag / ruang PTSP Satker (kosongkan untuk menyembunyikan kartu ACO).</small></td></tr>
+                            <tr><th>RSS Pengumuman MA RI</th><td><input type="url" name="rss_ma_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_ma_url'] ?? 'https://kepaniteraan.mahkamahagung.go.id/?format=feed&type=rss'); ?>"></td></tr>
+                            <tr><th>RSS Pengumuman Badilag</th><td><input type="url" name="rss_badilag_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_badilag_url'] ?? 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik?format=feed&type=rss'); ?>"></td></tr>
                             <tr><th>Secret Key HMAC API</th><td><input type="text" name="hmac_secret" class="regular-text" value="<?php echo esc_attr($cfg['hmac_secret']); ?>" placeholder="Minimal 32 karakter"><br><label><input type="checkbox" name="generate_hmac" value="1"> Generate Secret Key acak baru (64 hex)</label></td></tr>
                             <tr><th>Turnstile Site Key</th><td><input type="text" name="turnstile_site_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_site_key']); ?>"></td></tr>
                             <tr><th>Turnstile Secret Key</th><td><input type="password" name="turnstile_secret_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_secret_key']); ?>"></td></tr>
@@ -1560,11 +2187,19 @@ function pa_sinova_render_admin_page(): void {
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
                     <h2 style="margin-top:0;color:#056e4f;">Seeder Struktur Baku 1-Klik</h2>
-                    <p>Membuat otomatis <strong>23 halaman Arsip Dokumen</strong> (slot s.d. 2027), <strong>17 halaman wajib/statis</strong> bertanda <code>[LENGKAPI]</code>, halaman <strong>Beranda</strong> lengkap, berita awal, dan menyusun <strong>Menu Utama</strong> di tema Astra / WordPress.</p>
-                    <form method="post">
+                    <p>Membuat otomatis <strong>23 halaman Arsip Dokumen</strong> (slot s.d. 2027), halaman <strong>Wajib &amp; Inklusif (termasuk /disabilitas/ &amp; /pengumuman-resmi/)</strong>, halaman <strong>Beranda</strong> lengkap, berita awal, dan menyusun <strong>6 Menu Utama Standar</strong> di tema Astra / WordPress.</p>
+                    <form method="post" style="margin-bottom:14px;">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="run_seeder">
                         <button type="submit" class="button button-primary">Generate Halaman, Beranda &amp; Menu (1-Klik)</button>
+                    </form>
+                    <hr style="margin:14px 0;">
+                    <h3 style="margin-top:0;font-size:14px;color:#0f172a;">Rapikan Ulang 6 Menu Utama Standar (SK 2722/2026)</h3>
+                    <p style="font-size:12.5px;color:#475569;">Menyusun ulang <em>Menu Utama SINOVA</em> menjadi tepat 6 induk: <strong>Beranda</strong>, <strong>Profil Pengadilan</strong>, <strong>Layanan Hukum</strong>, <strong>Transparansi</strong>, <strong>Layanan Publik &amp; Pengaduan</strong>, dan <strong>Berita &amp; Publikasi</strong>.</p>
+                    <form method="post" onsubmit="return confirm('Susun ulang item Menu Utama SINOVA menjadi 6 menu standar? Halaman tidak dihapus.');">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="rebuild_6menu">
+                        <button type="submit" class="button button-secondary">Rapikan 6 Menu Resmi Sekarang</button>
                     </form>
                 </div>
             </div>
@@ -1572,9 +2207,73 @@ function pa_sinova_render_admin_page(): void {
         <?php else :
             $secLogs    = get_option('pa_starter_security_logs', array());
             if (!is_array($secLogs)) $secLogs = array();
-            $tsActive   = function_exists('pa_starter_login_turnstile') && pa_starter_login_turnstile() !== null;
-            $hiddenSlug = pa_sinova_custom_login_slug();
+            $tsActive      = function_exists('pa_starter_login_turnstile') && pa_starter_login_turnstile() !== null;
+            $hiddenSlug    = pa_sinova_custom_login_slug();
+            $curUid        = get_current_user_id();
+            $mfaEnabled    = (string) get_user_meta($curUid, 'pa_totp_enabled', true) === '1';
+            $mfaPending    = (string) get_user_meta($curUid, 'pa_totp_pending_secret', true);
+            $mfaEnforced   = !empty($cfg['enforce_mfa']) && (string) $cfg['enforce_mfa'] === '1';
+            $mfaUri        = ($mfaPending !== '' && function_exists('pa_starter_totp_provisioning_uri')) ? pa_starter_totp_provisioning_uri(wp_get_current_user(), $mfaPending) : '';
+            $mfaQrSvg      = $mfaUri !== '' ? pa_sinova_totp_qr_svg($mfaUri) : '';
+            $recHashes     = get_user_meta($curUid, 'pa_totp_recovery_hashes', true);
+            $recRemaining  = is_array($recHashes) ? count($recHashes) : 0;
         ?>
+            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
+                <h2 style="margin-top:0;color:#056e4f;">Autentikasi Dua Faktor (MFA TOTP RFC 6238 Bawaan)</h2>
+                <p style="color:#475569;margin-top:0;">Tambahkan lapisan verifikasi OTP 6-digit menggunakan Google Authenticator, FreeOTP, atau Aegis — tanpa plugin pihak ketiga dan tanpa mengirim kunci ke server eksternal.</p>
+                <?php if (!empty($mfaRecoveryOnce)) : ?>
+                    <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
+                        <strong style="color:#92400e;">Simpan 8 Kode Cadangan Pemulihan Ini (Hanya Ditampilkan Sekali):</strong>
+                        <div style="display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:8px;margin-top:8px;font-family:monospace;font-size:13px;">
+                            <?php foreach ($mfaRecoveryOnce as $rc) : ?>
+                                <code style="background:#fff;padding:4px 8px;border:1px solid #fcd34d;border-radius:4px;text-align:center;"><?php echo esc_html($rc); ?></code>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($mfaEnabled) : ?>
+                    <p style="color:#15803d;font-weight:700;">● MFA TOTP AKTIF pada akun Anda (sisa kode cadangan sekali pakai: <?php echo (int) $recRemaining; ?>).</p>
+                    <form method="post" onsubmit="return confirm('Nonaktifkan MFA TOTP untuk akun Anda?');" style="display:inline-block;margin-right:12px;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="mfa_disable">
+                        <button type="submit" class="button" style="color:#b91c1c;">Nonaktifkan MFA Akun Saya</button>
+                    </form>
+                <?php elseif ($mfaPending !== '') : ?>
+                    <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center;background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin-bottom:12px;">
+                        <div><?php echo $mfaQrSvg; ?></div>
+                        <div style="flex:1;min-width:250px;">
+                            <p style="margin-top:0;"><strong>1. Pindai QR Code</strong> dengan aplikasi autentikator, atau masukkan kode Base32 berikut secara manual:</p>
+                            <p><code style="font-size:14px;letter-spacing:1.2px;padding:4px 8px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;"><?php echo esc_html(trim(chunk_split($mfaPending, 4, ' '))); ?></code></p>
+                            <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                                <input type="hidden" name="pa_sinova_action" value="mfa_activate">
+                                <input type="text" name="mfa_verify_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 digit OTP" required style="width:130px;font-weight:700;letter-spacing:2px;text-align:center;">
+                                <button type="submit" class="button button-primary">Verifikasi &amp; Aktifkan MFA</button>
+                            </form>
+                        </div>
+                    </div>
+                <?php else : ?>
+                    <p style="color:#64748b;">Status akun Anda saat ini: <strong>Belum mengaktifkan MFA TOTP</strong>.</p>
+                    <form method="post">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="mfa_setup_start">
+                        <button type="submit" class="button button-primary">Mulai Pengaturan MFA TOTP (Generate QR Lokal)</button>
+                    </form>
+                <?php endif; ?>
+
+                <?php if (current_user_can('manage_options')) : ?>
+                    <form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="mfa_policy">
+                        <label><input type="checkbox" name="enforce_mfa" value="1" <?php checked($mfaEnforced); ?>> Terapkan pengingat kewajiban MFA TOTP untuk seluruh Administrator &amp; Operator</label>
+                        <button type="submit" class="button button-secondary">Simpan Kebijakan MFA</button>
+                    </form>
+                <?php endif; ?>
+                <p style="margin:8px 0 0;font-size:12px;color:#64748b;"><em>Pemulihan darurat MFA: tambahkan <code>define('PA_DISABLE_CUSTOM_MFA', true);</code> di <code>wp-config.php</code> bila kehilangan perangkat &amp; kode cadangan.</em></p>
+            </div>
+
+            <?php if (current_user_can('manage_options')) : ?>
             <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;margin-bottom:18px;">
                 <h2 style="margin-top:0;color:#056e4f;">Sembunyikan Halaman Login Admin (Custom Login URL)</h2>
                 <p style="color:#475569;margin-top:0;">Lindungi halaman masuk operator dari serangan otomatis dengan memindahkan URL login dari <code>/wp-login.php</code> dan menyamarkan akses anonim <code>/wp-admin/</code> serta <code>/wp-login.php</code> dengan respon <strong>404 Not Found</strong>.</p>
@@ -1596,10 +2295,12 @@ function pa_sinova_render_admin_page(): void {
                 </p>
                 <p style="margin:6px 0 0;font-size:12px;color:#64748b;"><em>Pemulihan darurat: jika lupa URL login baru, tambahkan <code>define('PA_DISABLE_CUSTOM_LOGIN', true);</code> di berkas <code>wp-config.php</code>.</em></p>
             </div>
+            <?php endif; ?>
 
             <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
-                <h2 style="margin-top:0;color:#056e4f;">Status Pengamanan Aktif</h2>
-                <ul style="line-height:1.8;margin:0;padding-left:18px;">
+                <h2 style="margin-top:0;color:#056e4f;">Status Pengamanan &amp; Kontrol Akses Peran (RBAC)</h2>
+                <ul style="line-height:1.8;margin:0 0 12px;padding-left:18px;">
+                    <li><strong>MFA TOTP &amp; Batas Sesi Admin:</strong> <?php echo $mfaEnabled ? 'MFA TOTP Aktif' : 'MFA TOTP Opsional/Menunggu Aktivasi'; ?> · Batas sesi diam otomatis <strong>60 menit</strong> · Kebijakan kata sandi minimal <strong>10 karakter</strong></li>
                     <li><strong>Halaman Login Admin:</strong> <?php echo $hiddenSlug !== '' ? 'Disembunyikan pada slug kustom (<code>/' . esc_html($hiddenSlug) . '/</code>), akses langsung <code>wp-login.php</code> &amp; <code>/wp-admin/</code> anonim diblokir 404' : 'Standar <code>/wp-login.php</code> (dapat disembunyikan melalui formulir di atas)'; ?></li>
                     <li><strong>File Editor WP Admin:</strong> Dinonaktifkan (<code>DISALLOW_FILE_EDIT = true</code>)</li>
                     <li><strong>XML-RPC &amp; User Enumeration REST/Author:</strong> Diblokir untuk pengguna anonim</li>
@@ -1608,6 +2309,7 @@ function pa_sinova_render_admin_page(): void {
                     <li><strong>Folder Unggahan PDF (<code>sinova-docs/.htaccess</code>):</strong> <?php echo is_file(WP_CONTENT_DIR . '/uploads/sinova-docs/.htaccess') ? 'Terlindungi (PHP execution &amp; listing diblokir)' : 'Aktif setelah admin_init'; ?></li>
                     <li><strong>WAF URI &amp; DB Content Guard:</strong> Aktif memblokir pola judi online, webshell, SQLi/XSS, &amp; cloaking tautan</li>
                 </ul>
+                <p style="margin:0;font-size:12.5px;color:#334155;"><strong>Peran Operator Satker Tersedia (Users &rarr; Add New):</strong> <code>pa_kepaniteraan</code> (LIPA 7, Sisa Panjar, Prodeo, PPID &amp; Data Operasional), <code>pa_kesekretariatan</code> (Anggaran, SAKIP, BMN, LHKPN/LHKASN), dan <code>pa_humas</code> (Data Operasional, Survei, &amp; Berita).</p>
             </div>
             <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;">
                 <h2 style="margin-top:0;color:#056e4f;">Log Kejadian Keamanan Terakhir (40 Teratas)</h2>

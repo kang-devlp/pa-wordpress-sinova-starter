@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: PA SINOVA Starter - Security Hardening, Anti-Judol WAF, Rate Limiter & Dual-Mode CAPTCHA
- * Description: Pengamanan berlapis portal Pengadilan Agama: Brute-Force Rate Limiter (5x gagal/15 menit), OWASP Headers & HSTS, pelindung folder unggahan (.htaccess), blokir XML-RPC/enumerasi user, Anti-Judol WAF, serta Dual-Mode Login CAPTCHA (Turnstile / Math Fallback + Honeypot).
- * Version: 1.2.0-starter
+ * Plugin Name: PA SINOVA Starter - Security Hardening, Anti-Judol WAF, Rate Limiter, TOTP MFA & Hidden Login
+ * Description: Pengamanan berlapis portal Pengadilan Agama: Brute-Force Rate Limiter, TOTP MFA RFC 6238 bawaan, idle timeout 60 menit, kebijakan password kuat, Hidden Login URL 404, OWASP Headers, proteksi folder .htaccess, Anti-Judol WAF, & CAPTCHA login.
+ * Version: 1.4.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -271,11 +271,46 @@ add_action('wp_login_failed', static function ($username) {
     }
 });
 
-add_action('wp_login', static function () {
+add_action('wp_login', static function ($userLogin = '', $user = null) {
     $ipHash = pa_starter_client_ip_hash();
     delete_transient('pa_bf_fail_' . $ipHash);
     delete_transient('pa_bf_lock_' . $ipHash);
-});
+
+    if (!$user instanceof WP_User || PHP_SAPI === 'cli' || defined('PA_MFA_COMPLETING')) {
+        return;
+    }
+    if ((defined('REST_REQUEST') && REST_REQUEST) || (defined('XMLRPC_REQUEST') && XMLRPC_REQUEST) || wp_doing_ajax() || wp_doing_cron()) {
+        return;
+    }
+
+    update_user_meta((int) $user->ID, 'pa_last_admin_seen', time());
+
+    if (!pa_starter_mfa_disabled() && get_user_meta((int) $user->ID, 'pa_totp_enabled', true) === '1') {
+        $secret = (string) get_user_meta((int) $user->ID, 'pa_totp_secret', true);
+        if ($secret !== '') {
+            $token      = bin2hex(random_bytes(24));
+            $remember   = !empty($_POST['rememberme']);
+            $redirectTo = !empty($_REQUEST['redirect_to']) ? esc_url_raw(wp_unslash((string) $_REQUEST['redirect_to'])) : admin_url();
+            set_transient('pa_mfa_chal_' . $token, array(
+                'user_id'     => (int) $user->ID,
+                'remember'    => $remember,
+                'redirect_to' => $redirectTo,
+                'tries'       => 0,
+            ), 300);
+            wp_clear_auth_cookie();
+            setcookie('pa_mfa_chal', $token, array(
+                'expires'  => time() + 300,
+                'path'     => defined('COOKIEPATH') && COOKIEPATH ? COOKIEPATH : '/',
+                'domain'   => defined('COOKIE_DOMAIN') ? COOKIE_DOMAIN : '',
+                'secure'   => is_ssl(),
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ));
+            wp_safe_redirect(add_query_arg('pa_mfa', '1', wp_login_url()));
+            exit;
+        }
+    }
+}, 5, 2);
 
 // Layer 4: Menyembunyikan Halaman Login Admin (Custom Login URL + Stealth 404 pada wp-login.php / wp-admin)
 function pa_starter_active_login_slug(): string {
@@ -329,6 +364,327 @@ function pa_starter_send_stealth_404(): void {
     exit;
 }
 
+// ============================================================================
+// Layer 5: Built-in TOTP MFA (RFC 6238), Session Idle Timeout, & Password Policy
+// ============================================================================
+
+defined('PA_ADMIN_IDLE_SECONDS') || define('PA_ADMIN_IDLE_SECONDS', 3600);
+
+function pa_starter_mfa_disabled(): bool {
+    return defined('PA_DISABLE_CUSTOM_MFA') && PA_DISABLE_CUSTOM_MFA;
+}
+
+function pa_starter_base32_encode(string $bytes): string {
+    $alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $bits  = '';
+    $len   = strlen($bytes);
+    for ($i = 0; $i < $len; $i++) {
+        $bits .= str_pad(decbin(ord($bytes[$i])), 8, '0', STR_PAD_LEFT);
+    }
+    $out = '';
+    foreach (str_split($bits, 5) as $chunk) {
+        if (strlen($chunk) < 5) {
+            $chunk = str_pad($chunk, 5, '0', STR_PAD_RIGHT);
+        }
+        $out .= $alpha[bindec($chunk)];
+    }
+    return $out;
+}
+
+function pa_starter_base32_decode(string $b32): string {
+    $alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $clean = strtoupper(preg_replace('/[^A-Z2-7]/i', '', $b32));
+    $bits  = '';
+    $len   = strlen($clean);
+    for ($i = 0; $i < $len; $i++) {
+        $pos = strpos($alpha, $clean[$i]);
+        if ($pos === false) {
+            continue;
+        }
+        $bits .= str_pad(decbin($pos), 5, '0', STR_PAD_LEFT);
+    }
+    $out = '';
+    foreach (str_split($bits, 8) as $byte) {
+        if (strlen($byte) === 8) {
+            $out .= chr(bindec($byte));
+        }
+    }
+    return $out;
+}
+
+function pa_starter_totp_generate_secret(int $bytes = 20): string {
+    return pa_starter_base32_encode(random_bytes(max(16, $bytes)));
+}
+
+function pa_starter_totp_code(string $secret, ?int $timeSlice = null): string {
+    $key   = pa_starter_base32_decode($secret);
+    $slice = $timeSlice ?? (int) floor(time() / 30);
+    $time  = pack('N2', ($slice >> 32) & 0xffffffff, $slice & 0xffffffff);
+    $hm    = hash_hmac('sha1', $time, $key, true);
+    $off   = ord(substr($hm, -1)) & 0x0f;
+    $part  = substr($hm, $off, 4);
+    $val   = unpack('N', $part);
+    $num   = ($val[1] & 0x7fffffff) % 1000000;
+    return str_pad((string) $num, 6, '0', STR_PAD_LEFT);
+}
+
+function pa_starter_totp_verify(string $secret, string $code, int $window = 1, int $userId = 0): bool {
+    $clean = preg_replace('/\D+/', '', $code);
+    if (strlen($clean) !== 6) {
+        return false;
+    }
+    $nowSlice = (int) floor(time() / 30);
+    $lastStep = $userId > 0 ? (int) get_user_meta($userId, 'pa_totp_last_step', true) : -1;
+
+    for ($i = -$window; $i <= $window; $i++) {
+        $slice = $nowSlice + $i;
+        if ($userId > 0 && $lastStep > 0 && $slice <= $lastStep) {
+            continue;
+        }
+        if (hash_equals(pa_starter_totp_code($secret, $slice), $clean)) {
+            if ($userId > 0) {
+                update_user_meta($userId, 'pa_totp_last_step', $slice);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+function pa_starter_totp_generate_recovery_codes(int $count = 8): array {
+    $alpha  = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $maxIdx = strlen($alpha) - 1;
+    $plain  = array();
+    $hashes = array();
+    for ($i = 0; $i < $count; $i++) {
+        $raw = '';
+        for ($j = 0; $j < 10; $j++) {
+            $raw .= $alpha[random_int(0, $maxIdx)];
+        }
+        $plain[]  = substr($raw, 0, 5) . '-' . substr($raw, 5, 5);
+        $hashes[] = wp_hash_password($raw);
+    }
+    return array('plain' => $plain, 'hashes' => $hashes);
+}
+
+function pa_starter_totp_consume_recovery(int $userId, string $code): bool {
+    $norm = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $code));
+    if (strlen($norm) < 8) {
+        return false;
+    }
+    $hashes = get_user_meta($userId, 'pa_totp_recovery_hashes', true);
+    if (!is_array($hashes) || empty($hashes)) {
+        return false;
+    }
+    foreach ($hashes as $idx => $hash) {
+        if (is_string($hash) && wp_check_password($norm, $hash)) {
+            unset($hashes[$idx]);
+            update_user_meta($userId, 'pa_totp_recovery_hashes', array_values($hashes));
+            return true;
+        }
+    }
+    return false;
+}
+
+function pa_starter_totp_provisioning_uri(WP_User $user, string $secret): string {
+    $rawIssuer = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'PA Portal');
+    $issuer    = trim((string) preg_replace('/[^A-Za-z0-9._-]/', '', $rawIssuer));
+    $issuer    = substr($issuer !== '' ? $issuer : 'PAPortal', 0, 14);
+    $login     = substr((string) preg_replace('/[^A-Za-z0-9._@-]/', '', (string) $user->user_login), 0, 14) ?: 'operator';
+    $label     = rawurlencode($issuer . ':' . $login);
+    return 'otpauth://totp/' . $label . '?secret=' . rawurlencode($secret) . '&issuer=' . rawurlencode($issuer);
+}
+
+function pa_starter_clear_mfa_cookie(): void {
+    setcookie('pa_mfa_chal', '', array(
+        'expires'  => time() - 3600,
+        'path'     => defined('COOKIEPATH') && COOKIEPATH ? COOKIEPATH : '/',
+        'domain'   => defined('COOKIE_DOMAIN') ? COOKIE_DOMAIN : '',
+        'secure'   => is_ssl(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ));
+}
+
+function pa_starter_render_mfa_screen(string $errorMsg = '', string $loginBackUrl = ''): void {
+    if (!headers_sent()) {
+        nocache_headers();
+        status_header(200);
+        header('Content-Type: text/html; charset=UTF-8');
+    }
+    $back = $loginBackUrl ?: wp_login_url();
+    ?>
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="robots" content="noindex,nofollow">
+        <title>Verifikasi MFA (TOTP) · Portal Operator</title>
+        <style>
+            body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#022c22,#056e4f);font-family:system-ui,-apple-system,sans-serif;padding:16px}
+            .box{width:100%;max-width:420px;background:#fff;border-radius:16px;border:2px solid #C9A227;padding:28px;box-shadow:0 18px 42px rgba(0,0,0,.35)}
+            .badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#ecfdf5;border:1px solid #056e4f;color:#056e4f;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:8px}
+            h1{margin:0 0 8px;font-size:20px;color:#043927}
+            p{margin:0 0 16px;font-size:13.5px;line-height:1.5;color:#475569}
+            .err{padding:10px 12px;margin-bottom:14px;border-radius:8px;background:#fef2f2;border:1px solid #ef4444;color:#991b1b;font-size:13px;font-weight:600}
+            label{display:block;font-size:12.5px;font-weight:700;color:#043927;margin-bottom:6px}
+            input[type="text"]{width:100%;box-sizing:border-box;padding:11px 12px;font-size:18px;letter-spacing:.12em;text-align:center;border:1.5px solid #056e4f;border-radius:10px;margin-bottom:14px}
+            button{width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#043927,#056e4f);color:#E5C158;font-size:14px;font-weight:800;cursor:pointer}
+            .back{display:block;text-align:center;margin-top:14px;font-size:12.5px;color:#056e4f;font-weight:700;text-decoration:none}
+        </style>
+    </head>
+    <body>
+        <main class="box">
+            <span class="badge">Autentikasi Dua Faktor (MFA)</span>
+            <h1>Masukkan Kode Verifikasi</h1>
+            <p>Buka aplikasi <strong>Google / Microsoft Authenticator</strong> Anda lalu masukkan kode 6 digit, atau masukkan salah satu <em>Recovery Code</em>.</p>
+            <?php if ($errorMsg !== '') : ?>
+                <div class="err"><?php echo esc_html($errorMsg); ?></div>
+            <?php endif; ?>
+            <form method="post" action="<?php echo esc_url(add_query_arg('pa_mfa', '1', $back)); ?>">
+                <?php wp_nonce_field('pa_mfa_verify_action', 'pa_mfa_nonce'); ?>
+                <label for="mfa_code">Kode TOTP (6 Digit) atau Recovery Code</label>
+                <input type="text" id="mfa_code" name="mfa_code" autocomplete="one-time-code" autofocus required>
+                <button type="submit">Verifikasi &amp; Masuk Dashboard</button>
+            </form>
+            <a class="back" href="<?php echo esc_url($back); ?>">← Kembali ke Halaman Login</a>
+        </main>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+function pa_starter_handle_mfa_gate(): void {
+    if (empty($_GET['pa_mfa']) || pa_starter_mfa_disabled()) {
+        return;
+    }
+    $token = sanitize_text_field((string) ($_COOKIE['pa_mfa_chal'] ?? ''));
+    $chal  = ($token !== '' && preg_match('/^[a-f0-9]{48}$/', $token)) ? get_transient('pa_mfa_chal_' . $token) : false;
+    if (!is_array($chal) || empty($chal['user_id'])) {
+        pa_starter_clear_mfa_cookie();
+        wp_safe_redirect(wp_login_url());
+        exit;
+    }
+
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['mfa_code'])) {
+        $nonce = sanitize_text_field(wp_unslash((string) ($_POST['pa_mfa_nonce'] ?? '')));
+        if (!wp_verify_nonce($nonce, 'pa_mfa_verify_action')) {
+            pa_starter_render_mfa_screen('Sesi formulir tidak valid, silakan muat ulang.');
+        }
+        $uid    = (int) $chal['user_id'];
+        $code   = sanitize_text_field(wp_unslash((string) $_POST['mfa_code']));
+        $secret = (string) get_user_meta($uid, 'pa_totp_secret', true);
+        $valid  = ($secret !== '' && pa_starter_totp_verify($secret, $code, 1, $uid)) || pa_starter_totp_consume_recovery($uid, $code);
+
+        if ($valid) {
+            delete_transient('pa_mfa_chal_' . $token);
+            pa_starter_clear_mfa_cookie();
+            define('PA_MFA_COMPLETING', true);
+            update_user_meta($uid, 'pa_last_admin_seen', time());
+            wp_set_auth_cookie($uid, !empty($chal['remember']));
+            pa_starter_security_log('mfa-login-ok', 'UID ' . $uid);
+            wp_safe_redirect(!empty($chal['redirect_to']) ? (string) $chal['redirect_to'] : admin_url());
+            exit;
+        }
+
+        $tries = (int) ($chal['tries'] ?? 0) + 1;
+        if ($tries >= 5) {
+            delete_transient('pa_mfa_chal_' . $token);
+            pa_starter_clear_mfa_cookie();
+            pa_starter_security_log('mfa-failed-lock', 'UID ' . $uid);
+            pa_starter_render_mfa_screen('Terlalu banyak kode MFA salah (5x). Silakan login ulang dari awal.');
+        }
+        $chal['tries'] = $tries;
+        set_transient('pa_mfa_chal_' . $token, $chal, 300);
+        pa_starter_render_mfa_screen('Kode verifikasi tidak cocok. Sisa percobaan: ' . (5 - $tries) . '.');
+    }
+
+    pa_starter_render_mfa_screen();
+}
+
+add_action('admin_init', static function () {
+    if (PHP_SAPI === 'cli' || wp_doing_ajax() || wp_doing_cron()) {
+        return;
+    }
+    $uid = get_current_user_id();
+    if ($uid <= 0) {
+        return;
+    }
+    $last = (int) get_user_meta($uid, 'pa_last_admin_seen', true);
+    if ($last > 0 && (time() - $last) > PA_ADMIN_IDLE_SECONDS) {
+        update_user_meta($uid, 'pa_last_admin_seen', 0);
+        pa_starter_security_log('session-idle-timeout', 'UID ' . $uid);
+        wp_logout();
+        wp_safe_redirect(add_query_arg('pa_idle', '1', wp_login_url()));
+        exit;
+    }
+    if ((time() - $last) > 60) {
+        update_user_meta($uid, 'pa_last_admin_seen', time());
+    }
+}, 5);
+
+add_action('admin_notices', static function () {
+    if (pa_starter_mfa_disabled() || !function_exists('pa_sinova_get_settings')) {
+        return;
+    }
+    $cfg = pa_sinova_get_settings();
+    if (empty($cfg['enforce_mfa']) || (string) $cfg['enforce_mfa'] !== '1') {
+        return;
+    }
+    $uid = get_current_user_id();
+    if ($uid > 0 && (current_user_can('manage_options') || current_user_can('pa_access_sinova_hub')) && get_user_meta($uid, 'pa_totp_enabled', true) !== '1') {
+        $secUrl = admin_url('admin.php?page=pa-sinova-starter&tab=security');
+        echo '<div class="notice notice-warning"><p><strong>Kebijakan Keamanan:</strong> Akun Anda belum mengaktifkan Autentikasi Dua Faktor (MFA TOTP). <a href="' . esc_url($secUrl) . '">Aktifkan MFA sekarang →</a></p></div>';
+    }
+});
+
+add_filter('login_message', static function ($msg) {
+    if (!empty($_GET['pa_idle'])) {
+        $msg .= '<div id="login_error"><strong>Sesi Berakhir:</strong> Anda keluar otomatis setelah 60 menit tidak aktif demi keamanan. Silakan masuk kembali.</div>';
+    }
+    return $msg;
+});
+
+function pa_starter_check_password_policy(string $pass): ?string {
+    if (strlen($pass) < 10) {
+        return 'Password operator wajib minimal 10 karakter.';
+    }
+    if (!preg_match('/[a-z]/', $pass) || !preg_match('/[A-Z]/', $pass) || !preg_match('/\d/', $pass)) {
+        return 'Password operator harus memuat kombinasi huruf kecil, huruf besar, dan angka.';
+    }
+    return null;
+}
+
+add_action('user_profile_update_errors', static function ($errors, $update, $user) {
+    if (empty($_POST['pass1'])) {
+        return;
+    }
+    $role     = is_object($user) && !empty($user->role) ? (string) $user->role : '';
+    $isPriv   = in_array($role, array('administrator', 'editor', 'author', 'pa_kepaniteraan', 'pa_kesekretariatan', 'pa_humas'), true)
+        || (is_object($user) && !empty($user->ID) && (user_can((int) $user->ID, 'manage_options') || user_can((int) $user->ID, 'edit_pages') || user_can((int) $user->ID, 'edit_posts')));
+    if (!$isPriv) {
+        return;
+    }
+    $err = pa_starter_check_password_policy((string) wp_unslash($_POST['pass1']));
+    if ($err !== null && $errors instanceof WP_Error) {
+        $errors->add('pa_weak_password', '<strong>Keamanan Password:</strong> ' . $err);
+    }
+}, 10, 3);
+
+add_action('validate_password_reset', static function ($errors, $user) {
+    if (empty($_POST['pass1']) || !$user instanceof WP_User) {
+        return;
+    }
+    if (user_can((int) $user->ID, 'manage_options') || user_can((int) $user->ID, 'edit_pages') || user_can((int) $user->ID, 'edit_posts')) {
+        $err = pa_starter_check_password_policy((string) wp_unslash($_POST['pass1']));
+        if ($err !== null && $errors instanceof WP_Error) {
+            $errors->add('pa_weak_password', '<strong>Keamanan Password:</strong> ' . $err);
+        }
+    }
+}, 10, 2);
+
 add_action('init', static function () {
     if (pa_starter_active_login_slug() !== '') {
         remove_action('template_redirect', 'wp_redirect_admin_locations', 1000);
@@ -339,6 +695,9 @@ add_action('wp_loaded', static function () {
     if (PHP_SAPI === 'cli' || (defined('DOING_CRON') && DOING_CRON)) {
         return;
     }
+
+    pa_starter_handle_mfa_gate();
+
     $slug = pa_starter_active_login_slug();
     if ($slug === '') {
         return;

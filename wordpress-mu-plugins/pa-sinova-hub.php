@@ -660,11 +660,22 @@ function pa_sinova_render_year_card(int $year, array $subGroups, array $grid, st
                                 $isPdf = (($doc['source_type'] ?? '') === 'wp_pdf');
                                 $badge = $isPdf ? 'PDF Resmi' : (stripos($url, 'drive.google.com') !== false ? 'Drive' : 'Tautan');
                                 $displayTitle = !empty($doc['title']) && !$isMonthly ? (string) $doc['title'] : $pInfo['label'];
+                                $previewUrl   = '';
+                                if (preg_match('/\.pdf(?:$|\?)/i', $url) || $isPdf) {
+                                    $previewUrl = $url;
+                                } elseif (preg_match('#drive\.google\.com/file/d/([A-Za-z0-9_-]+)#i', $url, $dm) || preg_match('#drive\.google\.com/open\?id=([A-Za-z0-9_-]+)#i', $url, $dm)) {
+                                    $previewUrl = 'https://drive.google.com/file/d/' . $dm[1] . '/preview';
+                                }
                         ?>
-                            <a href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener noreferrer" class="pa-sinova-btn is-filled">
-                                <span class="pa-sinova-btn-month"><?php echo esc_html($isMonthly ? $pInfo['label'] : $displayTitle); ?></span>
-                                <span class="pa-sinova-btn-meta"><?php echo esc_html(($isMonthly ? '' : $pInfo['label'] . ' · ') . $badge); ?> ↗</span>
-                            </a>
+                            <div class="pa-sinova-slot-wrap">
+                                <a href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener noreferrer" class="pa-sinova-btn is-filled">
+                                    <span class="pa-sinova-btn-month"><?php echo esc_html($isMonthly ? $pInfo['label'] : $displayTitle); ?></span>
+                                    <span class="pa-sinova-btn-meta"><?php echo esc_html(($isMonthly ? '' : $pInfo['label'] . ' · ') . $badge); ?> ↗</span>
+                                </a>
+                                <?php if ($previewUrl !== '') : ?>
+                                    <button type="button" class="pa-doc-preview-trigger" data-preview-url="<?php echo esc_url($previewUrl); ?>" data-open-url="<?php echo esc_url($url); ?>" data-preview-title="<?php echo esc_attr($modTitle . ' — ' . ($isMonthly ? $pInfo['label'] : $displayTitle) . ' ' . $year); ?>">Pratinjau</button>
+                                <?php endif; ?>
+                            </div>
                         <?php else : ?>
                             <span class="pa-sinova-btn is-empty" aria-disabled="true">
                                 <span class="pa-sinova-btn-month"><?php echo esc_html($pInfo['label']); ?></span>
@@ -800,7 +811,33 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
         html[data-pa-theme="dark"] .pa-sinova-btn.is-filled{background:#21392b;border-color:#C9A227;color:#fff}
         html[data-pa-theme="dark"] .pa-sinova-btn.is-filled .pa-sinova-btn-meta{color:#E5C158}
         html[data-pa-theme="dark"] .pa-sinova-btn.is-empty{background:#122018;border-color:#355241;color:#94a3b8}
+        .pa-sinova-slot-wrap{position:relative;display:flex;flex-direction:column}
+        .pa-sinova-slot-wrap .pa-sinova-btn{flex:1}
+        .pa-doc-preview-trigger{position:absolute;top:7px;right:7px;padding:2px 8px;border-radius:999px;border:1px solid #056e4f;background:#ffffff;color:#056e4f;font-size:10.5px;font-weight:800;cursor:pointer;z-index:2;transition:background-color .15s ease,color .15s ease}
+        .pa-doc-preview-trigger:hover{background:#056e4f;color:#E5C158;border-color:#C9A227}
+        html[data-pa-theme="dark"] .pa-doc-preview-trigger{background:#022c22;color:#E5C158;border-color:#C9A227}
+        .pa-preview-dialog{width:min(960px,95vw);max-width:95vw;padding:0;border:2px solid #C9A227;border-radius:16px;background:#ffffff;box-shadow:0 24px 60px rgba(0,0,0,.38);overflow:hidden}
+        .pa-preview-dialog::backdrop{background:rgba(2,44,34,.72);backdrop-filter:blur(4px)}
+        .pa-preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:linear-gradient(135deg,#043927,#056e4f);border-bottom:3px solid #C9A227;color:#ffffff}
+        .pa-preview-head strong{font-size:14px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pa-preview-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+        .pa-preview-ext{padding:5px 11px;border-radius:8px;background:#E5C158;color:#022c22!important;font-size:12px;font-weight:800;text-decoration:none!important}
+        .pa-preview-close{padding:5px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#ffffff;font-weight:800;cursor:pointer}
+        .pa-preview-body{height:min(76vh,720px);background:#f1f5f9}
+        .pa-preview-body iframe{width:100%;height:100%;border:0;display:block}
+        html[data-pa-theme="dark"] .pa-preview-dialog{background:#13221a}
+        html[data-pa-theme="dark"] .pa-preview-body{background:#0b141a}
     </style>
+    <dialog id="pa-doc-preview-modal" class="pa-preview-dialog" aria-labelledby="pa-preview-modal-title">
+        <div class="pa-preview-head">
+            <strong id="pa-preview-modal-title">Pratinjau Dokumen</strong>
+            <div class="pa-preview-actions">
+                <a id="pa-preview-modal-ext" class="pa-preview-ext" href="#" target="_blank" rel="noopener noreferrer">Buka Tab Baru ↗</a>
+                <button type="button" id="pa-preview-modal-close" class="pa-preview-close" aria-label="Tutup pratinjau">✕ Tutup</button>
+            </div>
+        </div>
+        <div class="pa-preview-body"><iframe id="pa-preview-modal-frame" title="Pratinjau Dokumen PDF" src="about:blank" loading="lazy"></iframe></div>
+    </dialog>
     <script id="pa-sinova-hub-js">
         (function(){
             document.querySelectorAll('.pa-sinova-archive-wrap').forEach(function(wrap){
@@ -814,6 +851,33 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
                     });
                 });
             });
+            var dlg = document.getElementById('pa-doc-preview-modal');
+            var frm = document.getElementById('pa-preview-modal-frame');
+            var ttl = document.getElementById('pa-preview-modal-title');
+            var ext = document.getElementById('pa-preview-modal-ext');
+            var cls = document.getElementById('pa-preview-modal-close');
+            if(dlg && frm){
+                function closeModal(){
+                    if(typeof dlg.close === 'function' && dlg.open) dlg.close();
+                    else dlg.removeAttribute('open');
+                    frm.src = 'about:blank';
+                }
+                document.querySelectorAll('.pa-doc-preview-trigger').forEach(function(btn){
+                    btn.addEventListener('click', function(){
+                        var pv = btn.getAttribute('data-preview-url') || '';
+                        var op = btn.getAttribute('data-open-url') || pv;
+                        if(!pv) return;
+                        if(ttl) ttl.textContent = btn.getAttribute('data-preview-title') || 'Pratinjau Dokumen';
+                        if(ext) ext.href = op;
+                        frm.src = pv;
+                        if(typeof dlg.showModal === 'function') dlg.showModal();
+                        else dlg.setAttribute('open', 'open');
+                    });
+                });
+                if(cls) cls.addEventListener('click', closeModal);
+                dlg.addEventListener('close', function(){ frm.src = 'about:blank'; });
+                dlg.addEventListener('click', function(e){ if(e.target === dlg) closeModal(); });
+            }
         })();
     </script>
     <?php

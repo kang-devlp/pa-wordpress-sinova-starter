@@ -130,23 +130,9 @@ add_action('wp_head', static function () {
     if (is_admin()) {
         return;
     }
-    echo '<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>' . "\n";
-    echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
     echo '<meta name="color-scheme" content="light dark">' . "\n";
     echo '<script id="pa-a11y-boot">try{var t=localStorage.getItem("pa_starter_theme"),c=localStorage.getItem("pa_starter_contrast"),z=localStorage.getItem("pa_starter_zoom");if(!t&&/[?&]theme=dark(?:&|$)/.test(location.search))t="dark";if(t==="dark")document.documentElement.setAttribute("data-pa-theme","dark");if(c==="high")document.documentElement.setAttribute("data-pa-contrast","high");if(z)document.documentElement.style.fontSize=z;}catch(e){}</script>' . "\n";
 }, 2);
-
-add_action('wp_enqueue_scripts', static function () {
-    if (is_admin()) {
-        return;
-    }
-    wp_enqueue_style(
-        'pa-starter-inter',
-        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
-        array(),
-        null
-    );
-}, 999);
 
 // 3. Shortcode [pa_sinova_welcome_section]: Sambutan Pimpinan + Standar Maklumat Pelayanan PTSP
 add_shortcode('pa_sinova_welcome_section', static function () {
@@ -279,6 +265,7 @@ add_action('astra_render_header_column', static function ($row, $section) {
     <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>" aria-label="Pencarian Informasi Website">
         <input type="search" name="s" class="pa-header-search-input" placeholder="Cari dokumen, berita, layanan..." value="<?php echo esc_attr(get_search_query()); ?>">
         <button type="submit" class="pa-header-search-btn" aria-label="Cari">Cari</button>
+        <button type="button" id="pa-cmdk-open" class="pa-cmdk-trigger" aria-haspopup="dialog" data-pa-tip="Pencarian Instan Lintas Dokumen &amp; Jadwal (Ctrl+K)">⌘ <kbd>Ctrl K</kbd></button>
     </form>
     <?php if ($logoUrl !== '') : ?>
         <img src="<?php echo esc_url($logoUrl); ?>" alt="Logo Pengadilan" class="pa-header-custom-logo" width="44" height="44">
@@ -1329,6 +1316,311 @@ html[data-pa-contrast="high"] a { color: #003d29 !important; text-decoration: un
 }
 #pa-a11y-dock button:hover,
 #pa-a11y-dock button[aria-pressed="true"] { background: #C9A227; color: #043927; }
+
+/* Command Palette Ctrl+K */
+.pa-cmdk-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 9px;
+    border: 1px solid rgba(201, 162, 39, 0.5);
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    font: 700 11.5px/1.2 var(--pa-font, system-ui, sans-serif);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.pa-cmdk-trigger kbd {
+    background: rgba(2, 44, 34, 0.6);
+    color: #E5C158;
+    border: 1px solid rgba(229, 193, 88, 0.35);
+    border-radius: 5px;
+    padding: 1px 5px;
+    font: 700 10.5px/1.2 monospace;
+}
+.pa-cmdk-trigger:hover { background: #C9A227; color: #022c22; }
+#pa-cmdk-dialog {
+    width: min(640px, 94vw);
+    max-width: 94vw;
+    padding: 0;
+    border: 1.5px solid #C9A227;
+    border-radius: 16px;
+    background: var(--pa-surface, #ffffff);
+    color: var(--pa-text, #0f172a);
+    box-shadow: 0 28px 65px rgba(2, 44, 34, 0.35);
+    overflow: hidden;
+}
+#pa-cmdk-dialog::backdrop { background: rgba(2, 44, 34, 0.58); backdrop-filter: blur(4px); }
+.pa-cmdk-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: #022c22;
+    color: #ffffff;
+    border-bottom: 1px solid rgba(201, 162, 39, 0.35);
+}
+#pa-cmdk-input {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+    outline: none;
+}
+#pa-cmdk-input::placeholder { color: #94a3b8; }
+#pa-cmdk-close {
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.pa-cmdk-results { max-height: 360px; overflow-y: auto; padding: 10px; }
+.pa-cmdk-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid transparent;
+}
+.pa-cmdk-item:hover, .pa-cmdk-item:focus-visible {
+    background: rgba(5, 110, 79, 0.08);
+    border-color: #C9A227;
+}
+.pa-cmdk-item strong { display: block; font-size: 14px; color: var(--pa-primary, #056e4f); }
+.pa-cmdk-item small { display: block; font-size: 12px; color: var(--pa-muted, #475569); margin-top: 2px; }
+.pa-cmdk-badge {
+    flex-shrink: 0;
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(201, 162, 39, 0.16);
+    color: #92400e;
+}
+.pa-cmdk-empty { padding: 18px; text-align: center; color: var(--pa-muted, #64748b); font-size: 13.5px; }
+
+/* Pengumuman Resmi RSS MA RI & Ditjen Badilag */
+.pa-feeds-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 20px;
+    margin-top: 16px;
+}
+.pa-feed-card {
+    background: var(--pa-surface, #ffffff);
+    border: 1px solid var(--pa-border, #e2e8f0);
+    border-top: 4px solid #C9A227;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+.pa-feed-card-head {
+    background: linear-gradient(135deg, #022c22 0%, #056e4f 100%);
+    color: #ffffff;
+    padding: 14px 16px;
+}
+.pa-feed-brand { display: flex; align-items: center; gap: 12px; }
+.pa-feed-crest {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    background: rgba(201, 162, 39, 0.14);
+    border: 1px solid rgba(229, 193, 88, 0.45);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.pa-feed-pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #E5C158;
+}
+.pa-feed-brand h3 { margin: 2px 0 0; font-size: 15.5px; color: #ffffff !important; font-weight: 800; }
+.pa-feed-list { list-style: none; margin: 0; padding: 8px 14px; flex: 1; }
+.pa-feed-item { border-bottom: 1px solid var(--pa-border, #e2e8f0); }
+.pa-feed-item:last-child { border-bottom: 0; }
+.pa-feed-item > a {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    justify-items: start;
+    align-items: center;
+    text-align: left;
+    gap: 4px 10px;
+    padding: 10px 4px;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+}
+.pa-feed-date { grid-column: 1 / -1; font-size: 11px; font-weight: 700; color: #b45309; text-align: left; }
+.pa-feed-title { font-size: 13.5px; line-height: 1.4; color: var(--pa-text, #0f172a); transition: color 0.15s ease; text-align: left; }
+.pa-feed-item > a:hover .pa-feed-title { color: #056e4f; }
+.pa-feed-ext { font-weight: 800; color: #C9A227; align-self: center; justify-self: end; }
+.pa-feed-excerpt {
+    grid-column: 1 / -1;
+    display: block;
+    text-align: left;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--pa-muted, #475569);
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease, opacity 0.2s ease;
+}
+.pa-feed-item:hover .pa-feed-excerpt,
+.pa-feed-item:focus-within .pa-feed-excerpt { max-height: 80px; opacity: 1; padding: 0 4px 8px; }
+.pa-feed-empty { padding: 14px 4px; font-size: 13px; color: var(--pa-muted, #64748b); }
+.pa-feed-card-foot {
+    padding: 11px 16px;
+    background: var(--pa-surface-soft, #f8fafc);
+    border-top: 1px solid var(--pa-border, #e2e8f0);
+    text-align: right;
+}
+.pa-feed-card-foot a { font-size: 12.5px; font-weight: 700; color: var(--pa-primary, #056e4f); text-decoration: none; }
+
+/* Modul Data Operasional Terstruktur (Pegawai, Sidang, Ghaib, Statistik) */
+.pa-ops-wrap { margin: 18px 0; }
+.pa-ops-filter-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.pa-ops-tab {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--pa-border, #cbd5e1);
+    background: var(--pa-surface, #ffffff);
+    color: var(--pa-text, #0f172a);
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.pa-ops-tab.is-active, .pa-ops-tab:hover { background: #056e4f; color: #ffffff; border-color: #056e4f; }
+.pa-pegawai-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 14px; }
+.pa-pegawai-card {
+    background: var(--pa-surface, #ffffff);
+    border: 1px solid var(--pa-border, #e2e8f0);
+    border-top: 3px solid #C9A227;
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    position: relative;
+}
+.pa-pegawai-card.is-hidden { display: none; }
+.pa-pegawai-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #022c22, #056e4f);
+    color: #E5C158;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.pa-pegawai-cat { font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: #b45309; letter-spacing: 0.04em; }
+.pa-pegawai-info h3 { margin: 3px 0 4px; font-size: 14.5px; line-height: 1.3; }
+.pa-pegawai-role { margin: 0; font-size: 12.5px; color: var(--pa-muted, #475569); }
+.pa-pegawai-hover-meta {
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: var(--pa-muted, #64748b);
+    opacity: 0.85;
+}
+.pa-pegawai-hover-meta small { display: block; line-height: 1.45; }
+.pa-ops-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.pa-ops-search {
+    min-width: 240px;
+    flex: 1;
+    max-width: 380px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--pa-border, #cbd5e1);
+    background: var(--pa-surface, #ffffff);
+    color: var(--pa-text, #0f172a);
+}
+.pa-ops-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pa-ops-badge {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(5, 110, 79, 0.12);
+    color: #056e4f;
+}
+.pa-ops-link-btn {
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: #056e4f;
+    color: #ffffff !important;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+}
+.pa-table-scroll { overflow-x: auto; border: 1px solid var(--pa-border, #e2e8f0); border-radius: 12px; }
+.pa-ops-table { width: 100%; border-collapse: collapse; background: var(--pa-surface, #ffffff); font-size: 13.5px; }
+.pa-ops-table th { background: #022c22; color: #ffffff; text-align: left; padding: 10px 12px; font-weight: 700; }
+.pa-ops-table td { padding: 10px 12px; border-bottom: 1px solid var(--pa-border, #e2e8f0); vertical-align: top; }
+.pa-ops-table tr:last-child td { border-bottom: 0; }
+.pa-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.pa-kpi-box {
+    background: var(--pa-surface, #ffffff);
+    border: 1px solid var(--pa-border, #e2e8f0);
+    border-left: 4px solid #C9A227;
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+.pa-kpi-box span { display: block; font-size: 11.5px; color: var(--pa-muted, #64748b); font-weight: 700; }
+.pa-kpi-box strong { display: block; font-size: 22px; color: var(--pa-primary, #056e4f); margin-top: 2px; }
+.pa-prog-wrap { display: flex; align-items: center; gap: 8px; }
+.pa-prog-bar { flex: 1; height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.pa-prog-bar span { display: block; height: 100%; background: linear-gradient(90deg, #056e4f, #C9A227); }
+
+html[data-pa-theme="dark"] .pa-feed-card,
+html[data-pa-theme="dark"] .pa-pegawai-card,
+html[data-pa-theme="dark"] .pa-kpi-box,
+html[data-pa-theme="dark"] .pa-ops-table,
+html[data-pa-theme="dark"] .pa-ops-tab,
+html[data-pa-theme="dark"] .pa-ops-search,
+html[data-pa-theme="dark"] #pa-cmdk-dialog {
+    background: #182a20;
+    border-color: #355241;
+    color: #e6f4ee;
+}
+html[data-pa-theme="dark"] .pa-feed-item,
+html[data-pa-theme="dark"] .pa-ops-table td,
+html[data-pa-theme="dark"] .pa-table-scroll { border-color: #2c4637; }
+html[data-pa-theme="dark"] .pa-feed-title { color: #e6f4ee; }
+html[data-pa-theme="dark"] .pa-feed-date { color: #E5C158; }
+html[data-pa-theme="dark"] .pa-feed-excerpt,
+html[data-pa-theme="dark"] .pa-pegawai-role,
+html[data-pa-theme="dark"] .pa-pegawai-hover-meta,
+html[data-pa-theme="dark"] .pa-cmdk-item small,
+html[data-pa-theme="dark"] .pa-kpi-box span { color: #cbd5e1; }
+html[data-pa-theme="dark"] .pa-kpi-box strong,
+html[data-pa-theme="dark"] .pa-cmdk-item strong,
+html[data-pa-theme="dark"] .pa-feed-card-foot a { color: #E5C158; }
+html[data-pa-theme="dark"] .pa-feed-card-foot { background: #13221a; border-color: #2c4637; }
+html[data-pa-theme="dark"] .pa-feed-item > a:hover .pa-feed-title { color: #6ee7b7; }
+html[data-pa-theme="dark"] .pa-ops-badge { background: rgba(110, 231, 183, 0.14); color: #6ee7b7; }
+html[data-pa-theme="dark"] .pa-cmdk-badge { background: rgba(229, 193, 88, 0.2); color: #fcd34d; }
 </style>
     <?php
 }, 90);
@@ -1403,6 +1695,7 @@ add_action('wp_body_open', static function () {
         <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>">
             <input type="search" name="s" class="pa-header-search-input" placeholder="Cari informasi, berita..." value="<?php echo esc_attr(get_search_query()); ?>">
             <button type="submit" class="pa-header-search-btn">Cari</button>
+            <button type="button" id="pa-cmdk-open" class="pa-cmdk-trigger" aria-haspopup="dialog" data-pa-tip="Pencarian Instan Lintas Dokumen &amp; Jadwal (Ctrl+K)">⌘ <kbd>Ctrl K</kbd></button>
         </form>
     </div>
 </header>
@@ -1470,6 +1763,7 @@ add_action('wp_footer', static function () {
                 <li><a href="<?php echo esc_url(home_url('/struktur-organisasi/')); ?>">Struktur Organisasi</a></li>
                 <li><a href="<?php echo esc_url(home_url('/prosedur-berperkara/')); ?>">Prosedur Berperkara</a></li>
                 <li><a href="<?php echo esc_url(home_url('/standar-maklumat-pelayanan/')); ?>">Standar &amp; Maklumat Pelayanan</a></li>
+                <li><a href="<?php echo esc_url(home_url('/disabilitas/')); ?>">Layanan Kelompok Rentan &amp; Disabilitas</a></li>
                 <li><a href="<?php echo esc_url(home_url('/statistik-kunjungan/')); ?>">Statistik Kunjungan Website</a></li>
             </ul>
         </div>
@@ -1503,6 +1797,16 @@ add_action('wp_footer', static function () {
     <button type="button" id="pa-btn-speak" aria-pressed="false" data-pa-tip="Bacakan isi halaman dalam Bahasa Indonesia">🔊 Bacakan</button>
     <button type="button" id="pa-btn-font-reset" data-pa-tip="Kembalikan pengaturan tampilan standar">Reset</button>
 </div>
+<dialog id="pa-cmdk-dialog" aria-labelledby="pa-cmdk-label">
+    <div class="pa-cmdk-head">
+        <span id="pa-cmdk-label" style="font-weight:800;color:#E5C158;font-size:13px;">PENCARIAN INSTAN</span>
+        <input type="search" id="pa-cmdk-input" placeholder="Ketik kata kunci: LRA, jadwal sidang, DIPA, disabilitas..." autocomplete="off">
+        <button type="button" id="pa-cmdk-close" aria-label="Tutup pencarian">ESC</button>
+    </div>
+    <div class="pa-cmdk-results" id="pa-cmdk-results" role="region" aria-live="polite">
+        <div class="pa-cmdk-empty">Ketik minimal 2 karakter atau jelajahi pintasan: DIPA, LRA, Jadwal Sidang, e-Court, Disabilitas.</div>
+    </div>
+</dialog>
 <script id="pa-a11y-js">
 (function(){
     var root = document.documentElement;
@@ -1543,11 +1847,10 @@ add_action('wp_footer', static function () {
     var menuTips = {
         'beranda': 'Halaman utama portal keterbukaan informasi',
         'profil pengadilan': 'Visi, misi, tupoksi, yurisdiksi, struktur, & profil pegawai',
-        'kepaniteraan & perkara': 'Jadwal sidang, e-Court, putusan, panjar, & LIPA 7',
-        'kesekretariatan & anggaran': 'LRA, DIPA 01/04, PNBP, Neraca, CALK, BMN, & PBJ',
-        'perencanaan & sakip': 'Renstra, IKU, Perjanjian Kinerja, RKT, & LKJiP',
-        'layanan publik & ppid': 'Survei SKM/SPAK/SPKP, posbakum, pengaduan, & LHKPN',
-        'publikasi': 'Kerja sama instansi (MoU) & informasi kelembagaan'
+        'layanan hukum': 'Jadwal sidang, e-Court, putusan, panjar, LIPA 7, & panggilan ghaib',
+        'transparansi': 'LRA, DIPA 01/04, PNBP, SAKIP, LKJiP, & LHKPN',
+        'layanan publik & pengaduan': 'Survei SKM/SPAK/SPKP, posbakum, disabilitas, & pengaduan',
+        'berita & publikasi': 'Berita satker, pengumuman MA RI & Badilag, serta MoU'
     };
     document.querySelectorAll('#ast-hf-menu-1 > .menu-item > .menu-link, .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link, .pa-shell-menu > li > a').forEach(function(a){
         if(!a.hasAttribute('data-pa-tip')){
@@ -1688,6 +1991,108 @@ add_action('wp_footer', static function () {
         });
     }
     syncState();
+
+    // Filter Tab Pegawai & Tabel Data Operasional
+    var pegBoard = document.getElementById('pa-pegawai-board');
+    if(pegBoard){
+        pegBoard.querySelectorAll('.pa-ops-tab').forEach(function(tab){
+            tab.addEventListener('click', function(){
+                var f = (tab.getAttribute('data-pegawai-filter') || 'Semua').toLowerCase();
+                pegBoard.querySelectorAll('.pa-ops-tab').forEach(function(t){ t.classList.toggle('is-active', t === tab); });
+                pegBoard.querySelectorAll('.pa-pegawai-card').forEach(function(c){
+                    var g = (c.getAttribute('data-group') || '').toLowerCase();
+                    c.classList.toggle('is-hidden', f !== 'semua' && g.indexOf(f) === -1);
+                });
+            });
+        });
+    }
+    document.querySelectorAll('.pa-ops-search[data-ops-table]').forEach(function(inp){
+        inp.addEventListener('input', function(){
+            var tbl = document.getElementById(inp.getAttribute('data-ops-table'));
+            if(!tbl) return;
+            var q = (inp.value || '').trim().toLowerCase();
+            tbl.querySelectorAll('tbody tr').forEach(function(tr){
+                tr.style.display = (!q || (tr.textContent || '').toLowerCase().indexOf(q) !== -1) ? '' : 'none';
+            });
+        });
+    });
+
+    // Hydrate Official RSS Feeds jika cache awal masih kosong
+    var feedSec = document.querySelector('.pa-feeds-section[data-pa-feeds-hydrate="1"]');
+    if(feedSec && window.fetch){
+        var fLimit = parseInt(feedSec.getAttribute('data-pa-feeds-limit') || '5', 10) || 5;
+        fetch(<?php echo wp_json_encode(rest_url('pa-portal/v1/official-feeds')); ?>, { credentials: 'same-origin' })
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(d){
+                if(!d) return;
+                function paintList(elId, arr){
+                    var ul = document.getElementById(elId);
+                    if(!ul || !Array.isArray(arr) || !arr.length) return;
+                    ul.innerHTML = arr.slice(0, fLimit).map(function(it){
+                        var dt = it.date_label ? '<span class="pa-feed-date">' + escHtml(it.date_label) + '</span>' : '';
+                        var ex = it.excerpt ? '<span class="pa-feed-excerpt">' + escHtml(it.excerpt) + '</span>' : '';
+                        return '<li class="pa-feed-item"><a href="' + escHtml(it.link) + '" target="_blank" rel="noopener noreferrer">' + dt + '<strong class="pa-feed-title">' + escHtml(it.title) + '</strong><span class="pa-feed-ext" aria-hidden="true">↗</span></a>' + ex + '</li>';
+                    }).join('');
+                }
+                paintList('pa-feed-list-ma', d.ma);
+                paintList('pa-feed-list-badilag', d.badilag);
+            }).catch(function(){});
+    }
+
+    // Command Palette Ctrl+K
+    var cmdDlg = document.getElementById('pa-cmdk-dialog');
+    var cmdInput = document.getElementById('pa-cmdk-input');
+    var cmdRes = document.getElementById('pa-cmdk-results');
+    var cmdClose = document.getElementById('pa-cmdk-close');
+    var cmdTimer = null;
+    var quickUrl = <?php echo wp_json_encode(rest_url('pa-portal/v1/quick-search')); ?>;
+
+    function escHtml(s){
+        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function renderCmdItems(list){
+        if(!cmdRes) return;
+        if(!list || !list.length){
+            cmdRes.innerHTML = '<div class="pa-cmdk-empty">Tidak ditemukan hasil yang cocok. Coba kata kunci lain atau tekan Enter pada pencarian utama.</div>';
+            return;
+        }
+        cmdRes.innerHTML = list.map(function(it){
+            var extAttr = (it.type === 'doc' && /^https?:\/\//i.test(it.url || '')) ? ' target="_blank" rel="noopener noreferrer"' : '';
+            return '<a class="pa-cmdk-item" href="' + escHtml(it.url) + '"' + extAttr + '><div><strong>' + escHtml(it.title) + '</strong><small>' + escHtml(it.desc || '') + '</small></div><span class="pa-cmdk-badge">' + escHtml(it.badge || it.type || 'Halaman') + '</span></a>';
+        }).join('');
+    }
+    function fetchCmd(q){
+        if(!window.fetch) return;
+        fetch(quickUrl + '?q=' + encodeURIComponent(q || ''), { credentials: 'same-origin' })
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(d){ if(d && Array.isArray(d.items)) renderCmdItems(d.items); })
+            .catch(function(){});
+    }
+    function openCmd(){
+        if(!cmdDlg || typeof cmdDlg.showModal !== 'function') return;
+        if(!cmdDlg.open) cmdDlg.showModal();
+        if(cmdInput){
+            cmdInput.focus();
+            fetchCmd(cmdInput.value || '');
+        }
+    }
+    document.querySelectorAll('#pa-cmdk-open').forEach(function(b){ b.addEventListener('click', openCmd); });
+    if(cmdClose && cmdDlg){ cmdClose.addEventListener('click', function(){ cmdDlg.close(); }); }
+    if(cmdDlg){
+        cmdDlg.addEventListener('click', function(e){ if(e.target === cmdDlg) cmdDlg.close(); });
+    }
+    if(cmdInput){
+        cmdInput.addEventListener('input', function(){
+            clearTimeout(cmdTimer);
+            cmdTimer = setTimeout(function(){ fetchCmd(cmdInput.value || ''); }, 180);
+        });
+    }
+    document.addEventListener('keydown', function(e){
+        if((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')){
+            e.preventDefault();
+            if(cmdDlg && cmdDlg.open) cmdDlg.close(); else openCmd();
+        }
+    });
 })();
 </script>
     <?php
