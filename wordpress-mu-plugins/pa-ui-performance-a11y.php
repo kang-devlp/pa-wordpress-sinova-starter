@@ -244,10 +244,10 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     <section class="pa-section-block pa-news-section" aria-label="Berita dan Pengumuman Terbaru">
         <div class="pa-news-head">
             <div>
-                <h2 class="pa-starter-heading" style="text-align:left;">BERITA &amp; PENGUMUMAN TERKINI</h2>
+                <h2 class="pa-starter-heading" style="text-align:left;" tabindex="0">BERITA &amp; PENGUMUMAN TERKINI <span class="pa-hint-i" aria-hidden="true">i</span></h2>
                 <p class="pa-starter-sub" style="text-align:left;margin-bottom:0;">Informasi Kegiatan, Publikasi, dan Pemberitahuan Resmi Satuan Kerja</p>
             </div>
-            <a class="pa-news-all" href="<?php echo esc_url(home_url('/?post_type=post')); ?>">Semua Berita →</a>
+            <a class="pa-news-all" href="<?php echo esc_url(home_url('/?post_type=post')); ?>" data-pa-tip="Lihat seluruh arsip berita dan pengumuman resmi.">Semua Berita →</a>
         </div>
         <div class="pa-news-grid">
             <?php foreach ($posts as $p) :
@@ -740,61 +740,131 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #fffff
     .pa-shell-submenu { position: static; box-shadow: none; border-radius: 8px; margin: 0 0 6px 12px; }
 }
 
-/* CSS Beranda Portal Resmi Pengadilan Agama */
-.pa-starter-showcase { max-width: 1180px; margin: 6px auto 28px; font-family: 'Inter', system-ui, sans-serif; }
+/* CSS Beranda Portal Resmi Pengadilan Agama (Clean Hover-First + GPU Parallax) */
+.pa-starter-showcase { max-width: 1180px; margin: 6px auto 28px; font-family: 'Inter', system-ui, sans-serif; overflow: visible !important; }
+.pa-section-block, .pa-services-grid, .pa-zi-grid, .pa-news-grid, .pa-split-section { overflow: visible !important; }
 .pa-ticker-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-radius: 10px; background: #f4faf7; border: 1px solid #d5e6dc; border-left: 4px solid #C9A227; margin-bottom: 18px; font-size: 12.5px; color: #043927; }
 .pa-ticker-tag { padding: 3px 9px; border-radius: 6px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
 .pa-ticker-text { flex: 1; min-width: 220px; font-weight: 600; }
 .pa-ticker-link { color: #056e4f !important; font-weight: 800; text-decoration: none !important; white-space: nowrap; }
 .pa-ticker-link:hover { text-decoration: underline !important; }
-.pa-hero-banner { padding: clamp(28px, 4.5vw, 48px) clamp(20px, 4vw, 42px); border-radius: 18px; background: radial-gradient(circle at top right, rgba(201, 162, 39, 0.24), transparent 52%), linear-gradient(135deg, #022c22 0%, #044e3a 52%, #056e4f 100%); border: 1.5px solid #C9A227; color: #fff; text-align: center; box-shadow: 0 14px 34px rgba(4, 57, 39, 0.18); margin-bottom: 30px; }
+.pa-hero-banner {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(30px, 4.8vw, 52px) clamp(20px, 4vw, 42px);
+    border-radius: 18px;
+    background: linear-gradient(135deg, #022c22 0%, #044e3a 52%, #056e4f 100%);
+    border: 1.5px solid #C9A227;
+    color: #fff;
+    text-align: center;
+    box-shadow: 0 14px 34px rgba(4, 57, 39, 0.18);
+    margin-bottom: 30px;
+}
+.pa-hero-banner::before,
+.pa-hero-banner::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    will-change: transform;
+    transition: transform 0.08s linear;
+}
+.pa-hero-banner::before {
+    inset: -36% -12%;
+    background:
+        radial-gradient(circle at 82% 24%, rgba(229, 193, 88, 0.24), transparent 45%),
+        radial-gradient(circle at 14% 78%, rgba(16, 185, 129, 0.22), transparent 42%),
+        repeating-linear-gradient(135deg, rgba(229, 193, 88, 0.04) 0 1px, transparent 1px 28px);
+    transform: translate3d(0, var(--pa-py, 0px), 0);
+}
+.pa-hero-banner::after {
+    width: 280px;
+    height: 280px;
+    right: -60px;
+    bottom: -90px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(229, 193, 88, 0.22);
+    background: radial-gradient(circle, rgba(201, 162, 39, 0.14), transparent 70%);
+    transform: translate3d(0, var(--pa-py-rev, 0px), 0);
+}
+.pa-hero-content { position: relative; z-index: 2; transform: translate3d(0, var(--pa-py-fg, 0px), 0); will-change: transform; }
 .pa-hero-kicker { display: inline-block; padding: 5px 14px; border-radius: 999px; background: rgba(201, 162, 39, 0.18); border: 1px solid #C9A227; color: #E5C158; font-size: 11.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 12px; }
-.pa-hero-title { margin: 0 0 10px; color: #fff; font-size: clamp(1.5rem, 3.2vw, 2.3rem); font-weight: 800; line-height: 1.2; }
-.pa-hero-lead { margin: 0 auto 22px; max-width: 760px; color: #d1fae5; font-size: 0.98rem; line-height: 1.55; }
-.pa-hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.pa-btn-gold { display: inline-flex; align-items: center; padding: 11px 20px; border-radius: 10px; background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%); color: #022c22 !important; font-weight: 800; font-size: 13.5px; text-decoration: none !important; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); }
-.pa-btn-outline { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); border: 1.5px solid rgba(229, 193, 88, 0.55); color: #fff !important; font-weight: 700; font-size: 13.5px; text-decoration: none !important; }
-.pa-btn-outline:hover { background: rgba(255, 255, 255, 0.2); }
-.pa-section-block { margin-bottom: 32px; text-align: center; }
-.pa-starter-heading { margin: 0 0 4px; color: #056e4f; font-weight: 800; font-size: 1.38rem; }
-.pa-starter-sub { margin: 0 0 18px; color: #4b5563; font-weight: 600; font-size: 0.92rem; }
+.pa-hero-title { margin: 0 0 12px; color: #fff; font-size: clamp(1.5rem, 3.2vw, 2.35rem); font-weight: 800; line-height: 1.2; }
+.pa-hero-lead {
+    margin: 0 auto 14px;
+    max-width: 720px;
+    color: #d1fae5;
+    font-size: 0.94rem;
+    line-height: 1.5;
+}
+.pa-hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px; }
+.pa-btn-gold { display: inline-flex; align-items: center; padding: 11px 20px; border-radius: 10px; background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%); color: #022c22 !important; font-weight: 800; font-size: 13.5px; text-decoration: none !important; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); transition: transform 0.16s ease, box-shadow 0.16s ease; }
+.pa-btn-gold:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0, 0, 0, 0.25); }
+.pa-btn-outline { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); border: 1.5px solid rgba(229, 193, 88, 0.55); color: #fff !important; font-weight: 700; font-size: 13.5px; text-decoration: none !important; transition: transform 0.16s ease, background-color 0.16s ease; }
+.pa-btn-outline:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
+.pa-section-block { margin-bottom: 34px; text-align: center; position: relative; }
+.pa-starter-heading { margin: 0 0 18px; color: #056e4f; font-weight: 800; font-size: 1.35rem; display: inline-flex; align-items: center; gap: 8px; cursor: default; }
+.pa-hint-i {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1px solid #C9A227; color: #8A6808;
+    font-size: 11px; font-weight: 800; font-style: italic; font-family: Georgia, serif;
+    opacity: 0.78; transition: background-color 0.16s ease, color 0.16s ease;
+}
+.pa-starter-heading:hover .pa-hint-i,
+.pa-starter-heading:focus-visible .pa-hint-i { background: #056e4f; color: #E5C158; border-color: #056e4f; opacity: 1; }
 .pa-services-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; text-align: left; }
 @media (max-width: 960px) { .pa-services-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .pa-services-grid { grid-template-columns: 1fr; } }
-.pa-service-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 14px; background: #ffffff; border: 1.5px solid #d5e6dc; border-top: 4px solid #056e4f; color: #1f2937 !important; text-decoration: none !important; box-shadow: 0 6px 16px rgba(4, 57, 39, 0.06); transition: transform 0.18s ease, border-color 0.18s ease; }
-.pa-service-card:hover { transform: translateY(-3px); border-color: #C9A227; }
+.pa-service-card {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
+    padding: 16px 16px 15px; border-radius: 14px;
+    background: #ffffff; border: 1.5px solid #d5e6dc; border-top: 4px solid #056e4f;
+    color: #1f2937 !important; text-decoration: none !important;
+    box-shadow: 0 5px 14px rgba(4, 57, 39, 0.05);
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.pa-service-card:hover,
+.pa-service-card:focus-visible { transform: translateY(-4px); border-color: #C9A227; box-shadow: 0 12px 26px rgba(4, 57, 39, 0.14); z-index: 40; }
 .pa-svc-top { display: flex; align-items: center; justify-content: space-between; }
-.pa-svc-icon { width: 34px; height: 34px; border-radius: 9px; background: #ecfdf5; color: #056e4f; display: inline-flex; align-items: center; justify-content: center; }
+.pa-svc-icon { width: 34px; height: 34px; border-radius: 9px; background: #ecfdf5; color: #056e4f; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.18s ease, color 0.18s ease; }
+.pa-service-card:hover .pa-svc-icon { background: #056e4f; color: #E5C158; }
 .pa-svc-icon svg { width: 18px; height: 18px; }
 .pa-svc-badge { padding: 2px 8px; border-radius: 999px; background: #f8fafc; border: 1px solid #cbd5e1; color: #043927; font-size: 10.5px; font-weight: 800; }
-.pa-service-card strong { font-size: 14.5px; color: #043927; }
-.pa-service-card span:last-child { font-size: 12.5px; line-height: 1.45; color: #4b5563; }
+.pa-service-card strong { font-size: 14.5px; color: #043927; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pa-service-card strong::after { content: "→"; font-size: 13px; color: #C9A227; opacity: 0.5; transition: transform 0.18s ease, opacity 0.18s ease; }
+.pa-service-card:hover strong::after { transform: translateX(3px); opacity: 1; }
+.pa-service-card > span:last-child { font-size: 12.2px; line-height: 1.45; color: #4b5563; }
 .pa-welcome-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 32px; text-align: left; }
 @media (max-width: 860px) { .pa-welcome-grid { grid-template-columns: 1fr; } }
 
 /* Banner Resmi Access CCTV Online (ACO) Badilag */
 .pa-aco-banner {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 18px;
-    padding: 18px 22px;
+    padding: 15px 22px;
     margin-bottom: 32px;
     border-radius: 16px;
     background: linear-gradient(135deg, #f4faf7 0%, #ffffff 55%, #fefce8 100%);
     border: 1.5px solid #C9A227;
     box-shadow: 0 8px 22px rgba(4, 57, 39, 0.08);
     text-align: left;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
-.pa-aco-logo { flex: 0 0 64px; width: 64px; height: 64px; }
-.pa-aco-logo svg { width: 64px; height: 64px; display: block; }
+.pa-aco-banner:hover,
+.pa-aco-banner:focus-within { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(4, 57, 39, 0.14); z-index: 35; }
+.pa-aco-logo { flex: 0 0 58px; width: 58px; height: 58px; }
+.pa-aco-logo svg { width: 58px; height: 58px; display: block; }
 .pa-aco-body { flex: 1 1 320px; min-width: 0; }
-.pa-aco-kicker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.pa-aco-kicker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 5px; }
 .pa-aco-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #043927; color: #E5C158; font-size: 11px; font-weight: 800; letter-spacing: 0.03em; }
 .pa-aco-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
 .pa-aco-std { font-size: 11.5px; font-weight: 700; color: #056e4f; }
-.pa-aco-body h3 { margin: 0 0 4px; font-size: 1.08rem; font-weight: 800; color: #043927; }
-.pa-aco-body p { margin: 0; font-size: 0.89rem; line-height: 1.5; color: #475569; }
+.pa-aco-body h3 { margin: 0; font-size: 1.06rem; font-weight: 800; color: #043927; }
+.pa-aco-body p { margin: 4px 0 0; font-size: 0.87rem; line-height: 1.5; color: #475569; }
 .pa-aco-cta { flex: 0 0 auto; }
 .pa-aco-btn { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 10px; background: linear-gradient(135deg, #043927 0%, #056e4f 100%); border: 1.5px solid #C9A227; color: #E5C158 !important; font-size: 13px; font-weight: 800; text-decoration: none !important; box-shadow: 0 6px 14px rgba(4, 57, 39, 0.16); transition: transform 0.16s ease; }
 .pa-aco-btn:hover { transform: translateY(-2px); background: #022c22; }
@@ -802,14 +872,16 @@ html[data-pa-theme="dark"] .pa-aco-banner { background: linear-gradient(135deg, 
 html[data-pa-theme="dark"] .pa-aco-body h3 { color: #E5C158; }
 html[data-pa-theme="dark"] .pa-aco-body p,
 html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
-.pa-welcome-card { padding: 22px; border-radius: 16px; background: #f4faf7; border: 1.5px solid #d5e6dc; border-left: 5px solid #056e4f; }
+.pa-welcome-card { padding: 22px; border-radius: 16px; background: #f4faf7; border: 1.5px solid #d5e6dc; border-left: 5px solid #056e4f; transition: transform 0.18s ease, border-color 0.18s ease; }
+.pa-welcome-card:hover { transform: translateY(-2px); border-color: #C9A227; }
 .pa-wc-kicker { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
 .pa-welcome-card h3 { margin: 0 0 10px; color: #043927; font-size: 1.15rem; font-weight: 800; }
 .pa-wc-body { margin: 0 0 14px; color: #334155; font-size: 0.92rem; line-height: 1.6; }
 .pa-wc-links { display: flex; flex-wrap: wrap; gap: 8px; }
-.pa-wc-links a { padding: 6px 12px; border-radius: 8px; background: #ffffff; border: 1px solid #056e4f; color: #043927 !important; font-size: 12px; font-weight: 700; text-decoration: none !important; }
+.pa-wc-links a { padding: 6px 12px; border-radius: 8px; background: #ffffff; border: 1px solid #056e4f; color: #043927 !important; font-size: 12px; font-weight: 700; text-decoration: none !important; transition: background-color 0.15s ease, color 0.15s ease; }
 .pa-wc-links a:hover { background: #056e4f; color: #ffffff !important; }
-.pa-maklumat-card { padding: 22px; border-radius: 16px; background: linear-gradient(155deg, #043927 0%, #056e4f 100%); border: 1.5px solid #C9A227; color: #ffffff; }
+.pa-maklumat-card { padding: 22px; border-radius: 16px; background: linear-gradient(155deg, #043927 0%, #056e4f 100%); border: 1.5px solid #C9A227; color: #ffffff; transition: transform 0.18s ease; }
+.pa-maklumat-card:hover { transform: translateY(-2px); }
 .pa-mk-kicker { display: inline-block; padding: 3px 10px; border-radius: 999px; background: rgba(229, 193, 88, 0.18); border: 1px solid #C9A227; color: #E5C158; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
 .pa-maklumat-card h3 { margin: 0 0 8px; color: #fff; font-size: 1.15rem; font-weight: 800; }
 .pa-mk-quote { margin: 0 0 12px; color: #e6f4ee; font-size: 12.5px; line-height: 1.55; font-style: italic; }
@@ -819,17 +891,21 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
 .pa-zi-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
 @media (max-width: 960px) { .pa-zi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .pa-zi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.pa-zi-card { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 18px 12px; border-radius: 12px; background: linear-gradient(135deg, #056e4f 0%, #043927 100%); border: 1.5px solid #C9A227; color: #fff !important; text-decoration: none !important; box-shadow: 0 6px 14px rgba(4, 57, 39, 0.18); transition: transform 0.2s ease; }
-.pa-zi-card:hover { transform: translateY(-3px); border-color: #E5C158; }
-.pa-zi-icon { width: 34px; height: 34px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: #E5C158; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.pa-zi-card { position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 18px 12px; border-radius: 12px; background: linear-gradient(135deg, #056e4f 0%, #043927 100%); border: 1.5px solid #C9A227; color: #fff !important; text-decoration: none !important; box-shadow: 0 6px 14px rgba(4, 57, 39, 0.18); transition: transform 0.2s ease, border-color 0.2s ease; }
+.pa-zi-card:hover,
+.pa-zi-card:focus-visible { transform: translateY(-4px); border-color: #E5C158; z-index: 40; }
+.pa-zi-icon { width: 36px; height: 36px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: #E5C158; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
 .pa-zi-icon svg { width: 18px; height: 18px; }
-.pa-zi-area { font-size: 15px; font-weight: 800; color: #E5C158; margin-bottom: 4px; }
-.pa-zi-desc { font-size: 11.5px; line-height: 1.32; font-weight: 600; min-height: 2.64em; display: flex; align-items: center; justify-content: center; text-align: center; }
-.pa-news-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; margin-bottom: 16px; }
+.pa-zi-area { font-size: 15px; font-weight: 800; color: #E5C158; margin-bottom: 0; }
+.pa-zi-desc { font-size: 11.5px; line-height: 1.32; font-weight: 700; display: flex; align-items: center; justify-content: center; text-align: center; }
+.pa-news-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 16px; }
+.pa-news-head > div { position: relative; }
 .pa-news-all { color: #056e4f !important; font-weight: 800; font-size: 13px; text-decoration: none !important; }
 .pa-news-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; text-align: left; }
 @media (max-width: 860px) { .pa-news-grid { grid-template-columns: 1fr; } }
-.pa-news-card { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #d5e6dc; box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05); }
+.pa-news-card { position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #d5e6dc; box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05); transition: transform 0.18s ease, border-color 0.18s ease; }
+.pa-news-card:hover,
+.pa-news-card:focus-within { transform: translateY(-3px); border-color: #C9A227; z-index: 35; }
 .pa-news-date { font-size: 11.5px; font-weight: 700; color: #8A6808; }
 .pa-news-card h3 { margin: 0; font-size: 15px; line-height: 1.4; }
 .pa-news-card h3 a { color: #043927 !important; text-decoration: none !important; }
@@ -852,14 +928,295 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
 .pa-starter-survey .survey-dot { padding: 5px 11px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.28); background: transparent; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
 .pa-starter-survey .survey-dot.is-active { background: #E5C158; color: #022c22; border-color: #E5C158; }
 .pa-hub-shortcuts { background: #f4faf7; border: 1.5px solid #d5e6dc; border-radius: 16px; padding: 20px; text-align: left; display: flex; flex-direction: column; justify-content: space-between; }
-.pa-hub-shortcuts-head h3 { margin: 0 0 4px; color: #043927; font-size: 1.15rem; font-weight: 800; }
-.pa-hub-shortcuts-head p { margin: 0 0 14px; color: #4b5563; font-size: 0.88rem; }
+.pa-hub-shortcuts-head { position: relative; }
+.pa-hub-shortcuts-head h3 { margin: 0 0 12px; color: #043927; font-size: 1.15rem; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; cursor: default; }
+.pa-hub-shortcuts-head p { margin: 0; color: #4b5563; font-size: 0.88rem; }
 .pa-shortcut-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 520px) { .pa-shortcut-grid { grid-template-columns: 1fr; } }
-.pa-shortcut-item { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #d5e6dc; text-decoration: none !important; transition: border-color 0.15s ease, transform 0.15s ease; }
-.pa-shortcut-item:hover { border-color: #056e4f; transform: translateY(-2px); }
+.pa-shortcut-item { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #d5e6dc; text-decoration: none !important; transition: border-color 0.15s ease, transform 0.15s ease; }
+.pa-shortcut-item:hover { border-color: #C9A227; transform: translateY(-2px); z-index: 30; }
 .pa-shortcut-item span { font-size: 11px; font-weight: 800; color: #8A6808; text-transform: uppercase; }
 .pa-shortcut-item strong { font-size: 13.5px; color: #043927; }
+
+/* Hover-First Clean UX: Keterangan Muncul Elegan Hanya Saat Hover/Fokus (CLS = 0) */
+@media (hover: hover) and (pointer: fine) {
+    html:not([data-pa-contrast="high"]) .pa-hero-lead {
+        position: absolute;
+        left: 50%;
+        top: 6px;
+        transform: translate(-50%, -6px);
+        width: min(680px, 92%);
+        margin: 0;
+        padding: 9px 16px;
+        border-radius: 10px;
+        background: rgba(2, 44, 34, 0.94);
+        border: 1px solid rgba(229, 193, 88, 0.6);
+        color: #f8fafc;
+        font-size: 0.85rem;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+        z-index: 30;
+    }
+    html:not([data-pa-contrast="high"]) .pa-hero-title:hover + .pa-hero-lead,
+    html:not([data-pa-contrast="high"]) .pa-hero-kicker:hover ~ .pa-hero-lead {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+    }
+
+    html:not([data-pa-contrast="high"]) .pa-starter-sub,
+    html:not([data-pa-contrast="high"]) .pa-hub-shortcuts-head p {
+        position: absolute;
+        left: 50%;
+        top: 34px;
+        transform: translate(-50%, -4px);
+        margin: 0;
+        padding: 7px 14px;
+        border-radius: 9px;
+        background: #022c22;
+        border: 1px solid #C9A227;
+        color: #f8fafc !important;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        max-width: 92vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        box-shadow: 0 10px 24px rgba(2, 44, 34, 0.24);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        z-index: 45;
+        transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+    }
+    html:not([data-pa-contrast="high"]) .pa-news-head .pa-starter-sub,
+    html:not([data-pa-contrast="high"]) .pa-hub-shortcuts-head p {
+        left: 0;
+        transform: translate(0, -4px);
+    }
+    html:not([data-pa-contrast="high"]) .pa-starter-heading:hover + .pa-starter-sub,
+    html:not([data-pa-contrast="high"]) .pa-starter-heading:focus-visible + .pa-starter-sub {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+    }
+    html:not([data-pa-contrast="high"]) .pa-news-head .pa-starter-heading:hover + .pa-starter-sub,
+    html:not([data-pa-contrast="high"]) .pa-news-head .pa-starter-heading:focus-visible + .pa-starter-sub,
+    html:not([data-pa-contrast="high"]) .pa-hub-shortcuts-head h3:hover + p,
+    html:not([data-pa-contrast="high"]) .pa-hub-shortcuts-head:focus-within p {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(0, 0);
+    }
+
+    html:not([data-pa-contrast="high"]) .pa-service-card > span:last-child {
+        position: absolute;
+        left: -1.5px;
+        right: -1.5px;
+        top: calc(100% - 6px);
+        z-index: 45;
+        padding: 10px 14px 12px;
+        border-radius: 0 0 14px 14px;
+        background: #022c22;
+        border: 1.5px solid #C9A227;
+        border-top: 1px solid rgba(229, 193, 88, 0.3);
+        color: #f1f5f9 !important;
+        box-shadow: 0 14px 28px rgba(2, 44, 34, 0.28);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-4px);
+        pointer-events: none;
+        transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+    }
+    html:not([data-pa-contrast="high"]) .pa-service-card:hover,
+    html:not([data-pa-contrast="high"]) .pa-service-card:focus-visible {
+        border-bottom-left-radius: 4px;
+        border-bottom-right-radius: 4px;
+    }
+    html:not([data-pa-contrast="high"]) .pa-service-card:hover > span:last-child,
+    html:not([data-pa-contrast="high"]) .pa-service-card:focus-visible > span:last-child {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+
+    html:not([data-pa-contrast="high"]) .pa-zi-card .pa-zi-desc {
+        position: absolute;
+        left: 50%;
+        top: calc(100% + 7px);
+        transform: translate(-50%, -4px);
+        min-width: 175px;
+        max-width: 220px;
+        padding: 7px 10px;
+        border-radius: 9px;
+        background: #022c22;
+        border: 1px solid #E5C158;
+        color: #ffffff;
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.25);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        z-index: 45;
+        transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+    }
+    html:not([data-pa-contrast="high"]) .pa-zi-card:hover .pa-zi-desc,
+    html:not([data-pa-contrast="high"]) .pa-zi-card:focus-visible .pa-zi-desc {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+    }
+
+    html:not([data-pa-contrast="high"]) .pa-aco-body p,
+    html:not([data-pa-contrast="high"]) .pa-news-card p {
+        position: absolute;
+        left: -1px;
+        right: -1px;
+        top: calc(100% - 5px);
+        margin: 0;
+        padding: 10px 14px;
+        border-radius: 0 0 12px 12px;
+        background: #022c22;
+        border: 1.5px solid #C9A227;
+        border-top: 1px solid rgba(229, 193, 88, 0.35);
+        color: #f1f5f9 !important;
+        box-shadow: 0 14px 28px rgba(2, 44, 34, 0.26);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-4px);
+        pointer-events: none;
+        z-index: 45;
+        transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+    }
+    html:not([data-pa-contrast="high"]) .pa-aco-banner:hover .pa-aco-body p,
+    html:not([data-pa-contrast="high"]) .pa-aco-banner:focus-within .pa-aco-body p,
+    html:not([data-pa-contrast="high"]) .pa-news-card:hover p,
+    html:not([data-pa-contrast="high"]) .pa-news-card:focus-within p {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+}
+
+/* Tooltip Ringan pada Button, Topbar, & Menu Saat Disorot ([data-pa-tip]) */
+#ast-desktop-header,
+#ast-desktop-header .main-header-bar,
+#ast-desktop-header .site-header-primary-section-right,
+#ast-desktop-header .ast-builder-menu-1,
+#ast-desktop-header .main-header-menu { overflow: visible !important; }
+[data-pa-tip] { position: relative; }
+@media (hover: hover) and (pointer: fine) {
+    [data-pa-tip]::after {
+        content: attr(data-pa-tip);
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 9px);
+        transform: translate(-50%, 4px);
+        width: max-content;
+        max-width: 250px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: #022c22;
+        border: 1px solid #C9A227;
+        color: #ffffff;
+        font-size: 11.5px;
+        font-weight: 600;
+        line-height: 1.35;
+        text-align: center;
+        white-space: normal;
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        z-index: 9998;
+        transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+    }
+    .pa-shell-topbar [data-pa-tip]::after {
+        bottom: auto;
+        top: calc(100% + 7px);
+        transform: translate(-50%, -4px);
+    }
+    #pa-topbar-theme-btn[data-pa-tip]::after { left: auto; right: 0; transform: translate(0, -4px); }
+    #pa-btn-top[data-pa-tip]::after,
+    .pa-news-all[data-pa-tip]::after { left: auto; right: 0; transform: translate(0, 4px); }
+    #pa-a11y-dock button:first-child[data-pa-tip]::after { left: 0; transform: translate(0, 4px); }
+    [data-pa-tip]:hover::after,
+    [data-pa-tip]:focus-visible::after {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+    }
+    #pa-topbar-theme-btn[data-pa-tip]:hover::after,
+    #pa-topbar-theme-btn[data-pa-tip]:focus-visible::after,
+    #pa-btn-top[data-pa-tip]:hover::after,
+    #pa-btn-top[data-pa-tip]:focus-visible::after,
+    .pa-news-all[data-pa-tip]:hover::after,
+    .pa-news-all[data-pa-tip]:focus-visible::after,
+    #pa-a11y-dock button:first-child[data-pa-tip]:hover::after,
+    #pa-a11y-dock button:first-child[data-pa-tip]:focus-visible::after {
+        transform: translate(0, 0);
+    }
+}
+
+/* Indikator Progres Gulir, Status PTSP Real-Time, & Tombol Ke Atas */
+#pa-scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #C9A227 0%, #E5C158 55%, #10b981 100%);
+    transform-origin: 0 50%;
+    transform: scaleX(0);
+    z-index: 99999;
+    pointer-events: none;
+}
+.pa-ptsp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.08);
+    color: #d1fae5;
+}
+.pa-ptsp-pill.is-open { border-color: rgba(34, 197, 94, 0.55); color: #86efac; }
+.pa-ptsp-pill.is-closed { border-color: rgba(229, 193, 88, 0.45); color: #fde68a; }
+html.pa-is-scrolled #ast-desktop-header .main-header-bar,
+html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 0.18) !important; }
+#pa-btn-top {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 99989;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    border: 1.5px solid #C9A227;
+    background: rgba(4, 57, 39, 0.94);
+    color: #E5C158;
+    font: 800 16px/1 'Inter', system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+#pa-btn-top.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+#pa-btn-top:hover { background: #022c22; color: #ffffff; }
+@media (prefers-reduced-motion: reduce) {
+    .pa-hero-banner::before, .pa-hero-banner::after, .pa-hero-content { transform: none !important; transition: none !important; }
+    * { scroll-behavior: auto !important; }
+}
+@media print {
+    #pa-a11y-dock, #pa-btn-top, #pa-scroll-progress, .pa-shell-topbar, .pa-shell-navwrap, #ast-desktop-header, .pa-inner-sidebar { display: none !important; }
+}
 
 /* Footer 4 Kolom Resmi + Statistik Pengunjung */
 .pa-shell-footer { background: #022c22; color: #d1fae5; border-top: 4px solid #C9A227; padding: 34px 16px 24px; font-size: 13px; }
@@ -931,7 +1288,8 @@ html[data-pa-theme="dark"] .pa-hub-shortcuts-head h3,
 html[data-pa-theme="dark"] .pa-shortcut-item strong,
 html[data-pa-theme="dark"] .pa-vstat-box strong,
 html[data-pa-theme="dark"] .pa-starter-heading { color: #E5C158 !important; }
-html[data-pa-theme="dark"] .pa-service-card span:last-child,
+html[data-pa-theme="dark"] .pa-svc-badge { background: rgba(255, 255, 255, 0.08); border-color: #4b6e58; color: #E5C158; }
+html[data-pa-theme="dark"] .pa-service-card > span:last-child,
 html[data-pa-theme="dark"] .pa-wc-body,
 html[data-pa-theme="dark"] .pa-news-card p,
 html[data-pa-theme="dark"] .pa-starter-sub,
@@ -993,16 +1351,18 @@ add_action('wp_body_open', static function () {
         . ($monsId[(int) $wibNow->format('n')] ?? $wibNow->format('F')) . ' '
         . $wibNow->format('Y') . ' · ' . $wibNow->format('H:i:s') . ' WIB';
     ?>
+<div id="pa-scroll-progress" aria-hidden="true"></div>
 <div class="pa-shell-topbar">
     <div class="pa-shell-inner">
         <span id="pa-live-clock" class="pa-live-clock" title="Waktu Indonesia Barat"><?php echo esc_html($clockInit); ?></span>
         <div class="pa-shell-topbar-links">
+            <span id="pa-ptsp-live-pill" class="pa-ptsp-pill" data-pa-tip="Jam layanan PTSP: Senin–Kamis 08.00–16.30 WIB · Jumat 08.00–17.00 WIB">● PTSP</span>
             <span>PTSP: <?php echo esc_html($phone ?: 'Senin–Jumat'); ?></span>
-            <a href="<?php echo esc_url($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'); ?>" target="_blank" rel="noopener noreferrer">SIPP</a>
-            <a href="<?php echo esc_url($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer">e-Court</a>
-            <a href="<?php echo esc_url($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>CCTV ACO</a>
-            <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Survei Pelayanan</a>
-            <button type="button" id="pa-topbar-theme-btn" class="pa-topbar-theme-btn" aria-pressed="false" title="Ubah Mode Terang/Gelap">🌙 Mode Gelap</button>
+            <a href="<?php echo esc_url($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Sistem Informasi Penelusuran Perkara">SIPP</a>
+            <a href="<?php echo esc_url($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Layanan Perkara Elektronik MA RI">e-Court</a>
+            <a href="<?php echo esc_url($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Pemantauan Access CCTV Online Ditjen Badilag" style="display:inline-flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>CCTV ACO</a>
+            <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Survei Persepsi Kepuasan &amp; Anti Korupsi">Survei Pelayanan</a>
+            <button type="button" id="pa-topbar-theme-btn" class="pa-topbar-theme-btn" aria-pressed="false" data-pa-tip="Ubah tampilan antara Mode Terang dan Mode Gelap">🌙 Mode Gelap</button>
         </div>
     </div>
 </div>
@@ -1134,13 +1494,14 @@ add_action('wp_footer', static function () {
     </div>
 </footer>
     <?php endif; ?>
+<button type="button" id="pa-btn-top" aria-label="Kembali ke atas" data-pa-tip="Kembali ke bagian atas halaman">↑</button>
 <div id="pa-a11y-dock" role="region" aria-label="Sarana Aksesibilitas Website">
-    <button type="button" id="pa-btn-dark" aria-pressed="false" title="Ubah Mode Terang/Gelap">Mode Gelap</button>
-    <button type="button" id="pa-btn-contrast" aria-pressed="false" title="Kontras Tinggi WCAG">Kontras</button>
-    <button type="button" id="pa-btn-font-up" title="Perbesar Teks">A+</button>
-    <button type="button" id="pa-btn-font-down" title="Perkecil Teks">A-</button>
-    <button type="button" id="pa-btn-speak" aria-pressed="false" title="Pembaca Layar Bahasa Indonesia">🔊 Bacakan</button>
-    <button type="button" id="pa-btn-font-reset" title="Reset Tampilan Standar">Reset</button>
+    <button type="button" id="pa-btn-dark" aria-pressed="false" data-pa-tip="Ubah tampilan antara Mode Terang dan Mode Gelap">Mode Gelap</button>
+    <button type="button" id="pa-btn-contrast" aria-pressed="false" data-pa-tip="Aktifkan mode kontras tinggi WCAG AA">Kontras</button>
+    <button type="button" id="pa-btn-font-up" data-pa-tip="Perbesar ukuran teks halaman">A+</button>
+    <button type="button" id="pa-btn-font-down" data-pa-tip="Perkecil ukuran teks halaman">A-</button>
+    <button type="button" id="pa-btn-speak" aria-pressed="false" data-pa-tip="Bacakan isi halaman dalam Bahasa Indonesia">🔊 Bacakan</button>
+    <button type="button" id="pa-btn-font-reset" data-pa-tip="Kembalikan pengaturan tampilan standar">Reset</button>
 </div>
 <script id="pa-a11y-js">
 (function(){
@@ -1152,6 +1513,10 @@ add_action('wp_footer', static function () {
     var btnDown = document.getElementById('pa-btn-font-down');
     var btnSpeak = document.getElementById('pa-btn-speak');
     var btnReset = document.getElementById('pa-btn-font-reset');
+    var btnTop = document.getElementById('pa-btn-top');
+    var scrollBar = document.getElementById('pa-scroll-progress');
+    var heroEl = document.querySelector('.pa-hero-banner');
+    var ptspPill = document.getElementById('pa-ptsp-live-pill');
     var menuToggle = document.getElementById('pa-shell-menu-toggle');
     var menuList = document.getElementById('pa-shell-menu-list');
     var clockEl = document.getElementById('pa-live-clock');
@@ -1161,11 +1526,63 @@ add_action('wp_footer', static function () {
         var bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
         var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
         var tickClock = function(){
-            var d = new Date();
-            clockEl.textContent = hari[d.getDay()] + ', ' + d.getDate() + ' ' + bulan[d.getMonth()] + ' ' + d.getFullYear() + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' WIB';
+            var d = new Date(Date.now() + 7 * 3600000);
+            clockEl.textContent = hari[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + bulan[d.getUTCMonth()] + ' ' + d.getUTCFullYear() + ' · ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + ' WIB';
+            if(ptspPill){
+                var dow = d.getUTCDay(), mins = d.getUTCHours() * 60 + d.getUTCMinutes();
+                var open = (dow >= 1 && dow <= 4 && mins >= 480 && mins <= 990) || (dow === 5 && mins >= 480 && mins <= 1020);
+                ptspPill.classList.toggle('is-open', open);
+                ptspPill.classList.toggle('is-closed', !open);
+                ptspPill.textContent = open ? '● PTSP Buka' : '● PTSP Tutup';
+            }
         };
         tickClock();
         setInterval(tickClock, 1000);
+    }
+
+    var menuTips = {
+        'beranda': 'Halaman utama portal keterbukaan informasi',
+        'profil pengadilan': 'Visi, misi, tupoksi, yurisdiksi, struktur, & profil pegawai',
+        'kepaniteraan & perkara': 'Jadwal sidang, e-Court, putusan, panjar, & LIPA 7',
+        'kesekretariatan & anggaran': 'LRA, DIPA 01/04, PNBP, Neraca, CALK, BMN, & PBJ',
+        'perencanaan & sakip': 'Renstra, IKU, Perjanjian Kinerja, RKT, & LKJiP',
+        'layanan publik & ppid': 'Survei SKM/SPAK/SPKP, posbakum, pengaduan, & LHKPN',
+        'publikasi': 'Kerja sama instansi (MoU) & informasi kelembagaan'
+    };
+    document.querySelectorAll('#ast-hf-menu-1 > .menu-item > .menu-link, .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link, .pa-shell-menu > li > a').forEach(function(a){
+        if(!a.hasAttribute('data-pa-tip')){
+            var key = (a.textContent || '').replace(/[▾\s]+/g, ' ').trim().toLowerCase();
+            if(menuTips[key]) a.setAttribute('data-pa-tip', menuTips[key]);
+        }
+    });
+
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var rafLock = false;
+    var heroHeight = heroEl ? Math.max(360, heroEl.offsetHeight + 180) : 0;
+    function applyScrollEffects(){
+        rafLock = false;
+        var y = window.scrollY || window.pageYOffset || 0;
+        var docH = Math.max(1, root.scrollHeight - window.innerHeight);
+        if(scrollBar) scrollBar.style.transform = 'scaleX(' + Math.min(1, Math.max(0, y / docH)).toFixed(4) + ')';
+        root.classList.toggle('pa-is-scrolled', y > 50);
+        if(btnTop) btnTop.classList.toggle('is-visible', y > 360);
+        if(heroEl && !reduceMotion && y <= heroHeight){
+            heroEl.style.setProperty('--pa-py', (y * 0.22).toFixed(1) + 'px');
+            heroEl.style.setProperty('--pa-py-rev', (-y * 0.14).toFixed(1) + 'px');
+            heroEl.style.setProperty('--pa-py-fg', (y * 0.06).toFixed(1) + 'px');
+        }
+    }
+    window.addEventListener('scroll', function(){
+        if(!rafLock){
+            rafLock = true;
+            window.requestAnimationFrame(applyScrollEffects);
+        }
+    }, { passive: true });
+    applyScrollEffects();
+    if(btnTop){
+        btnTop.addEventListener('click', function(){
+            window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+        });
     }
 
     if(window.fetch){
