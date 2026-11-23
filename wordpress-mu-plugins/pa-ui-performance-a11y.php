@@ -177,11 +177,49 @@ body.pa-sinova-classic-shell:not(.home) .entry-title {
     margin-bottom: 18px;
 }
 
-/* Styling Header Native Tema Astra menjadi Hijau Gelap - Gold Resmi PA */
+/* Styling Header Native Tema Astra menjadi 2 Baris Rapi (Brand + Navbar 1-Garis Hijau Gelap–Gold) */
 body.pa-sinova-classic-shell .main-header-bar {
     background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
     border-bottom: 3px solid #C9A227 !important;
     color: #fff !important;
+    padding: 0 !important;
+    line-height: 1.4 !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .site-primary-header-wrap {
+    max-width: 1200px !important;
+    padding: 0 !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .ast-builder-grid-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0 !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-left {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 13px 16px !important;
+    border-bottom: 1px solid rgba(201, 162, 39, 0.35);
+    justify-content: flex-start !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-right {
+    width: 100% !important;
+    max-width: 100% !important;
+    background: rgba(2, 44, 34, 0.45);
+    padding: 0 8px !important;
+    justify-content: flex-start !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .ast-builder-menu-1,
+body.pa-sinova-classic-shell #ast-desktop-header .ast-main-header-bar-alignment,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-bar-navigation,
+body.pa-sinova-classic-shell #ast-desktop-header .main-navigation {
+    width: 100% !important;
+    line-height: 1.3 !important;
+}
+body.pa-sinova-classic-shell .site-title {
+    font-size: clamp(1.1rem, 2vw, 1.42rem) !important;
+    font-weight: 800 !important;
+    line-height: 1.25 !important;
 }
 body.pa-sinova-classic-shell .site-title a,
 body.pa-sinova-classic-shell .site-description {
@@ -191,40 +229,92 @@ body.pa-sinova-classic-shell .site-description {
     color: #d1fae5 !important;
     font-size: 12px !important;
 }
+body.pa-sinova-classic-shell .ast-desktop .main-header-menu {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 2px !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item {
+    flex: 0 0 auto !important;
+    line-height: 1.3 !important;
+}
 body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu-link {
     color: #ffffff !important;
     font-weight: 700 !important;
-    font-size: 13.5px !important;
-    padding-left: 11px !important;
-    padding-right: 11px !important;
+    font-size: 13px !important;
+    line-height: 1.3 !important;
+    height: auto !important;
+    padding: 11px 11px !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    border-bottom: 2px solid transparent !important;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+@media (max-width: 1180px) {
+    body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu-link {
+        padding: 10px 8px !important;
+        font-size: 12px !important;
+    }
 }
 body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu-link:hover,
 body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .current-menu-item > .menu-link {
     color: #E5C158 !important;
+    background: rgba(201, 162, 39, 0.14) !important;
+    border-bottom-color: #E5C158 !important;
+}
+body.pa-sinova-classic-shell .ast-desktop .main-header-menu .ast-header-navigation-arrow svg {
+    width: 11px;
+    height: 11px;
+    color: #E5C158;
 }
 body.pa-sinova-classic-shell .ast-desktop .main-header-menu .sub-menu {
     background: #ffffff !important;
+    border: 1px solid #d5e6dc !important;
     border-top: 3px solid #C9A227 !important;
     border-radius: 0 0 10px 10px !important;
     box-shadow: 0 14px 32px rgba(4, 57, 39, 0.18) !important;
     width: 280px !important;
     max-height: 70vh;
     overflow-y: auto;
+    line-height: 1.35 !important;
+}
+body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item:nth-last-child(-n+2) > .sub-menu {
+    left: auto !important;
+    right: 0 !important;
 }
 body.pa-sinova-classic-shell .main-header-menu .sub-menu .menu-link {
     color: #043927 !important;
     font-weight: 600 !important;
     font-size: 13px !important;
+    line-height: 1.4 !important;
     padding: 9px 14px !important;
+    white-space: normal !important;
 }
 body.pa-sinova-classic-shell .main-header-menu .sub-menu .menu-link:hover {
     background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
     color: #E5C158 !important;
 }
+body.pa-sinova-classic-shell .ast-mobile-header-wrap .ast-primary-header-bar {
+    padding: 10px 14px !important;
+}
 body.pa-sinova-classic-shell .ast-mobile-menu-buttons .menu-toggle {
     background: rgba(201, 162, 39, 0.2) !important;
     border-color: #C9A227 !important;
     color: #E5C158 !important;
+}
+body.pa-sinova-classic-shell .ast-mobile-popup-drawer .ast-mobile-popup-inner {
+    background: #043927 !important;
+}
+body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link {
+    color: #ffffff !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 /* Topbar Institusional (Tampil di Astra maupun Block Theme) */
