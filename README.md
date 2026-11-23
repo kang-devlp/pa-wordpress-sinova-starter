@@ -6,6 +6,19 @@ Seluruh fitur dikemas dalam 5 berkas `mu-plugins` tanpa ketergantungan plugin be
 
 ---
 
+## Pratinjau Tampilan
+
+### Beranda Portal (Mode Terang)
+![Tampilan Beranda Mode Terang](docs/screenshots/beranda-light.png)
+
+### Beranda Portal (Mode Gelap / Dark Mode)
+![Tampilan Beranda Mode Gelap](docs/screenshots/beranda-dark.png)
+
+### Halaman Arsip Dokumen SINOVA ("Rumah Tahun 2027")
+![Tampilan Modul Arsip Dokumen SINOVA LRA](docs/screenshots/modul-sinova.png)
+
+---
+
 ## Fitur Utama
 
 1. **Tema Institusional Hijau Gelap & Emas:** Mendukung penuh tema gratis **Astra** (dan tetap berjalan rapi pada tema bawaan WordPress) dengan navigasi dropdown 6 pilar, kotak sambutan pimpinan, layanan perkara, berita terkini, serta footer 4 kolom resmi.
@@ -31,6 +44,8 @@ sinova-starter-kit/
 │   └── pa-security-hardening.php          # Header keamanan, filter upload, WAF dasar, & login CAPTCHA
 ├── wordpress-templates/
 │   └── beranda-blocks-starter.html        # Kerangka HTML halaman Beranda standar Pengadilan Agama
+├── docs/
+│   └── screenshots/                       # Pratinjau tampilan Beranda (Light/Dark) & Modul SINOVA
 └── laravel-sinova-panel/                  # Opsional: modul Laravel + Vue jika memakai panel internal kantor
 ```
 

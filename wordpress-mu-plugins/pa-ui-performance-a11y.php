@@ -27,7 +27,7 @@ add_action('wp_head', static function () {
     echo '<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>' . "\n";
     echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
     echo '<meta name="color-scheme" content="light dark">' . "\n";
-    echo '<script id="pa-a11y-boot">try{var t=localStorage.getItem("pa_starter_theme"),c=localStorage.getItem("pa_starter_contrast"),z=localStorage.getItem("pa_starter_zoom");if(t==="dark")document.documentElement.setAttribute("data-pa-theme","dark");if(c==="high")document.documentElement.setAttribute("data-pa-contrast","high");if(z)document.documentElement.style.fontSize=z;}catch(e){}</script>' . "\n";
+    echo '<script id="pa-a11y-boot">try{var t=localStorage.getItem("pa_starter_theme"),c=localStorage.getItem("pa_starter_contrast"),z=localStorage.getItem("pa_starter_zoom");if(!t&&/[?&]theme=dark(?:&|$)/.test(location.search))t="dark";if(t==="dark")document.documentElement.setAttribute("data-pa-theme","dark");if(c==="high")document.documentElement.setAttribute("data-pa-contrast","high");if(z)document.documentElement.style.fontSize=z;}catch(e){}</script>' . "\n";
 }, 2);
 
 add_action('wp_enqueue_scripts', static function () {
@@ -205,7 +205,7 @@ body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-le
 body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-right {
     width: 100% !important;
     max-width: 100% !important;
-    background: rgba(2, 44, 34, 0.45);
+    background: rgba(2, 44, 34, 0.55);
     padding: 0 8px !important;
     justify-content: flex-start !important;
 }
@@ -229,7 +229,8 @@ body.pa-sinova-classic-shell .site-description {
     color: #d1fae5 !important;
     font-size: 12px !important;
 }
-body.pa-sinova-classic-shell .ast-desktop .main-header-menu {
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu {
     display: flex !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
@@ -239,11 +240,13 @@ body.pa-sinova-classic-shell .ast-desktop .main-header-menu {
     margin: 0 !important;
     padding: 0 !important;
 }
-body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item {
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item {
     flex: 0 0 auto !important;
     line-height: 1.3 !important;
 }
-body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu-link {
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link {
     color: #ffffff !important;
     font-weight: 700 !important;
     font-size: 13px !important;
@@ -258,23 +261,29 @@ body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 @media (max-width: 1180px) {
-    body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu-link {
+    body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link,
+    body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link {
         padding: 10px 8px !important;
         font-size: 12px !important;
     }
 }
-body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item > .menu-link:hover,
-body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .current-menu-item > .menu-link {
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link:hover,
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .current-menu-item > .menu-link,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link:hover,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .current-menu-item > .menu-link {
     color: #E5C158 !important;
-    background: rgba(201, 162, 39, 0.14) !important;
+    background: rgba(201, 162, 39, 0.16) !important;
     border-bottom-color: #E5C158 !important;
 }
-body.pa-sinova-classic-shell .ast-desktop .main-header-menu .ast-header-navigation-arrow svg {
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link .ast-header-navigation-arrow,
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link svg {
+    color: #E5C158 !important;
+    fill: currentColor !important;
     width: 11px;
     height: 11px;
-    color: #E5C158;
 }
-body.pa-sinova-classic-shell .ast-desktop .main-header-menu .sub-menu {
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 .sub-menu,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu .sub-menu {
     background: #ffffff !important;
     border: 1px solid #d5e6dc !important;
     border-top: 3px solid #C9A227 !important;
@@ -285,11 +294,12 @@ body.pa-sinova-classic-shell .ast-desktop .main-header-menu .sub-menu {
     overflow-y: auto;
     line-height: 1.35 !important;
 }
-body.pa-sinova-classic-shell .ast-desktop .main-header-menu > .menu-item:nth-last-child(-n+2) > .sub-menu {
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item:nth-last-child(-n+2) > .sub-menu,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item:nth-last-child(-n+2) > .sub-menu {
     left: auto !important;
     right: 0 !important;
 }
-body.pa-sinova-classic-shell .main-header-menu .sub-menu .menu-link {
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .menu-link {
     color: #043927 !important;
     font-weight: 600 !important;
     font-size: 13px !important;
@@ -297,7 +307,7 @@ body.pa-sinova-classic-shell .main-header-menu .sub-menu .menu-link {
     padding: 9px 14px !important;
     white-space: normal !important;
 }
-body.pa-sinova-classic-shell .main-header-menu .sub-menu .menu-link:hover {
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .menu-link:hover {
     background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
     color: #E5C158 !important;
 }
@@ -315,6 +325,34 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .ast-mobile-popup-inner {
 body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link {
     color: #ffffff !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Jam Real-Time & Tombol Light/Dark Mode di Topbar */
+.pa-live-clock {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    color: #E5C158;
+    font-variant-numeric: tabular-nums;
+}
+.pa-topbar-theme-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(229, 193, 88, 0.6);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    font: 700 11.5px/1.3 'Inter', system-ui, sans-serif;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.pa-topbar-theme-btn:hover,
+.pa-topbar-theme-btn[aria-pressed="true"] {
+    background: #E5C158;
+    color: #022c22;
 }
 
 /* Topbar Institusional (Tampil di Astra maupun Block Theme) */
@@ -1102,26 +1140,38 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link {
     font-weight: 700;
 }
 
-/* Dark Mode & Kontras Tinggi */
+/* Dark Mode & Kontras Tinggi (Astra + Block Theme) */
 html[data-pa-theme="dark"] body,
+html[data-pa-theme="dark"] #page,
 html[data-pa-theme="dark"] .site,
 html[data-pa-theme="dark"] .wp-site-blocks,
 html[data-pa-theme="dark"] .site-content,
+html[data-pa-theme="dark"] #primary,
+html[data-pa-theme="dark"] .ast-separate-container,
+html[data-pa-theme="dark"] .ast-separate-container .ast-article-single,
 html[data-pa-theme="dark"] article.page,
 html[data-pa-theme="dark"] article.post {
-    background-color: #0f1720 !important;
+    background-color: #0b141a !important;
     color: #e7eef2 !important;
 }
 html[data-pa-theme="dark"] .pa-shell-navwrap,
 html[data-pa-theme="dark"] .pa-shell-submenu,
-html[data-pa-theme="dark"] .pa-ticker-bar {
-    background: #13221a;
-    border-color: #2c4637;
-    color: #e6f4ee;
+html[data-pa-theme="dark"] .pa-ticker-bar,
+html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu {
+    background: #13221a !important;
+    border-color: #2c4637 !important;
+    color: #e6f4ee !important;
 }
 html[data-pa-theme="dark"] .pa-shell-menu > li > a,
 html[data-pa-theme="dark"] .pa-shell-submenu a,
-html[data-pa-theme="dark"] .pa-ticker-link { color: #e6f4ee !important; }
+html[data-pa-theme="dark"] .pa-ticker-link,
+html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .menu-link {
+    color: #e6f4ee !important;
+}
+html[data-pa-theme="dark"] body.pa-sinova-classic-shell:not(.home) .entry-title,
+html[data-pa-theme="dark"] body.pa-sinova-block-shell .wp-block-post-title {
+    color: #E5C158 !important;
+}
 html[data-pa-theme="dark"] .pa-service-card,
 html[data-pa-theme="dark"] .pa-welcome-card,
 html[data-pa-theme="dark"] .pa-news-card,
@@ -1188,15 +1238,25 @@ add_action('wp_body_open', static function () {
     $tagline = get_bloginfo('description') ?: 'Portal Keterbukaan Informasi Publik (SK Dirjen Badilag 2722/2026)';
     $phone   = $cfg['phone'] ?? '';
     $email   = $cfg['email'] ?? '';
+
+    $wibNow  = new DateTimeImmutable('now', new DateTimeZone('Asia/Jakarta'));
+    $daysId  = array('Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu');
+    $monsId  = array(1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember');
+    $clockInit = $daysId[(int) $wibNow->format('w')] . ', '
+        . $wibNow->format('j') . ' '
+        . ($monsId[(int) $wibNow->format('n')] ?? $wibNow->format('F')) . ' '
+        . $wibNow->format('Y') . ' · ' . $wibNow->format('H:i:s') . ' WIB';
     ?>
 <div class="pa-shell-topbar">
     <div class="pa-shell-inner">
-        <span>PTSP: <?php echo esc_html($phone ?: 'Senin–Jumat 08.00–16.30 WIB'); ?> · <?php echo esc_html($email ?: 'info@pengadilan.go.id'); ?></span>
+        <span id="pa-live-clock" class="pa-live-clock" title="Waktu Indonesia Barat"><?php echo esc_html($clockInit); ?></span>
         <div class="pa-shell-topbar-links">
+            <span>PTSP: <?php echo esc_html($phone ?: 'Senin–Jumat'); ?></span>
             <a href="<?php echo esc_url($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'); ?>" target="_blank" rel="noopener noreferrer">SIPP</a>
             <a href="<?php echo esc_url($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer">e-Court</a>
             <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Survei Badilag</a>
             <a href="<?php echo esc_url(wp_login_url()); ?>">Login Admin</a>
+            <button type="button" id="pa-topbar-theme-btn" class="pa-topbar-theme-btn" aria-pressed="false" title="Ubah Mode Terang/Gelap">🌙 Mode Gelap</button>
         </div>
     </div>
 </div>
@@ -1325,11 +1385,25 @@ add_action('wp_footer', static function () {
 (function(){
     var root = document.documentElement;
     var btnDark = document.getElementById('pa-btn-dark');
+    var btnTopTheme = document.getElementById('pa-topbar-theme-btn');
     var btnContrast = document.getElementById('pa-btn-contrast');
     var btnUp = document.getElementById('pa-btn-font-up');
     var btnReset = document.getElementById('pa-btn-font-reset');
     var menuToggle = document.getElementById('pa-shell-menu-toggle');
     var menuList = document.getElementById('pa-shell-menu-list');
+    var clockEl = document.getElementById('pa-live-clock');
+
+    if(clockEl){
+        var hari = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+        var bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
+        var tickClock = function(){
+            var d = new Date();
+            clockEl.textContent = hari[d.getDay()] + ', ' + d.getDate() + ' ' + bulan[d.getMonth()] + ' ' + d.getFullYear() + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' WIB';
+        };
+        tickClock();
+        setInterval(tickClock, 1000);
+    }
 
     if(menuToggle && menuList){
         menuToggle.addEventListener('click', function(){
@@ -1352,16 +1426,17 @@ add_action('wp_footer', static function () {
         var dark = root.getAttribute('data-pa-theme') === 'dark';
         var hi = root.getAttribute('data-pa-contrast') === 'high';
         if(btnDark){ btnDark.setAttribute('aria-pressed', dark ? 'true' : 'false'); btnDark.textContent = dark ? 'Mode Terang' : 'Mode Gelap'; }
+        if(btnTopTheme){ btnTopTheme.setAttribute('aria-pressed', dark ? 'true' : 'false'); btnTopTheme.textContent = dark ? '☀️ Mode Terang' : '🌙 Mode Gelap'; }
         if(btnContrast){ btnContrast.setAttribute('aria-pressed', hi ? 'true' : 'false'); }
     }
-    if(btnDark){
-        btnDark.addEventListener('click', function(){
-            var next = root.getAttribute('data-pa-theme') === 'dark' ? '' : 'dark';
-            if(next) root.setAttribute('data-pa-theme', next); else root.removeAttribute('data-pa-theme');
-            try{ localStorage.setItem('pa_starter_theme', next); }catch(e){}
-            syncState();
-        });
+    function toggleDarkMode(){
+        var next = root.getAttribute('data-pa-theme') === 'dark' ? '' : 'dark';
+        if(next) root.setAttribute('data-pa-theme', next); else root.removeAttribute('data-pa-theme');
+        try{ localStorage.setItem('pa_starter_theme', next); }catch(e){}
+        syncState();
     }
+    if(btnDark){ btnDark.addEventListener('click', toggleDarkMode); }
+    if(btnTopTheme){ btnTopTheme.addEventListener('click', toggleDarkMode); }
     if(btnContrast){
         btnContrast.addEventListener('click', function(){
             var next = root.getAttribute('data-pa-contrast') === 'high' ? '' : 'high';
