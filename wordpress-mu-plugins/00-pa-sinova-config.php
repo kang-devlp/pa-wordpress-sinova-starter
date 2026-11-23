@@ -281,6 +281,56 @@ function pa_sinova_run_starter_seeder(): array {
         }
     }
 
+    // Buat atau lengkapi Halaman Beranda Eksekutif (Bebas strip KSES) jika belum diatur
+    $frontSlug = 'beranda';
+    $tplPaths  = array(
+        ABSPATH . 'sinova-starter-kit/wordpress-templates/beranda-blocks-starter.html',
+        dirname(__DIR__) . '/wordpress-templates/beranda-blocks-starter.html',
+    );
+    $frontHtml = '';
+    foreach ($tplPaths as $tp) {
+        if (is_file($tp)) {
+            $frontHtml = (string) file_get_contents($tp);
+            break;
+        }
+    }
+    if ($frontHtml === '') {
+        $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h2 class=\"pa-hero-title\">Portal Resmi Informasi &amp; Layanan Peradilan</h2><p class=\"pa-hero-lead\">Akses transparan informasi perkara, anggaran, kinerja SAKIP, serta arsip dokumen standar SINOVA Ditjen Badilag.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Hasil Survei Pelayanan</a></div></section>\n</div>\n<!-- /wp:html -->";
+    }
+    $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
+    if ($frontId <= 0 || !get_post_status($frontId)) {
+        $existingFront = get_page_by_path($frontSlug);
+        $wasKses = has_filter('content_save_pre', 'wp_filter_post_kses');
+        if ($wasKses && function_exists('kses_remove_filters')) {
+            kses_remove_filters();
+        }
+        if ($existingFront instanceof WP_Post) {
+            $frontId = (int) $existingFront->ID;
+        } else {
+            $frontId = (int) wp_insert_post(array(
+                'post_type'    => 'page',
+                'post_status'  => 'publish',
+                'post_title'   => 'Beranda',
+                'post_name'    => $frontSlug,
+                'post_content' => $frontHtml,
+            ));
+            if ($frontId > 0) {
+                $createdCount++;
+            }
+        }
+        if ($wasKses && function_exists('kses_init_filters')) {
+            kses_init_filters();
+        }
+        if ($frontId > 0) {
+            $seeded['static:beranda'] = $frontId;
+            update_option('pa_sinova_seeded_pages', $seeded, false);
+        }
+    }
+    if ($frontId > 0 && get_option('show_on_front') !== 'page') {
+        update_option('show_on_front', 'page');
+        update_option('page_on_front', $frontId);
+    }
+
     return array('pages_created' => $createdCount, 'total_mapped' => count($seeded), 'menu_items' => $menuCreated);
 }
 
