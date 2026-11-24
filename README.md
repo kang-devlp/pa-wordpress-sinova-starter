@@ -146,25 +146,55 @@ Jika satuan kerja sudah memiliki website WordPress berisi berita, galeri, serta 
 
 ---
 
-## Skenario C: Migrasi Bertahap dari Joomla ke WordPress
+## Skenario C: Panduan Lengkap Migrasi Joomla ke WordPress (Bebas Kehilangan Data)
 
-Untuk satuan kerja yang ingin beralih dari **Joomla (3.x / 4.x)** ke WordPress agar konten berita dan arsip pengumuman bertahun-tahun tetap terbawa utuh:
+Bagi satuan kerja yang ingin beralih dari **Joomla (versi 1.5 s.d. 5.x)** ke WordPress agar **ratusan hingga ribuan arsip berita, foto, dan pengumuman historis bertahun-tahun tetap utuh 100%**, ikuti urutan standar berikut.
 
-1. **Kerjakan di Lingkungan Uji (*Staging* / Lokal):**
-   * Jangan mematikan website Joomla yang sedang online. Siapkan WordPress baru beserta tema gratis **Astra** di server lokal (*Laragon/XAMPP*) atau subdomain sementara.
-2. **Impor Artikel, Kategori, dan Media Joomla:**
-   * Pasang plugin gratis resmi **`FG Joomla to WordPress`** dari menu **WP Admin → Plugins → Add New**.
-   * Masukkan kredensial koneksi *read-only* database MySQL Joomla lama (prefix tabel umumnya `jos_` atau sesuai konfigurasi Joomla Anda) serta URL website Joomla asal untuk menarik seluruh berita, halaman profil, kategori, dan gambar ke WordPress beserta tanggal terbit aslinya.
-   * Setelah selesai memindahkan konten, nonaktifkan dan hapus plugin importer agar WordPress tetap ringan.
-3. **Salin Berkas PDF Lokal & Jaga Tautan Lama (*301 Redirect*):**
-   * Salin folder dokumen lama dari server Joomla (umumnya di direktori `images/` atau `files/`) ke path yang sama pada WordPress agar tautan PDF di dalam berita lama tetap dapat diunduh.
-   * Bila alamat halaman utama berubah (misalnya dari `/index.php/profil/visi-misi` ke `/visi-dan-misi/`), pasang aturan *Redirect 301* melalui `.htaccess` atau plugin *Redirection* supaya tautan dari mesin pencari tidak menghasilkan halaman tidak ditemukan (`404`).
-4. **Pasang Starter Kit & Rapikan Arsip:**
-   * Salin seluruh 6 berkas `.php` dan folder `assets/` dari `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
-   * Jalankan **Seeder 1-Klik** (atau gunakan **Tab Migrasi & Adopsi** untuk memindai tautan Google Drive/PDF yang ikut terbawa di artikel hasil impor Joomla agar masuk ke 23 modul dokumen terstruktur).
-   * Berita lama hasil migrasi Joomla secara otomatis muncul pada blok **Berita Terkini** di Beranda dan terindeks oleh fitur pencarian website.
-5. **Pengujian Sebelum Pengalihan Domain (*Cut-Over*):**
-   * Periksa seluruh tautan melalui **WP Admin → SINOVA Hub → Dashboard 3 Pilar & 35 Kriteria**, pastikan SSL/HTTPS aktif pada domain produksi, barulah pindahkan WordPress hasil migrasi ke domain utama.
+> 📖 **Panduan Detail:** Untuk tutorial bergambar langkah demi langkah dan checklist lengkap, baca: **[docs/PANDUAN-MIGRASI-JOOMLA-KE-WORDPRESS.md](docs/PANDUAN-MIGRASI-JOOMLA-KE-WORDPRESS.md)**.
+
+### 1. Tool Resmi yang Digunakan: Plugin `FG Joomla to WordPress`
+Gunakan plugin resmi **`FG Joomla to WordPress`** (tersedia gratis di direktori plugin WordPress resmi):
+* **Pemasangan:** Buka **WP Admin → Plugins → Add New**, cari `FG Joomla to WordPress`, lalu klik **Install Now** dan **Activate**.
+* **Persiapan Database:** Buka berkas `configuration.php` di server Joomla lama untuk melihat `$host`, `$user`, `$password`, `$db`, dan `$dbprefix` (misal: `jos_`).
+* **Tips Koneksi Aman (Bebas Blokir Port 3306):** Ekspor database Joomla menjadi berkas `.sql` via phpMyAdmin hosting lama, lalu impor ke database MySQL lokal/server WordPress baru. Masukkan host `localhost` pada form importer agar proses impor tidak terganggu firewall hosting.
+* **Jalankan Uji & Impor:** Buka **Tools → Import → Joomla (FG)**, klik **Test the database connection**. Setelah sukses hijau, centang *Posts*, *Categories*, *Import images*, dan *Keep original upload dates*, lalu klik **Import content from Joomla to WordPress**.
+* **Perbaiki Tautan Internal:** Klik tombol **Modify internal links** setelah proses selesai, kemudian nonaktifkan & hapus plugin importer tersebut.
+
+### 2. Urutan Langkah Pasang Starter Kit Setelah Migrasi Selesai
+Setelah artikel dan foto dari Joomla berhasil masuk ke WordPress:
+1. **Atur Permalink WordPress (Wajib):** Buka **Settings → Permalinks**, pilih format **Post name** (`/%postname%/`), lalu klik **Save Changes**.
+2. **Salin Berkas Starter Kit:** Salin seluruh 6 berkas `.php` dan folder `assets/` dari `wordpress-mu-plugins/` ke direktori `wp-content/mu-plugins/` di server WordPress Anda.
+3. **Buka Ruang Operator:** Masuk ke **WP Admin → SINOVA Hub**.
+
+### 3. Wajib Aktifkan "Mode Adopsi" Sebelum Menjalankan Seeder!
+> [!CAUTION]
+> **JANGAN LANGSUNG KLIK SEEDER STANDAR!**  
+> Menjalankan seeder tanpa Mode Adopsi berisiko mengganti menu navigasi lama atau menimpa tata letak Beranda yang sudah Anda siapkan.
+
+1. Buka **WP Admin → SINOVA Hub → tab Migrasi & Adopsi**.
+2. Beri tanda centang pada opsi:  
+   ☑ **"Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)"**
+3. Klik tombol **"Simpan Mode & Jalankan Seeder Aman"**.
+4. **Manfaat Mode Adopsi:**
+   * Seluruh berita dan kategori hasil impor Joomla tetap utuh dan aman.
+   * Menu navigasi eksisting serta Beranda tidak diubah.
+   * Mode CSP otomatis beralih ke `compat` agar skrip tema lama tidak terblokir.
+   * Sistem hanya menambahkan 23 modul dokumen publik (LRA, DIPA, SAKIP, dll.) yang belum ada di belakang layar.
+5. **Pindai Tautan Dokumen Lama:** Gunakan formulir **Ekstrak & Impor Tautan Dokumen** di tab yang sama untuk menarik tautan Google Drive / PDF dari dalam artikel berita Joomla lama langsung ke dalam tabel arsip terstruktur SINOVA.
+
+### 4. Matriks Troubleshooting Error Umum (Solusi Cepat)
+
+| Gejala / Error | Penyebab Utama | Solusi Praktis |
+|---|---|---|
+| **`Could not connect to the Joomla database`** | Port MySQL 3306 remote ditutup firewall cPanel hosting asal. | Ekspor database Joomla ke `.sql`, impor ke phpMyAdmin lokal/server baru, dan gunakan host `localhost` di FG Joomla. |
+| **`Maximum execution time exceeded` / 504 Gateway Timeout** | Berita dan foto sangat banyak (ribuan) melampaui batas default PHP (30s). | Naikkan `max_execution_time = 300` dan `memory_limit = 512M` di `php.ini`, lalu klik tombol **Resume import** di FG Joomla. |
+| **Gambar Berita Pecah (*Broken Images*)** | Opsi *Import images* lupa dicentang atau server lama memblokir hotlink. | Salin folder `images/` dari server Joomla via FTP/cPanel ke `wp-content/uploads/imported-joomla/`. |
+| **Tautan Berita Menjadi Error 404** | Pola URL lama Joomla (`/index.php/berita/...`) berbeda dengan format WordPress (`/%postname%/`). | Pasang plugin gratis **Redirection** dan buat aturan regex: Source `^/index.php/(.*)$` → Target `/$1`. |
+| **Layar Putih (*White Screen*) / Error 500** | Versi PHP hosting masih < 8.1, atau folder `assets/` lupa disalin. | Upgrade PHP hosting ke PHP 8.2 atau 8.3, dan pastikan folder `wp-content/mu-plugins/assets/` ikut disalin lengkap. |
+| **Menu Hilang Setelah Klik Seeder** | Operator lupa mencentang **Mode Adopsi** sebelum klik seeder. | Masuk ke **Appearance → Menus** untuk memilih kembali menu lama Anda, lalu centang Mode Adopsi di tab **Migrasi & Adopsi**. |
+
+### 5. Pengujian Sebelum Pengalihan Domain (*Cut-Over*)
+Periksa seluruh tautan melalui **WP Admin → SINOVA Hub → Dashboard 3 Pilar & 35 Kriteria** (target skor &ge; 90), pastikan sertifikat SSL/HTTPS aktif pada domain resmi `.go.id`, lalu lakukan *pointing* DNS domain utama ke WordPress hasil migrasi.
 
 ---
 
