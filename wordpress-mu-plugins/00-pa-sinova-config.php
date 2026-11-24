@@ -23,6 +23,8 @@ function pa_sinova_get_settings(): array {
         'direktori_url'            => 'https://putusan3.mahkamahagung.go.id/',
         'survey_url'               => 'https://survei.badilag.net/',
         'aco_url'                  => 'https://cctv.badilag.net/',
+        'aco_logo_url'             => '',
+        'aco_float_enabled'        => '1',
         'rss_ma_url'               => 'https://kepaniteraan.mahkamahagung.go.id/?format=feed&type=rss',
         'rss_badilag_url'          => 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik?format=feed&type=rss',
         'custom_login_slug'        => '',
@@ -1217,7 +1219,7 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
             }
         }
         if ($frontHtml === '') {
-            $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h1 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h1><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_aco_card]\n  [pa_sinova_welcome_section]\n  [pa_sinova_zi_grid]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
+            $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h1 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h1><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_welcome_section]\n  [pa_sinova_zi_grid]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
         }
         $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
         if ($frontId <= 0 || !get_post_status($frontId)) {
@@ -1246,6 +1248,10 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
             if ($frontId > 0) {
                 $seeded['static:beranda'] = $frontId;
             }
+        }
+
+        if (function_exists('term_exists') && function_exists('wp_insert_term') && !term_exists('pengumuman', 'category')) {
+            wp_insert_term('Pengumuman', 'category', array('slug' => 'pengumuman'));
         }
 
         $postCounts = wp_count_posts('post');
@@ -1932,6 +1938,8 @@ function pa_sinova_render_admin_page(): void {
                 'direktori_url'            => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
                 'survey_url'               => esc_url_raw(wp_unslash((string) ($_POST['survey_url'] ?? ''))),
                 'aco_url'                  => esc_url_raw(wp_unslash((string) ($_POST['aco_url'] ?? ($cur['aco_url'] ?? '')))),
+                'aco_logo_url'             => esc_url_raw(wp_unslash((string) ($_POST['aco_logo_url'] ?? ''))),
+                'aco_float_enabled'        => !empty($_POST['aco_float_enabled']) ? '1' : '0',
                 'rss_ma_url'               => $rssMaCheck['url'],
                 'rss_badilag_url'          => $rssBadCheck['url'],
                 'enforce_mfa'              => (string) ($cur['enforce_mfa'] ?? '0'),
@@ -3376,7 +3384,9 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>URL e-Court</th><td><input type="url" name="ecourt_url" class="regular-text" value="<?php echo esc_attr($cfg['ecourt_url']); ?>"></td></tr>
                             <tr><th>URL Direktori Putusan</th><td><input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>"></td></tr>
                             <tr><th>URL Survei Badilag</th><td><input type="url" name="survey_url" class="regular-text" value="<?php echo esc_attr($cfg['survey_url']); ?>"></td></tr>
-                            <tr><th>URL CCTV Online (ACO)</th><td><input type="url" name="aco_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" placeholder="https://cctv.badilag.net/"><br><small style="color:#64748b;">Tautan Access CCTV Online Badilag / ruang PTSP Satker (kosongkan untuk menyembunyikan kartu ACO).</small></td></tr>
+                            <tr><th>URL CCTV Online (ACO)</th><td><input type="url" name="aco_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" placeholder="https://cctv.badilag.net/"><br><small style="color:#64748b;">Tautan Access CCTV Online Badilag / ruang PTSP Satker (kosongkan untuk menyembunyikan tautan &amp; lencana ACO).</small></td></tr>
+                            <tr><th>Logo CCTV ACO (Opsional)</th><td><input type="url" name="aco_logo_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_logo_url'] ?? ''); ?>" placeholder="Kosongkan untuk memakai animasi CCTV ACO bawaan"><br><small style="color:#64748b;">Biarkan kosong untuk memakai gambar GIF CCTV ACO lokal bawaan (<code>assets/cctv-aco.gif</code>), atau isi URL gambar Media Library satker sendiri.</small></td></tr>
+                            <tr><th>Dock Floating CCTV ACO</th><td><label><input type="checkbox" name="aco_float_enabled" value="1" <?php checked(($cfg['aco_float_enabled'] ?? '1') !== '0'); ?>> Tampilkan lencana CCTV ACO mini di tepi kanan layar</label></td></tr>
                             <tr><th>URL SIWAS &amp; SP4N-LAPOR!</th><td>
                                 <input type="url" name="siwas_url" class="regular-text" value="<?php echo esc_attr($cfg['siwas_url'] ?? 'https://siwas.mahkamahagung.go.id/'); ?>" placeholder="https://siwas.mahkamahagung.go.id/"><br>
                                 <input type="url" name="lapor_url" class="regular-text" value="<?php echo esc_attr($cfg['lapor_url'] ?? 'https://www.lapor.go.id/'); ?>" placeholder="https://www.lapor.go.id/" style="margin-top:4px;">

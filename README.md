@@ -30,8 +30,8 @@ Seluruh fitur dikemas dalam 6 berkas `mu-plugins` tanpa ketergantungan plugin ko
 
 ## Ringkasan Kemampuan
 
-1. **Tampilan Publik Bersih, Modern, Formal, WCAG 2.2 & Independen CDN:** Seluruh istilah teknis penilaian hanya muncul di ruang admin operator (**WP Admin → SINOVA Hub**) dan tidak ditampilkan ke masyarakat. Tampilan mengusung **6 Menu Utama Standar** (*Beranda*, *Profil Pengadilan*, *Layanan Hukum*, *Transparansi*, *Layanan Publik & Pengaduan*, *Berita & Publikasi*), pilihan **Palet Aksen Visual** (Royal Gold `#C9A227` atau Oranye Badilag `#ff9900`), keterangan hover-clean & **efek parallax ringan berbasis GPU**, **Mode Terang & Mode Gelap**, jam WIB + **indikator status PTSP**, pita **Informasi Serta-Merta (KMA 2-144/2022)**, kotak pencarian & **Command Palette `Ctrl+K`** instan, **Pratinjau Dokumen PDF/Drive di Halaman (Modal)**, **Meta Description dinamis + JSON-LD (`GovernmentOrganization`, `WebSite`, `NewsArticle`, `BreadcrumbList`) + Open Graph + Twitter Card + Web App Manifest**, font sistem **tanpa ketergantungan Google Fonts CDN eksternal**, kartu **Access CCTV Online (ACO)** berlogo resmi, kartu **6 Area Zona Integritas dinamis (`[pa_sinova_zi_grid]`)**, halaman wajib **KMA 2-144/2022** (`/disabilitas/`, `/informasi-serta-merta/`, `/informasi-tersedia-setiap-saat/`, `/layanan-pengaduan/`, `/zona-integritas/`), serta **Panel Aksesibilitas WCAG 2.2 Paripurna** (pembesar teks, kontras tinggi, mode gelap, spasi disleksia, garis bawah tautan, monokrom, hentikan animasi, & pembaca suara Bahasa Indonesia).
-2. **Umpan RSS Resmi Mahkamah Agung RI & Ditjen Badilag (`[pa_official_announcements]`):** Menampilkan 2 kolom pengumuman resmi terbaru dari Kepaniteraan Mahkamah Agung RI dan Ditjen Badilag secara otomatis dengan perlindungan **SSRF-safe** (pembatasan ketat suffix domain `.mahkamahagung.go.id` / `.badilag.net` / `.go.id` serta validasi IP publik di setiap hop redirect) dan pembaruan terjadwal.
+1. **Tampilan Publik Bersih, Modern, Formal, WCAG 2.2 & Independen CDN:** Seluruh istilah teknis penilaian hanya muncul di ruang admin operator (**WP Admin → SINOVA Hub**) dan tidak ditampilkan ke masyarakat. Tampilan mengusung header 2 baris *full-bleed* yang elegan dengan **6 Menu Utama Standar** (*Beranda*, *Profil Pengadilan*, *Layanan Hukum*, *Transparansi*, *Layanan Publik & Pengaduan*, *Berita & Publikasi*) dan **Mega Menu 4-kolom mengambang** (simetris 2/3/4 kolom tanpa ikon berlebih), **Pencarian Terpadu `Ctrl+K`** tunggal (pencarian menu, 23 arsip dokumen, layanan, & pencarian penuh WordPress), pilihan **Palet Aksen Visual** (Royal Gold `#C9A227` atau Oranye Badilag `#ff9900`), keterangan hover-clean & **efek parallax ringan berbasis GPU**, **Mode Terang & Mode Gelap**, jam WIB + **indikator status PTSP**, pita **Informasi Serta-Merta (KMA 2-144/2022)**, **Pratinjau Dokumen PDF/Drive di Halaman (Modal)**, **Meta Description dinamis + JSON-LD (`GovernmentOrganization`, `WebSite`, `NewsArticle`, `BreadcrumbList`) + Open Graph + Twitter Card + Web App Manifest**, font sistem **tanpa ketergantungan Google Fonts CDN eksternal**, **Dock Floating mini Access CCTV Online (ACO)** beraset GIF lokal (`assets/cctv-aco.gif`, dapat diatur/diganti di WP Admin dan ramah `Stop Animasi`), pemisahan **Berita Terkini Satker** dengan **Pengumuman**, kartu **6 Area Zona Integritas dinamis (`[pa_sinova_zi_grid]`)**, tombol kembali ke atas rapi, halaman wajib **KMA 2-144/2022** (`/disabilitas/`, `/informasi-serta-merta/`, `/informasi-tersedia-setiap-saat/`, `/layanan-pengaduan/`, `/zona-integritas/`), serta **Panel Aksesibilitas WCAG 2.2 Paripurna** (pembesar teks, kontras tinggi, mode gelap, spasi disleksia, garis bawah tautan, monokrom, hentikan animasi, & pembaca suara Bahasa Indonesia).
+2. **Pengumuman Satker & Umpan RSS Resmi 3 Kolom Sejajar (`[pa_official_announcements]`):** Menampilkan **3 kolom pengumuman sejajar** secara otomatis: **Pengumuman Satker** (kategori WP `pengumuman`, informasi serta-merta, & panggilan ghaib), **Mahkamah Agung RI (RSS)**, dan **Ditjen Badilag MA RI (RSS)** — dilengkapi perlindungan **SSRF-safe** (pembatasan ketat suffix domain `.mahkamahagung.go.id` / `.badilag.net` / `.go.id` serta validasi IP publik di setiap hop redirect) dan pembaruan terjadwal.
 3. **Data Operasional Terstruktur & Integrasi Read-Only SIPP Opsional:** Mengelola **Jadwal Sidang Harian** (`[pa_jadwal_sidang]`), **Direktori Hakim & Pegawai** (`[pa_pegawai_grid]`), **Panggilan Ghaib Pasal 27** (`[pa_panggilan_ghaib]`), serta **Statistik Perkara Bulanan** (`[pa_statistik_perkara]`) melalui tabel database terstruktur lengkap dengan filter ARIA aksesibel di frontend serta dukungan opsional pembacaan *read-only* langsung dari database SIPP (`PA_SIPP_DB_*`).
 4. **Dashboard 3 Pilar SINOVA + Standar Web Modern Chrome & Ekspor Bukti:** Menghitung otomatis skor berbobot **3 Pilar** (*60% Kualitas & Kepatuhan Konten Wajib 35 Kriteria + KMA 2-144*, *20% Desain UI/UX 2-Click Rule & WCAG 2.2*, *20% Performa, Keamanan & Standar Chrome*) beserta predikat (**Sangat Baik / Excellent** &ge; 90), menyediakan tombol **Ekspor Bukti CSV** dan **Laporan JSON 3 Pilar**, tombol **Salin URL**, pemetaan URL lama, dan pembagian **3 peran operator RBAC** (`pa_kepaniteraan`, `pa_kesekretariatan`, `pa_humas`).
 5. **Dukungan Migrasi & Adopsi Situs Lama (Non-Destruktif):**
@@ -53,13 +53,15 @@ sinova-starter-kit/
 ├── LICENSE
 ├── .gitignore
 ├── .htaccess.hardened.example             # Contoh aturan hardening Apache, gzip, & browser caching
-├── wordpress-mu-plugins/                  # Salin semua 6 berkas ke wp-content/mu-plugins/
+├── wordpress-mu-plugins/                  # Salin semua 6 berkas PHP + folder assets/ ke wp-content/mu-plugins/
 │   ├── 00-pa-sinova-config.php            # Konfigurasi satker, Security Headers/CSP helper, Seeder, FIM, & Audit 3 Pilar
 │   ├── pa-sinova-hub.php                  # Mesin 23 modul dokumen, kartu ZI [pa_sinova_zi_grid], modal pratinjau, & REST HMAC
-│   ├── pa-official-feeds-and-data.php     # Umpan RSS resmi MA RI & Badilag (SSRF-safe), tabel operasional, & SEO JSON-LD
+│   ├── pa-official-feeds-and-data.php     # Pengumuman Satker + RSS MA RI & Badilag 3 kolom (SSRF-safe), data operasional, & SEO JSON-LD
 │   ├── pa-home-page-cache.php             # Cache HTML Early-Serve + CSP Nonce + ETag/304 + Gzip + [waktu_render]
-│   ├── pa-ui-performance-a11y.php         # Desain zero-CDN, CWV, Panel WCAG 2.2 Paripurna, & Command Palette Ctrl+K (Trusted Types)
-│   └── pa-security-hardening.php          # MFA TOTP RFC 6238, security.txt, manifest, password kuat+simbol, custom login URL, & WAF
+│   ├── pa-ui-performance-a11y.php         # Header/Mega Menu 4 kolom, WCAG 2.2 Paripurna, Dock ACO mini, & Pencarian Terpadu Ctrl+K
+│   ├── pa-security-hardening.php          # MFA TOTP RFC 6238, security.txt, manifest, password kuat+simbol, custom login URL, & WAF
+│   └── assets/
+│       └── cctv-aco.gif                   # Aset GIF lokal Dock Floating Access CCTV Online (ACO) Badilag
 ├── wordpress-templates/
 │   └── beranda-blocks-starter.html        # Kerangka HTML halaman Beranda standar Pengadilan Agama (H1 tunggal + [pa_sinova_zi_grid])
 ├── docs/
@@ -80,8 +82,8 @@ Cocok bagi satuan kerja yang membangun portal dari awal di hosting cPanel/Direct
 ### Langkah 1: Pasang Folder `mu-plugins`
 1. Buka direktori instalasi WordPress Anda (`public_html/wp-content/` atau folder proyek lokal).
 2. Buat folder **`mu-plugins`** jika belum tersedia.
-3. Salin seluruh berkas `.php` dari `wordpress-mu-plugins/` ke dalam `wp-content/mu-plugins/`.
-   *(Seluruh berkas di `mu-plugins` aktif otomatis tanpa perlu tombol Activate.)*
+3. Salin seluruh berkas `.php` **beserta folder `assets/`** (`assets/cctv-aco.gif`) dari `wordpress-mu-plugins/` ke dalam `wp-content/mu-plugins/`.
+   *(Seluruh berkas `.php` di `mu-plugins` aktif otomatis tanpa perlu tombol Activate.)*
 
 ### Langkah 2: Atur Struktur Permalink
 1. Buka **WP Admin → Settings (Pengaturan) → Permalinks**.
@@ -89,7 +91,7 @@ Cocok bagi satuan kerja yang membangun portal dari awal di hosting cPanel/Direct
 
 ### Langkah 3: Isi Identitas Satker & Jalankan Seeder 1-Klik
 1. Buka **WP Admin → SINOVA Hub → tab Identitas Satker & Seeder 1-Klik**.
-2. Lengkapi **Nama Satker**, URL logo (opsional), alamat kantor, telepon/WA PTSP, email, jam sidang, sambutan pimpinan, serta tautan **SIPP**, **e-Court**, **Direktori Putusan**, **Survei Pelayanan**, dan **URL CCTV Online (ACO)** (`https://cctv.badilag.net/` atau tautan ruangan PTSP satker), lalu klik **Simpan Pengaturan**.
+2. Lengkapi **Nama Satker**, URL logo (opsional), alamat kantor, telepon/WA PTSP, email, jam sidang, sambutan pimpinan, tautan **SIPP**, **e-Court**, **Direktori Putusan**, **Survei Pelayanan**, serta **URL CCTV Online (ACO)** (`https://cctv.badilag.net/` atau tautan ruangan PTSP satker), **Logo CCTV ACO** (opsional, bawaan memakai `assets/cctv-aco.gif` lokal), & centang **Dock Floating CCTV ACO**, lalu klik **Simpan Pengaturan**.
 3. Klik **"Generate Halaman, Beranda & Menu (1-Klik)"** untuk membuat 23 halaman modul dokumen, 17 halaman profil/wajib bertanda `[LENGKAPI]`, halaman Beranda, statistik pengunjung, 3 artikel awal, serta `Menu Utama` pada Astra.
 
 ### Langkah 4: Kelola Dokumen, Edit/Hapus Massal & Lengkapi Halaman Profil
@@ -131,7 +133,7 @@ Secara bawaan, starter kit **tidak menampilkan tautan Login Admin** pada topbar 
 Jika satuan kerja sudah memiliki website WordPress berisi berita, galeri, serta tata letak Elementor/Astra yang tidak ingin diubah tampilannya, Anda tetap dapat memakai fitur arsip dokumen, dashboard kepatuhan, dan keamanannya secara aman:
 
 1. **Cadangkan Website Terlebih Dahulu:** Ekspor database melalui phpMyAdmin (`.sql`) dan simpan salinan folder `wp-content/` sebelum menambahkan berkas baru.
-2. **Pasang Folder `mu-plugins`:** Salin 6 berkas `.php` dari `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
+2. **Pasang Folder `mu-plugins`:** Salin seluruh 6 berkas `.php` **beserta folder `assets/`** dari `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
 3. **Aktifkan Mode Adopsi Situs Lama (Wajib sebelum menjalankan Seeder):**
    * Buka **WP Admin → SINOVA Hub → tab Migrasi & Adopsi**.
    * Centang opsi **"Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)"**, lalu klik **Simpan Mode & Jalankan Seeder Aman**.
@@ -158,7 +160,7 @@ Untuk satuan kerja yang ingin beralih dari **Joomla (3.x / 4.x)** ke WordPress a
    * Salin folder dokumen lama dari server Joomla (umumnya di direktori `images/` atau `files/`) ke path yang sama pada WordPress agar tautan PDF di dalam berita lama tetap dapat diunduh.
    * Bila alamat halaman utama berubah (misalnya dari `/index.php/profil/visi-misi` ke `/visi-dan-misi/`), pasang aturan *Redirect 301* melalui `.htaccess` atau plugin *Redirection* supaya tautan dari mesin pencari tidak menghasilkan halaman tidak ditemukan (`404`).
 4. **Pasang Starter Kit & Rapikan Arsip:**
-   * Salin 6 berkas `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
+   * Salin seluruh 6 berkas `.php` dan folder `assets/` dari `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
    * Jalankan **Seeder 1-Klik** (atau gunakan **Tab Migrasi & Adopsi** untuk memindai tautan Google Drive/PDF yang ikut terbawa di artikel hasil impor Joomla agar masuk ke 23 modul dokumen terstruktur).
    * Berita lama hasil migrasi Joomla secara otomatis muncul pada blok **Berita Terkini** di Beranda dan terindeks oleh fitur pencarian website.
 5. **Pengujian Sebelum Pengalihan Domain (*Cut-Over*):**
@@ -188,7 +190,7 @@ Jika satuan kerja memiliki aplikasi manajemen internal terpisah berbasis Laravel
 
 Bila satuan kerja sudah memasang versi sebelumnya dan ingin menerapkan pembaruan ini (misalnya fitur **Edit**, **Hapus Massal Checklist**, pengamanan Chrome Modern Web, & halaman wajib KMA 2-144/2022) **tanpa menghilangkan data yang sudah ada**:
 
-1. **Non-Destruktif (Aman untuk Database):** Cukup unduh/tarik pembaruan dari repositori ini lalu salin & timpa seluruh 6 berkas `.php` di `wordpress-mu-plugins/` ke folder `wp-content/mu-plugins/` pada server WordPress Anda. Tabel dokumen (`pa_sinova_documents`), tabel data operasional (`pa_portal_records`), berita, halaman, menu, dan pengaturan tidak akan terhapus.
+1. **Non-Destruktif (Aman untuk Database):** Cukup unduh/tarik pembaruan dari repositori ini lalu salin & timpa seluruh 6 berkas `.php` **beserta folder `assets/`** dari `wordpress-mu-plugins/` ke folder `wp-content/mu-plugins/` pada server WordPress Anda. Tabel dokumen (`pa_sinova_documents`), tabel data operasional (`pa_portal_records`), berita, halaman, menu, dan pengaturan tidak akan terhapus.
 2. **Bersihkan Cache HTML (Bila Aktif):** Hapus berkas `.html` sementara di `wp-content/cache/pa-pages/` (atau klik **Purge / Regenerasi** dari panel cache / simpan ulang pengaturan di WP Admin).
 3. **Lengkapi Halaman KMA Baru & Perbarui Baseline FIM (Opsional):**
    * Jalankan kembali **Seeder 1-Klik** (dengan atau tanpa Mode Adopsi) jika halaman baru (`/informasi-serta-merta/`, `/informasi-tersedia-setiap-saat/`, `/layanan-pengaduan/`, `/zona-integritas/`) belum ada — halaman yang sudah terbit dan telah disunting tidak akan ditimpa.

@@ -225,8 +225,12 @@ add_shortcode('pa_sinova_welcome_section', static function () {
     return (string) ob_get_clean();
 });
 
-// 3b. Shortcode [pa_sinova_aco_card]: Logo Resmi & Akses CCTV ACO Ditjen Badilag
-add_shortcode('pa_sinova_aco_card', static function () {
+// 3b. Shortcode [pa_sinova_aco_card]: Disembunyikan dari beranda bawaan karena tautan CCTV ACO sudah tersedia di Topbar & Footer
+add_shortcode('pa_sinova_aco_card', static function ($atts = array()) {
+    $cfgAtts = shortcode_atts(array('show' => '0'), $atts, 'pa_sinova_aco_card');
+    if ($cfgAtts['show'] !== '1') {
+        return '';
+    }
     $cfg    = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $acoUrl = trim((string) ($cfg['aco_url'] ?? 'https://cctv.badilag.net/'));
     if ($acoUrl === '') {
@@ -234,45 +238,40 @@ add_shortcode('pa_sinova_aco_card', static function () {
     }
     ob_start();
     ?>
-    <section class="pa-aco-banner" aria-label="Access CCTV Online (ACO) Ditjen Badilag">
-        <div class="pa-aco-logo" aria-hidden="true">
-            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="2" width="60" height="60" rx="14" fill="#022c22" stroke="#E5C158" stroke-width="2.5"/>
-                <path d="M15 26L40 17L45 29L20 38L15 26Z" fill="#056e4f" stroke="#E5C158" stroke-width="2" stroke-linejoin="round"/>
-                <path d="M45 22L51 20V28L45 26" fill="#C9A227"/>
-                <path d="M27 36V44H17" stroke="#E5C158" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="17" cy="44" r="2.5" fill="#E5C158"/>
-                <circle cx="49" cy="13" r="3.5" fill="#22c55e"/>
-                <text x="39" y="52" text-anchor="middle" fill="#E5C158" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="900" letter-spacing="0.8">ACO</text>
-            </svg>
+    <aside class="pa-aco-banner" aria-label="Access CCTV Online (ACO) Ditjen Badilag">
+        <div class="pa-aco-main">
+            <span class="pa-aco-dot" aria-hidden="true"></span>
+            <svg class="pa-aco-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <span class="pa-aco-text"><strong>Access CCTV Online (ACO) Badilag</strong> <span class="pa-aco-sep" aria-hidden="true">&middot;</span> <span class="pa-aco-desc">Pemantauan terbuka ruang pelayanan publik (PTSP)</span></span>
         </div>
-        <div class="pa-aco-body">
-            <div class="pa-aco-kicker-row">
-                <span class="pa-aco-pill"><span class="pa-aco-dot" aria-hidden="true"></span> LIVE MONITORING · ACO BADILAG</span>
-                <span class="pa-aco-std">Mahkamah Agung RI</span>
-            </div>
-            <h3>Access CCTV Online (ACO) — Transparansi Layanan Publik</h3>
-            <p>Pemantauan langsung ruang Pelayanan Terpadu Satu Pintu (PTSP) dan area layanan masyarakat sebagai wujud peradilan yang bersih dan transparan.</p>
-        </div>
-        <div class="pa-aco-cta">
-            <a class="pa-aco-btn" href="<?php echo esc_url($acoUrl); ?>" target="_blank" rel="noopener noreferrer">Pantau CCTV ACO ↗</a>
-        </div>
-    </section>
+        <a class="pa-aco-btn" href="<?php echo esc_url($acoUrl); ?>" target="_blank" rel="noopener noreferrer">Pantau CCTV ACO &#8599;</a>
+    </aside>
     <?php
     return (string) ob_get_clean();
 });
 
-// 4. Shortcode [pa_sinova_latest_posts count="3"]: Berita & Pengumuman Terkini Dinamis
+// 4. Shortcode [pa_sinova_latest_posts count="3"]: Berita Terkini Satuan Kerja (Memisahkan Kategori Pengumuman)
 add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     $cfgAtts = shortcode_atts(array('count' => 3), $atts, 'pa_sinova_latest_posts');
     $count   = max(1, min(6, (int) $cfgAtts['count']));
-    $posts   = get_posts(array(
+    $qArgs   = array(
         'post_type'      => 'post',
         'post_status'    => 'publish',
         'posts_per_page' => $count,
         'orderby'        => 'date',
         'order'          => 'DESC',
-    ));
+    );
+    if (function_exists('get_category_by_slug')) {
+        $annCat = get_category_by_slug('pengumuman');
+        if ($annCat && !is_wp_error($annCat)) {
+            $qArgs['category__not_in'] = array((int) $annCat->term_id);
+        }
+    }
+    $posts = get_posts($qArgs);
+    if (empty($posts) && isset($qArgs['category__not_in'])) {
+        unset($qArgs['category__not_in']);
+        $posts = get_posts($qArgs);
+    }
 
     if (empty($posts)) {
         return '';
@@ -280,13 +279,13 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
 
     ob_start();
     ?>
-    <section class="pa-section-block pa-news-section" aria-label="Berita dan Pengumuman Terbaru">
+    <section class="pa-section-block pa-news-section" aria-label="Berita Terkini Satuan Kerja">
         <div class="pa-news-head">
             <div>
-                <h2 class="pa-starter-heading" style="text-align:left;">BERITA &amp; PENGUMUMAN TERKINI <span class="pa-hint-i" aria-hidden="true">i</span></h2>
-                <p class="pa-starter-sub" style="text-align:left;margin-bottom:0;">Informasi Kegiatan, Publikasi, dan Pemberitahuan Resmi Satuan Kerja</p>
+                <h2 class="pa-starter-heading" style="text-align:left;">BERITA TERKINI SATKER <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+                <p class="pa-starter-sub" style="text-align:left;margin-bottom:0;">Liputan Kegiatan, Inovasi, dan Publikasi Berita Satuan Kerja</p>
             </div>
-            <a class="pa-news-all" href="<?php echo esc_url(home_url('/?post_type=post')); ?>" data-pa-tip="Lihat seluruh arsip berita dan pengumuman resmi.">Semua Berita →</a>
+            <a class="pa-news-all" href="<?php echo esc_url(home_url('/?post_type=post')); ?>" data-pa-tip="Lihat seluruh arsip berita satuan kerja.">Semua Berita →</a>
         </div>
         <div class="pa-news-grid">
             <?php foreach ($posts as $p) :
@@ -307,7 +306,7 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     return (string) ob_get_clean();
 });
 
-// 5. Tambahkan Logo Satker & Kotak Pencarian Internal ke Baris 1 Header Astra
+// 5. Tambahkan Logo Satker & Satu Kotak Pencarian Terpadu ke Baris 1 Header Astra
 add_action('astra_render_header_column', static function ($row, $section) {
     if ($row !== 'primary' || $section !== 'left' || is_admin() || pa_sinova_is_adoption_mode()) {
         return;
@@ -315,11 +314,13 @@ add_action('astra_render_header_column', static function ($row, $section) {
     $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $logoUrl = trim((string) ($cfg['logo_url'] ?? ''));
     ?>
-    <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>" aria-label="Pencarian Informasi Website">
-        <input type="search" name="s" class="pa-header-search-input" aria-label="Cari dokumen, berita, dan layanan" placeholder="Cari dokumen, berita, layanan..." value="<?php echo esc_attr(get_search_query()); ?>">
-        <button type="submit" class="pa-header-search-btn" aria-label="Cari">Cari</button>
-        <button type="button" id="pa-cmdk-open" class="pa-cmdk-trigger" aria-haspopup="dialog" data-pa-tip="Pencarian Instan Lintas Dokumen &amp; Jadwal (Ctrl+K)">⌘ <kbd>Ctrl K</kbd></button>
-    </form>
+    <button type="button" id="pa-cmdk-open" class="pa-unified-search-btn" aria-haspopup="dialog" aria-label="Cari layanan, dokumen, dan berita">
+        <span class="pa-us-left">
+            <svg class="pa-us-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+            <span class="pa-us-placeholder">Cari layanan, dokumen, berita...</span>
+        </span>
+        <kbd class="pa-us-kbd">Ctrl K</kbd>
+    </button>
     <?php if ($logoUrl !== '') : ?>
         <img src="<?php echo esc_url($logoUrl); ?>" alt="Logo Pengadilan" class="pa-header-custom-logo" width="44" height="44" fetchpriority="high" decoding="async">
     <?php endif;
@@ -482,29 +483,58 @@ body.pa-sinova-classic-shell:not(.home) .entry-title {
     margin-bottom: 16px;
 }
 
-/* Styling Header Native Tema Astra menjadi 2 Baris Rapi */
+/* Styling Header Native Tema Astra menjadi 2 Baris Elegan & Proporsional */
 body.pa-sinova-classic-shell .main-header-bar {
-    background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
-    border-bottom: 3px solid #C9A227 !important;
+    background: linear-gradient(125deg, #033022 0%, #05583f 54%, #066c4e 100%) !important;
+    border-bottom: 1px solid rgba(229, 193, 88, 0.30) !important;
+    box-shadow: 0 12px 30px -12px rgba(2, 44, 34, 0.28) !important;
     color: #fff !important;
     padding: 0 !important;
     line-height: 1.4 !important;
+    box-sizing: border-box !important;
+}
+body.pa-sinova-classic-shell .main-header-bar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(201, 162, 39, 0.16) 0%, rgba(229, 193, 88, 0.88) 50%, rgba(201, 162, 39, 0.16) 100%);
+    pointer-events: none;
+    z-index: 2;
+}
+body.pa-sinova-classic-shell #masthead,
+body.pa-sinova-classic-shell #ast-desktop-header,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-bar-wrap,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-bar {
+    position: relative !important;
+    z-index: 9990 !important;
+    overflow: visible !important;
 }
 body.pa-sinova-classic-shell #ast-desktop-header .site-primary-header-wrap {
-    max-width: 1200px !important;
+    position: relative !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
     padding: 0 !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
 }
 body.pa-sinova-classic-shell #ast-desktop-header .ast-builder-grid-row {
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 0 !important;
+    position: static !important;
+    overflow: visible !important;
 }
 body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-left {
     width: 100% !important;
     max-width: 100% !important;
-    padding: 13px 16px !important;
-    border-bottom: 1px solid rgba(201, 162, 39, 0.35);
+    box-sizing: border-box !important;
+    padding: 15px max(20px, calc((100% - 1180px) / 2)) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
     display: flex !important;
     flex-wrap: wrap !important;
     align-items: center !important;
@@ -516,66 +546,93 @@ body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-le
 }
 body.pa-sinova-classic-shell #ast-desktop-header .pa-header-custom-logo {
     order: 0;
-    border-radius: 8px;
-    background: #fff;
-    padding: 3px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 4px;
+    box-shadow: 0 4px 12px rgba(2, 44, 34, 0.18);
     object-fit: contain;
 }
-body.pa-sinova-classic-shell #ast-desktop-header .pa-header-search-form {
+body.pa-sinova-classic-shell #ast-desktop-header .pa-unified-search-btn,
+.pa-unified-search-btn {
     order: 2;
     margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.pa-header-search-input {
-    width: 265px;
-    min-width: 190px;
-    padding: 8px 14px !important;
+    width: 315px;
+    max-width: 100%;
+    height: 40px;
+    padding: 0 8px 0 14px !important;
     border-radius: 999px !important;
-    border: 1px solid rgba(229, 193, 88, 0.55) !important;
-    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    background: rgba(2, 36, 27, 0.30) !important;
+    backdrop-filter: blur(8px);
+    color: #e6f4ee !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    font: 600 12.5px/1.2 var(--pa-font, system-ui, sans-serif) !important;
+    cursor: pointer !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .pa-unified-search-btn:hover,
+body.pa-sinova-classic-shell #ast-desktop-header .pa-unified-search-btn:focus,
+body.pa-sinova-classic-shell #ast-desktop-header .pa-unified-search-btn:focus-visible,
+.pa-unified-search-btn:hover,
+.pa-unified-search-btn:focus,
+.pa-unified-search-btn:focus-visible {
+    background: rgba(2, 36, 27, 0.62) !important;
+    border-color: rgba(229, 193, 88, 0.78) !important;
     color: #ffffff !important;
-    font-size: 12.5px !important;
-    line-height: 1.3 !important;
-    outline: none;
+    box-shadow: 0 0 0 3px rgba(229, 193, 88, 0.18) !important;
+    outline: none !important;
 }
-.pa-header-search-input::placeholder { color: #d1fae5; }
-.pa-header-search-input:focus { background: rgba(2, 44, 34, 0.75) !important; border-color: #E5C158 !important; }
-.pa-header-search-btn {
-    white-space: nowrap !important;
-    flex-shrink: 0 !important;
-    padding: 8px 16px !important;
-    border-radius: 999px !important;
-    border: none !important;
-    background: #C9A227 !important;
-    color: #022c22 !important;
-    font-size: 12.5px !important;
-    line-height: 1.2 !important;
-    font-weight: 800 !important;
-    cursor: pointer;
+.pa-us-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
 }
-.ast-mobile-header-wrap .pa-header-search-form,
+.pa-us-ico { width: 15px; height: 15px; color: #E5C158; flex-shrink: 0; }
+.pa-us-placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #d1fae5; }
+.pa-us-kbd {
+    flex-shrink: 0;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: rgba(2, 36, 27, 0.72);
+    border: 1px solid rgba(229, 193, 88, 0.35);
+    color: #E5C158;
+    font: 700 11px/1 monospace;
+}
+.ast-mobile-header-wrap .pa-unified-search-btn,
 .ast-mobile-header-wrap .pa-header-custom-logo { display: none !important; }
 
 body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-right {
     width: 100% !important;
     max-width: 100% !important;
-    background: rgba(2, 44, 34, 0.55);
-    padding: 0 8px !important;
-    justify-content: flex-start !important;
+    box-sizing: border-box !important;
+    background: linear-gradient(180deg, rgba(2, 36, 27, 0.42) 0%, rgba(2, 36, 27, 0.56) 100%) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    padding: 8px max(20px, calc((100% - 1180px) / 2)) !important;
+    justify-content: stretch !important;
+    position: static !important;
+    overflow: visible !important;
 }
 body.pa-sinova-classic-shell #ast-desktop-header .ast-builder-menu-1,
 body.pa-sinova-classic-shell #ast-desktop-header .ast-main-header-bar-alignment,
 body.pa-sinova-classic-shell #ast-desktop-header .main-header-bar-navigation,
+body.pa-sinova-classic-shell #ast-desktop-header #primary-site-navigation-desktop,
 body.pa-sinova-classic-shell #ast-desktop-header .main-navigation {
     width: 100% !important;
     line-height: 1.3 !important;
+    position: static !important;
+    overflow: visible !important;
 }
 body.pa-sinova-classic-shell .site-title {
     font-size: clamp(1.1rem, 2vw, 1.42rem) !important;
     font-weight: 800 !important;
     line-height: 1.25 !important;
+    letter-spacing: -0.01em;
 }
 body.pa-sinova-classic-shell .site-title a,
 body.pa-sinova-classic-shell .site-description { color: #ffffff !important; }
@@ -585,87 +642,359 @@ body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu {
     display: flex !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 2px !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
+    position: static !important;
+    overflow: visible !important;
 }
 body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item,
 body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item {
-    flex: 0 0 auto !important;
+    flex: 0 1 auto !important;
     line-height: 1.3 !important;
+    position: static !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .ast-menu-toggle {
+    display: none !important;
 }
 body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link,
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item:last-child > .menu-link,
 body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link {
     color: #ffffff !important;
     font-weight: 700 !important;
     font-size: 13px !important;
     line-height: 1.3 !important;
     height: auto !important;
-    padding: 11px 11px !important;
+    margin: 0 !important;
+    padding: 8px 16px !important;
+    border-radius: 999px !important;
+    border: 1px solid transparent !important;
+    border-bottom: 1px solid transparent !important;
     white-space: nowrap !important;
     display: inline-flex !important;
     align-items: center !important;
-    gap: 4px !important;
-    border-bottom: 2px solid transparent !important;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    justify-content: center !important;
+    gap: 6px !important;
+    box-sizing: border-box !important;
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease !important;
 }
 @media (max-width: 1180px) {
     body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link,
     body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link {
-        padding: 10px 8px !important;
-        font-size: 12px !important;
+        padding: 7px 11px !important;
+        font-size: 12.2px !important;
+        gap: 5px !important;
     }
 }
-body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link:hover,
 body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .current-menu-item > .menu-link,
-body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link:hover,
 body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .current-menu-item > .menu-link {
     color: #E5C158 !important;
-    background: rgba(201, 162, 39, 0.16) !important;
-    border-bottom-color: #E5C158 !important;
+    background: rgba(255, 255, 255, 0.10) !important;
+    border-color: rgba(229, 193, 88, 0.26) !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link:hover,
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item.is-mega-open > .menu-link,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link:hover,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .ast-builder-menu-1 .main-header-menu > .menu-item.is-mega-open > .menu-link {
+    color: #E5C158 !important;
+    background: rgba(255, 255, 255, 0.14) !important;
+    border-color: rgba(229, 193, 88, 0.38) !important;
+    box-shadow: 0 4px 14px rgba(2, 44, 34, 0.18) !important;
 }
 body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link .ast-header-navigation-arrow,
-body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link svg {
-    color: #E5C158 !important;
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item > .menu-link .ast-header-navigation-arrow {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    flex-shrink: 0 !important;
+    color: rgba(229, 193, 88, 0.85) !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link .ast-icon.icon-arrow,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item > .menu-link .ast-icon.icon-arrow {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .menu-link svg.ast-arrow-svg,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item > .menu-link svg.ast-arrow-svg {
+    position: static !important;
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 10px !important;
+    height: 10px !important;
+    display: block !important;
+    color: currentColor !important;
     fill: currentColor !important;
-    width: 11px;
-    height: 11px;
+    transform-origin: center center !important;
+    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
-body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 .sub-menu,
-body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu .sub-menu {
-    background: #ffffff !important;
-    border: 1px solid #d5e6dc !important;
-    border-top: 3px solid #C9A227 !important;
-    border-radius: 0 0 10px 10px !important;
-    box-shadow: 0 14px 32px rgba(4, 57, 39, 0.18) !important;
-    width: 280px !important;
-    max-height: 70vh;
-    overflow-y: auto;
-    line-height: 1.35 !important;
-}
-body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item:nth-last-child(-n+2) > .sub-menu,
-body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item:nth-last-child(-n+2) > .sub-menu {
-    left: auto !important;
-    right: 0 !important;
-}
-body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .menu-link {
-    color: #043927 !important;
-    font-weight: 600 !important;
-    font-size: 13px !important;
-    line-height: 1.4 !important;
-    padding: 9px 14px !important;
-    white-space: normal !important;
-}
-body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .menu-link:hover {
-    background: linear-gradient(135deg, #043927 0%, #056e4f 100%) !important;
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item.is-mega-open > .menu-link .ast-header-navigation-arrow,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item.is-mega-open > .menu-link .ast-header-navigation-arrow {
     color: #E5C158 !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item.is-mega-open > .menu-link svg.ast-arrow-svg,
+body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item.is-mega-open > .menu-link svg.ast-arrow-svg {
+    transform: rotate(180deg) !important;
+}
+@media (min-width: 961px) {
+    body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .sub-menu,
+    body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item > .sub-menu,
+    .pa-shell-navwrap .pa-shell-menu > li > .pa-shell-submenu {
+        position: absolute !important;
+        left: 50% !important;
+        right: auto !important;
+        top: calc(100% + 10px) !important;
+        width: min(1180px, calc(100vw - 32px)) !important;
+        max-width: 1180px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        border: 1px solid rgba(4, 57, 39, 0.11) !important;
+        border-top: 2px solid rgba(201, 162, 39, 0.72) !important;
+        border-radius: 18px !important;
+        box-shadow: 0 24px 56px -12px rgba(2, 44, 34, 0.22), 0 6px 16px -4px rgba(2, 44, 34, 0.08) !important;
+        max-height: none !important;
+        overflow: visible !important;
+        display: block !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transform: translate(-50%, 6px) !important;
+        transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease !important;
+        z-index: 9999 !important;
+    }
+    body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .sub-menu::before,
+    .pa-shell-navwrap .pa-shell-menu > li > .pa-shell-submenu::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: -16px;
+        height: 16px;
+    }
+    body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item.is-mega-open > .sub-menu,
+    body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item.is-mega-open > .sub-menu,
+    body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item:not(.is-mega-closed):hover > .sub-menu,
+    body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item:not(.is-mega-closed):focus-within > .sub-menu,
+    .pa-shell-navwrap .pa-shell-menu > li.is-mega-open > .pa-shell-submenu,
+    .pa-shell-navwrap .pa-shell-menu > li:not(.is-mega-closed):hover > .pa-shell-submenu,
+    .pa-shell-navwrap .pa-shell-menu > li:not(.is-mega-closed):focus-within > .pa-shell-submenu {
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transform: translate(-50%, 0) !important;
+    }
 }
 body.pa-sinova-classic-shell .ast-mobile-header-wrap .ast-primary-header-bar { padding: 10px 14px !important; }
 body.pa-sinova-classic-shell .ast-mobile-menu-buttons .menu-toggle { background: rgba(201, 162, 39, 0.2) !important; border-color: #C9A227 !important; color: #E5C158 !important; }
 body.pa-sinova-classic-shell .ast-mobile-popup-drawer .ast-mobile-popup-inner { background: #043927 !important; }
 body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #ffffff !important; border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important; }
+
+/* Mega Menu 4-Kolom Mengambang Elegan & Simetris */
+.pa-mega-panel {
+    list-style: none !important;
+    box-sizing: border-box !important;
+}
+.pa-mega-panel > li {
+    list-style: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+.pa-mega-panel > li.pa-mega-head {
+    padding: 16px 24px 14px !important;
+    border-bottom: 1px solid rgba(4, 57, 39, 0.07);
+    border-radius: 16px 16px 0 0;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #ffffff;
+}
+.pa-mega-head-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.pa-mega-head-title {
+    margin: 0;
+    font-size: 15.5px;
+    font-weight: 800;
+    color: #043927;
+    letter-spacing: -0.01em;
+}
+.pa-mega-count-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #ecfdf5;
+    border: 1px solid #bbf7d0;
+    color: #056e4f;
+    font-size: 12px;
+    font-weight: 700;
+}
+.pa-mega-head-hint {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+}
+.pa-mega-panel > li.pa-mega-body {
+    padding: 18px 24px 20px !important;
+    max-height: 58vh;
+    overflow-y: auto;
+    background: #ffffff;
+}
+.pa-mega-grid {
+    list-style: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+}
+.pa-mega-grid[data-mega-cols="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+.pa-mega-grid[data-mega-cols="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+.pa-mega-grid > li {
+    list-style: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+}
+.pa-mega-grid .ast-icon { display: none !important; }
+.pa-mega-card-link,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 13px 16px !important;
+    min-height: 52px !important;
+    border-radius: 12px !important;
+    background: #fbfdfc !important;
+    border: 1px solid rgba(4, 57, 39, 0.10) !important;
+    color: #0f172a !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    line-height: 1.38 !important;
+    text-decoration: none !important;
+    white-space: normal !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 1px 2px rgba(2, 44, 34, 0.03) !important;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, color 0.15s ease !important;
+}
+.pa-mega-card-link::after,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link::after {
+    content: "→";
+    font-weight: 800;
+    color: #056e4f;
+    opacity: 0;
+    transform: translateX(-2px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    flex-shrink: 0;
+}
+.pa-mega-card-link:hover,
+.pa-mega-card-link:focus-visible,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link:hover,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link:focus-visible {
+    background: #effaf4 !important;
+    border-color: rgba(5, 110, 79, 0.38) !important;
+    color: #043927 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px -6px rgba(4, 57, 39, 0.14), inset 3px 0 0 #C9A227 !important;
+}
+.pa-mega-card-link:hover::after,
+.pa-mega-card-link:focus-visible::after,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link:hover::after,
+body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link:focus-visible::after {
+    opacity: 0.78;
+    transform: translateX(2px);
+}
+.pa-mega-card-label {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+.pa-mega-panel > li.pa-mega-foot {
+    padding: 12px 24px 13px !important;
+    background: #f8fbf9;
+    border-top: 1px solid rgba(4, 57, 39, 0.07);
+    border-radius: 0 0 16px 16px;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.2px;
+    color: #475569;
+}
+.pa-mega-crumb-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    flex: 1;
+}
+.pa-mega-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--pa-gold);
+    flex-shrink: 0;
+}
+.pa-mega-crumb-cat { color: #056e4f; font-weight: 800; white-space: nowrap; }
+.pa-mega-crumb-sep { color: #94a3b8; }
+.pa-mega-crumb-txt {
+    color: #475569;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pa-mega-avail {
+    padding: 3px 11px;
+    border-radius: 999px;
+    background: #fef9e7;
+    border: 1px solid #f3dfa0;
+    color: #854d0e;
+    font-size: 11.8px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+@media (max-width: 1120px) {
+    .pa-mega-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 960px) {
+    .pa-mega-head { padding: 12px 14px !important; }
+    .pa-mega-body { padding: 12px 14px !important; max-height: none; }
+    .pa-mega-grid,
+    .pa-mega-grid[data-mega-cols="2"],
+    .pa-mega-grid[data-mega-cols="3"] { grid-template-columns: 1fr !important; gap: 8px !important; }
+    .pa-mega-foot { padding: 10px 14px !important; }
+}
 <?php endif; ?>
 
 /* Breadcrumb & Sidebar Halaman Dalam */
@@ -776,11 +1105,11 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #fffff
 
 /* Topbar Institusional */
 .pa-shell-topbar {
-    background: #022c22;
+    background: #02241c;
     color: #d1fae5;
     font-size: 12px;
     padding: 7px 16px;
-    border-bottom: 1px solid rgba(201, 162, 39, 0.35);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .pa-shell-inner {
     max-width: 1180px;
@@ -796,29 +1125,31 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #fffff
 .pa-shell-topbar a:hover { text-decoration: underline; }
 
 /* Fallback Header & Navbar saat Block Theme aktif */
-.pa-shell-masthead { background: linear-gradient(135deg, #043927 0%, #056e4f 100%); color: #fff; padding: 16px; border-bottom: 3px solid #C9A227; }
+.pa-shell-masthead { background: linear-gradient(125deg, #033022 0%, #05583f 54%, #066c4e 100%); color: #fff; padding: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.09); }
 .pa-shell-brand { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #fff; }
 .pa-shell-emblem { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%); color: #022c22; font-weight: 900; font-size: 17px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .pa-shell-brand-title { margin: 0; font-size: clamp(1.05rem, 2vw, 1.4rem); font-weight: 800; color: #fff; line-height: 1.2; }
 .pa-shell-brand-sub { margin: 2px 0 0; font-size: 12.5px; color: #d1fae5; }
 .pa-shell-badge { padding: 6px 12px; border-radius: 999px; background: rgba(201, 162, 39, 0.16); border: 1px solid #C9A227; color: #E5C158; font-size: 12px; font-weight: 700; }
-.pa-shell-navwrap { background: #ffffff; border-bottom: 1px solid #d5e6dc; box-shadow: 0 4px 14px rgba(4, 57, 39, 0.06); position: sticky; top: 0; z-index: 9990; }
-.pa-shell-nav-row { max-width: 1180px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; }
-.pa-shell-menu-btn { display: none; margin: 8px 0; padding: 8px 14px; border-radius: 8px; border: 1.5px solid #056e4f; background: #f4faf7; color: #043927; font-weight: 700; cursor: pointer; }
-.pa-shell-menu { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
-.pa-shell-menu > li { position: relative; }
-.pa-shell-menu > li > a { display: flex; align-items: center; gap: 5px; padding: 13px 12px; color: #043927; text-decoration: none; font-size: 13.5px; font-weight: 700; border-bottom: 2px solid transparent; }
-.pa-shell-menu > li > a:hover, .pa-shell-menu > li:focus-within > a { color: #056e4f; background: #f4faf7; border-bottom-color: #C9A227; }
-.pa-shell-submenu { list-style: none; margin: 0; padding: 6px; position: absolute; left: 0; top: 100%; min-width: 270px; max-height: 70vh; overflow-y: auto; background: #ffffff; border: 1px solid #d5e6dc; border-top: 3px solid #C9A227; border-radius: 0 0 12px 12px; box-shadow: 0 14px 32px rgba(4, 57, 39, 0.16); display: none; z-index: 9995; }
-.pa-shell-menu > li:hover > .pa-shell-submenu, .pa-shell-menu > li:focus-within > .pa-shell-submenu { display: block; }
-.pa-shell-submenu a { display: block; padding: 8px 12px; border-radius: 8px; color: #1e293b; text-decoration: none; font-size: 13px; font-weight: 600; }
-.pa-shell-submenu a:hover { background: linear-gradient(135deg, #043927 0%, #056e4f 100%); color: #E5C158; }
+.pa-shell-navwrap { background: linear-gradient(180deg, #033124 0%, #02241c 100%); border-bottom: 1px solid rgba(229, 193, 88, 0.32); box-shadow: 0 12px 28px -12px rgba(2, 44, 34, 0.24); position: sticky; top: 0; z-index: 9990; }
+.pa-shell-nav-row { max-width: 1180px; margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; position: relative; }
+.pa-shell-menu-btn { display: none; margin: 4px 0; padding: 8px 14px; border-radius: 8px; border: 1.5px solid #C9A227; background: rgba(255, 255, 255, 0.12); color: #E5C158; font-weight: 700; cursor: pointer; }
+.pa-shell-menu { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; position: static; }
+.pa-shell-menu > li { position: static; flex: 0 1 auto; }
+.pa-shell-menu > li > a { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px; border: 1px solid transparent; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; white-space: nowrap; transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease; }
+.pa-shell-menu > li > a:hover,
+.pa-shell-menu > li.is-mega-open > a,
+.pa-shell-menu > li:focus-within > a { color: #E5C158; background: rgba(255, 255, 255, 0.14); border-color: rgba(229, 193, 88, 0.38); box-shadow: 0 4px 12px rgba(2, 44, 34, 0.16); }
+.pa-shell-submenu { list-style: none; margin: 0; padding: 0; background: #ffffff; border: 1px solid rgba(4, 57, 39, 0.11); border-top: 2px solid rgba(201, 162, 39, 0.72); border-radius: 18px; box-shadow: 0 24px 56px -12px rgba(2, 44, 34, 0.22); z-index: 9999; }
 @media (max-width: 960px) {
     .pa-shell-menu-btn { display: inline-flex; }
     .pa-shell-nav-row { flex-direction: column; align-items: stretch; }
-    .pa-shell-menu { display: none; flex-direction: column; align-items: stretch; padding-bottom: 10px; }
+    .pa-shell-menu { display: none; flex-direction: column; align-items: stretch; padding-bottom: 10px; gap: 4px; }
     .pa-shell-menu.is-open { display: flex; }
-    .pa-shell-submenu { position: static; box-shadow: none; border-radius: 8px; margin: 0 0 6px 12px; }
+    .pa-shell-menu > li > a { width: 100%; }
+    .pa-shell-submenu { display: none; position: static; box-shadow: none; border-radius: 10px; margin: 4px 0 8px 0; }
+    .pa-shell-menu > li.is-mega-open > .pa-shell-submenu,
+    .pa-shell-menu > li:focus-within > .pa-shell-submenu { display: block; }
 }
 
 /* CSS Beranda Portal Resmi Pengadilan Agama (Clean Hover-First + GPU Parallax) */
@@ -919,40 +1250,64 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #fffff
 .pa-welcome-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 32px; text-align: left; }
 @media (max-width: 860px) { .pa-welcome-grid { grid-template-columns: 1fr; } }
 
-/* Banner Resmi Access CCTV Online (ACO) Badilag */
+/* Strip Tenang Access CCTV Online (ACO) Badilag di Bagian Bawah Halaman */
 .pa-aco-banner {
-    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 18px;
-    padding: 15px 22px;
-    margin-bottom: 32px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #f4faf7 0%, #ffffff 55%, #fefce8 100%);
-    border: 1.5px solid #C9A227;
-    box-shadow: 0 8px 22px rgba(4, 57, 39, 0.08);
+    justify-content: space-between;
+    gap: 10px 16px;
+    padding: 10px 18px;
+    margin: 22px 0 0;
+    border-radius: 12px;
+    background: #f8fbf9;
+    border: 1px solid #d5e6dc;
+    box-shadow: none;
     text-align: left;
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    transition: border-color 0.16s ease, background-color 0.16s ease;
 }
 .pa-aco-banner:hover,
-.pa-aco-banner:focus-within { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(4, 57, 39, 0.14); z-index: 35; }
-.pa-aco-logo { flex: 0 0 58px; width: 58px; height: 58px; }
-.pa-aco-logo svg { width: 58px; height: 58px; display: block; }
-.pa-aco-body { flex: 1 1 320px; min-width: 0; }
-.pa-aco-kicker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 5px; }
-.pa-aco-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #043927; color: #E5C158; font-size: 11px; font-weight: 800; letter-spacing: 0.03em; }
-.pa-aco-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
-.pa-aco-std { font-size: 11.5px; font-weight: 700; color: #056e4f; }
-.pa-aco-body h3 { margin: 0; font-size: 1.06rem; font-weight: 800; color: #043927; }
-.pa-aco-body p { margin: 4px 0 0; font-size: 0.87rem; line-height: 1.5; color: #475569; }
-.pa-aco-cta { flex: 0 0 auto; }
-.pa-aco-btn { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 10px; background: linear-gradient(135deg, #043927 0%, #056e4f 100%); border: 1.5px solid #C9A227; color: #E5C158 !important; font-size: 13px; font-weight: 800; text-decoration: none !important; box-shadow: 0 6px 14px rgba(4, 57, 39, 0.16); transition: transform 0.16s ease; }
-.pa-aco-btn:hover { transform: translateY(-2px); background: #022c22; }
-html[data-pa-theme="dark"] .pa-aco-banner { background: linear-gradient(135deg, #13221a 0%, #0f1c15 100%); border-color: #C9A227; }
-html[data-pa-theme="dark"] .pa-aco-body h3 { color: #E5C158; }
-html[data-pa-theme="dark"] .pa-aco-body p,
-html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
+.pa-aco-banner:focus-within { border-color: #9ec5b3; background: #f2f9f5; }
+.pa-aco-main {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 280px;
+}
+.pa-aco-dot { width: 7px; height: 7px; border-radius: 50%; background: #16a34a; flex-shrink: 0; }
+.pa-aco-ico { width: 15px; height: 15px; color: #056e4f; flex-shrink: 0; }
+.pa-aco-text { font-size: 12.5px; line-height: 1.45; color: #334155; }
+.pa-aco-text strong { color: #043927; font-weight: 700; }
+.pa-aco-sep { color: #94a3b8; margin: 0 2px; }
+.pa-aco-desc { color: #64748b; }
+.pa-aco-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 13px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #056e4f !important;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none !important;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+.pa-aco-btn:hover,
+.pa-aco-btn:focus-visible { background: #ecfdf5; border-color: #056e4f; color: #043927 !important; }
+html[data-pa-theme="dark"] .pa-aco-banner { background: #111e18; border-color: #264234; }
+html[data-pa-theme="dark"] .pa-aco-banner:hover,
+html[data-pa-theme="dark"] .pa-aco-banner:focus-within { background: #15251e; border-color: #3a6651; }
+html[data-pa-theme="dark"] .pa-aco-ico { color: #E5C158; }
+html[data-pa-theme="dark"] .pa-aco-text { color: #cbd5e1; }
+html[data-pa-theme="dark"] .pa-aco-text strong { color: #e6f4ee; }
+html[data-pa-theme="dark"] .pa-aco-desc { color: #94a3b8; }
+html[data-pa-theme="dark"] .pa-aco-btn { background: #162a21; border-color: #2f5241; color: #E5C158 !important; }
+html[data-pa-theme="dark"] .pa-aco-btn:hover,
+html[data-pa-theme="dark"] .pa-aco-btn:focus-visible { background: #1e382b; border-color: #E5C158; }
 .pa-welcome-card { padding: 22px; border-radius: 16px; background: #f4faf7; border: 1.5px solid #d5e6dc; border-left: 5px solid #056e4f; transition: transform 0.18s ease, border-color 0.18s ease; }
 .pa-welcome-card:hover { transform: translateY(-2px); border-color: #C9A227; }
 .pa-wc-kicker { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
@@ -1150,7 +1505,6 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
         transform: translate(-50%, 0);
     }
 
-    html:not([data-pa-contrast="high"]) .pa-aco-body p,
     html:not([data-pa-contrast="high"]) .pa-news-card p {
         position: absolute;
         left: -1px;
@@ -1171,8 +1525,6 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
         z-index: 45;
         transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
     }
-    html:not([data-pa-contrast="high"]) .pa-aco-banner:hover .pa-aco-body p,
-    html:not([data-pa-contrast="high"]) .pa-aco-banner:focus-within .pa-aco-body p,
     html:not([data-pa-contrast="high"]) .pa-news-card:hover p,
     html:not([data-pa-contrast="high"]) .pa-news-card:focus-within p {
         opacity: 1;
@@ -1220,6 +1572,7 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
         transform: translate(-50%, -4px);
     }
     #pa-topbar-theme-btn[data-pa-tip]::after { left: auto; right: 0; transform: translate(0, -4px); }
+    #pa-aco-float[data-pa-tip]::after { left: auto; right: 8px; transform: translate(0, 4px); }
     #pa-btn-top[data-pa-tip]::after,
     .pa-news-all[data-pa-tip]::after { left: auto; right: 0; transform: translate(0, 4px); }
     #pa-a11y-dock button:first-child[data-pa-tip]::after { left: 0; transform: translate(0, 4px); }
@@ -1231,6 +1584,8 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
     }
     #pa-topbar-theme-btn[data-pa-tip]:hover::after,
     #pa-topbar-theme-btn[data-pa-tip]:focus-visible::after,
+    #pa-aco-float[data-pa-tip]:hover::after,
+    #pa-aco-float[data-pa-tip]:focus-visible::after,
     #pa-btn-top[data-pa-tip]:hover::after,
     #pa-btn-top[data-pa-tip]:focus-visible::after,
     .pa-news-all[data-pa-tip]:hover::after,
@@ -1270,33 +1625,93 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
 .pa-ptsp-pill.is-closed { border-color: rgba(229, 193, 88, 0.45); color: #fde68a; }
 html.pa-is-scrolled #ast-desktop-header .main-header-bar,
 html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 0.18) !important; }
+#ast-scroll-top,
+.ast-scroll-top-icon { display: none !important; }
 #pa-btn-top {
     position: fixed;
-    right: 16px;
-    bottom: 16px;
+    right: 18px;
+    bottom: 18px;
     z-index: 99989;
-    width: 42px;
-    height: 42px;
-    border-radius: 999px;
-    border: 1.5px solid #C9A227;
-    background: rgba(4, 57, 39, 0.94);
-    color: #E5C158;
-    font: 800 16px/1 'Inter', system-ui, sans-serif;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    border: 1.5px solid #C9A227 !important;
+    background: #043927 !important;
+    color: #E5C158 !important;
+    font: 800 17px/1 'Inter', system-ui, sans-serif !important;
     cursor: pointer;
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+    box-shadow: 0 8px 22px rgba(2, 44, 34, 0.28);
     opacity: 0;
     visibility: hidden;
     transform: translateY(10px);
-    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease, background-color 0.15s ease;
 }
 #pa-btn-top.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
-#pa-btn-top:hover { background: #022c22; color: #ffffff; }
+#pa-btn-top:hover { background: #022c22 !important; color: #ffffff !important; }
+#pa-aco-float {
+    position: fixed;
+    right: 0;
+    bottom: 76px;
+    z-index: 99988;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 2px 5px 8px;
+    border-radius: 12px 0 0 12px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(5, 110, 79, 0.16);
+    border-right: 0;
+    box-shadow: -3px 6px 18px rgba(2, 44, 34, 0.14);
+    text-decoration: none !important;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+#pa-aco-float:hover,
+#pa-aco-float:focus-visible {
+    transform: translateX(-2px);
+    border-color: rgba(201, 162, 39, 0.72);
+    box-shadow: -5px 10px 24px rgba(2, 44, 34, 0.22);
+}
+.pa-aco-float-img {
+    display: block;
+    width: 56px;
+    height: 50px;
+    object-fit: contain;
+    pointer-events: none;
+}
+.pa-aco-float-static {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px 5px 4px;
+    color: #043927;
+    font: 800 11px/1 'Inter', system-ui, sans-serif;
+    letter-spacing: 0.03em;
+}
+@media (max-width: 640px) {
+    #pa-aco-float { bottom: 70px; padding: 4px 2px 4px 6px; }
+    .pa-aco-float-img { width: 46px; height: 41px; }
+}
+html[data-pa-theme="dark"] #pa-aco-float {
+    background: rgba(248, 252, 250, 0.95);
+    border-color: rgba(229, 193, 88, 0.45);
+    box-shadow: -4px 8px 22px rgba(0, 0, 0, 0.38);
+}
 @media (prefers-reduced-motion: reduce) {
     .pa-hero-banner::before, .pa-hero-banner::after, .pa-hero-content { transform: none !important; transition: none !important; }
+    .pa-aco-float-img { display: none !important; }
+    .pa-aco-float-static { display: inline-flex; }
     * { scroll-behavior: auto !important; }
 }
 @media print {
-    #pa-a11y-dock, #pa-btn-top, #pa-scroll-progress, .pa-emergency-bar, .pa-shell-topbar, .pa-shell-navwrap, #ast-desktop-header, .pa-inner-sidebar { display: none !important; }
+    #pa-a11y-dock, #pa-btn-top, #pa-aco-float, #pa-scroll-progress, .pa-emergency-bar, .pa-shell-topbar, .pa-shell-navwrap, #ast-desktop-header, .pa-inner-sidebar { display: none !important; }
 }
 
 /* Footer 4 Kolom Resmi + Statistik Pengunjung */
@@ -1333,13 +1748,46 @@ html[data-pa-theme="dark"] article.post {
 }
 html[data-pa-theme="dark"] .pa-shell-navwrap,
 html[data-pa-theme="dark"] .pa-shell-submenu,
+html[data-pa-theme="dark"] .pa-mega-panel,
+html[data-pa-theme="dark"] .pa-mega-head,
+html[data-pa-theme="dark"] .pa-mega-body,
 html[data-pa-theme="dark"] .pa-ticker-bar,
 html[data-pa-theme="dark"] .pa-breadcrumb,
 html[data-pa-theme="dark"] .pa-inner-sidebar,
 html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu {
-    background: #13221a !important;
+    background: #102019 !important;
     border-color: #2c4637 !important;
     color: #e6f4ee !important;
+}
+html[data-pa-theme="dark"] .pa-mega-foot {
+    background: #0b1611 !important;
+    border-color: #243f31 !important;
+    color: #cbd5e1 !important;
+}
+html[data-pa-theme="dark"] .pa-mega-head-title,
+html[data-pa-theme="dark"] .pa-mega-crumb-cat { color: #E5C158 !important; }
+html[data-pa-theme="dark"] .pa-mega-head-hint,
+html[data-pa-theme="dark"] .pa-mega-crumb-txt { color: #94a3b8; }
+html[data-pa-theme="dark"] .pa-mega-count-pill { background: #162a21; border-color: #2c4637; color: #86efac; }
+html[data-pa-theme="dark"] .pa-mega-avail { background: #262010; border-color: #5c4818; color: #fde68a; }
+html[data-pa-theme="dark"] .pa-mega-card-link,
+html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link {
+    background: #162a21 !important;
+    border-color: rgba(229, 193, 88, 0.16) !important;
+    color: #e6f4ee !important;
+}
+html[data-pa-theme="dark"] .pa-mega-card-link::after,
+html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link::after {
+    color: #E5C158;
+}
+html[data-pa-theme="dark"] .pa-mega-card-link:hover,
+html[data-pa-theme="dark"] .pa-mega-card-link:focus-visible,
+html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link:hover,
+html[data-pa-theme="dark"] body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa-mega-card-link:focus-visible {
+    background: #1d382b !important;
+    border-color: rgba(229, 193, 88, 0.58) !important;
+    color: #E5C158 !important;
+    box-shadow: 0 10px 22px -6px rgba(0, 0, 0, 0.45), inset 3px 0 0 #E5C158 !important;
 }
 html[data-pa-theme="dark"] .pa-shell-menu > li > a,
 html[data-pa-theme="dark"] .pa-shell-submenu a,
@@ -1402,6 +1850,8 @@ html[data-pa-nomotion="1"] *::after {
     transition: none !important;
     scroll-behavior: auto !important;
 }
+html[data-pa-nomotion="1"] .pa-aco-float-img { display: none !important; }
+html[data-pa-nomotion="1"] .pa-aco-float-static { display: inline-flex; }
 .pa-feeds-section, .pa-news-section, .pa-split-section, .pa-shell-footer {
     content-visibility: auto;
     contain-intrinsic-size: auto 360px;
@@ -1487,31 +1937,24 @@ html[data-pa-nomotion="1"] *::after {
     text-align: center !important;
 }
 
-/* Command Palette Ctrl+K */
-.pa-cmdk-trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 10px;
-    border-radius: 9px;
-    border: 1px solid rgba(201, 162, 39, 0.5);
-    background: rgba(255, 255, 255, 0.14);
-    color: #ffffff;
-    font: 700 11.5px/1.2 var(--pa-font, system-ui, sans-serif);
-    cursor: pointer;
-    white-space: nowrap;
+/* Pencarian Terpadu (Modal Ctrl+K + Full-Site Submit) */
+.pa-cmdk-head-ico { width: 17px; height: 17px; color: #E5C158; flex-shrink: 0; }
+.pa-cmdk-submit {
+    padding: 6px 14px !important;
+    border-radius: 999px !important;
+    border: none !important;
+    background: #C9A227 !important;
+    color: #022c22 !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    cursor: pointer !important;
+    flex-shrink: 0;
 }
-.pa-cmdk-trigger kbd {
-    background: rgba(2, 44, 34, 0.6);
-    color: #E5C158;
-    border: 1px solid rgba(229, 193, 88, 0.35);
-    border-radius: 5px;
-    padding: 1px 5px;
-    font: 700 10.5px/1.2 monospace;
-}
-.pa-cmdk-trigger:hover { background: #C9A227; color: #022c22; }
+.pa-cmdk-submit:hover,
+.pa-cmdk-submit:focus-visible { background: #E5C158 !important; color: #022c22 !important; }
 #pa-cmdk-dialog {
-    width: min(640px, 94vw);
+    width: min(660px, 94vw);
     max-width: 94vw;
     padding: 0;
     border: 1.5px solid #C9A227;
@@ -1527,29 +1970,40 @@ html[data-pa-nomotion="1"] *::after {
     align-items: center;
     gap: 10px;
     padding: 12px 16px;
+    margin: 0;
     background: #022c22;
     color: #ffffff;
     border-bottom: 1px solid rgba(201, 162, 39, 0.35);
 }
 #pa-cmdk-input {
     flex: 1;
-    border: 0;
-    background: transparent;
-    color: #ffffff;
-    font-size: 15px;
+    min-width: 0;
+    border: 0 !important;
+    background: transparent !important;
+    color: #ffffff !important;
+    font-size: 14.5px;
     font-weight: 600;
-    outline: none;
+    outline: none !important;
+    padding: 4px 0 !important;
+    box-shadow: none !important;
 }
-#pa-cmdk-input::placeholder { color: #94a3b8; }
+#pa-cmdk-input::placeholder { color: #a7f3d0; opacity: 0.72; }
 #pa-cmdk-close {
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.28) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    border-radius: 8px !important;
+    padding: 5px 10px !important;
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    flex-shrink: 0;
+}
+#pa-cmdk-close:hover,
+#pa-cmdk-close:focus-visible {
+    background: rgba(255, 255, 255, 0.22) !important;
+    color: #E5C158 !important;
+    border-color: #E5C158 !important;
 }
 .pa-cmdk-results { max-height: 360px; overflow-y: auto; padding: 10px; }
 .pa-cmdk-item {
@@ -1580,91 +2034,146 @@ html[data-pa-nomotion="1"] *::after {
     color: #92400e;
 }
 .pa-cmdk-empty { padding: 18px; text-align: center; color: var(--pa-muted, #64748b); font-size: 13.5px; }
+.pa-cmdk-foot {
+    padding: 9px 16px;
+    background: #f8fbf9;
+    border-top: 1px solid #e2ece7;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11.5px;
+    color: #64748b;
+}
+.pa-cmdk-foot kbd {
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #043927;
+    font: 700 10.5px/1.3 monospace;
+}
+html[data-pa-theme="dark"] .pa-cmdk-foot { background: #13221a; border-color: #2c4637; color: #cbd5e1; }
+html[data-pa-theme="dark"] .pa-cmdk-foot kbd { background: #182a20; border-color: #355241; color: #E5C158; }
 
-/* Pengumuman Resmi RSS MA RI & Ditjen Badilag */
+/* Pengumuman 3 Kolom Sejajar (Satker | MA RI | Ditjen Badilag) */
 .pa-feeds-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
-    gap: 20px;
-    margin-top: 16px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 12px;
 }
+@media (max-width: 960px) { .pa-feeds-grid { grid-template-columns: 1fr; } }
 .pa-feed-card {
     background: var(--pa-surface, #ffffff);
-    border: 1px solid var(--pa-border, #e2e8f0);
-    border-top: 4px solid #C9A227;
-    border-radius: 16px;
+    border: 1px solid #d5e6dc;
+    border-top: 3px solid #C9A227;
+    border-radius: 13px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05);
 }
 .pa-feed-card-head {
     background: linear-gradient(135deg, #022c22 0%, #056e4f 100%);
     color: #ffffff;
-    padding: 14px 16px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
-.pa-feed-brand { display: flex; align-items: center; gap: 12px; }
-.pa-feed-crest {
-    width: 40px;
-    height: 40px;
-    border-radius: 11px;
-    background: rgba(201, 162, 39, 0.14);
-    border: 1px solid rgba(229, 193, 88, 0.45);
+.pa-feed-head-left {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    gap: 7px;
+    min-width: 0;
+}
+.pa-feed-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #E5C158;
     flex-shrink: 0;
+}
+.pa-feed-head-left h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
+    color: #ffffff !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .pa-feed-pill {
     display: inline-block;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
     color: #E5C158;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    flex-shrink: 0;
 }
-.pa-feed-brand h3 { margin: 2px 0 0; font-size: 15.5px; color: #ffffff !important; font-weight: 800; }
-.pa-feed-list { list-style: none; margin: 0; padding: 8px 14px; flex: 1; }
-.pa-feed-item { border-bottom: 1px solid var(--pa-border, #e2e8f0); }
+.pa-feed-more {
+    font-size: 11.2px;
+    font-weight: 700;
+    color: #E5C158 !important;
+    text-decoration: none !important;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.pa-feed-more:hover { text-decoration: underline !important; color: #ffffff !important; }
+.pa-feed-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 11px;
+    max-height: 276px;
+    overflow-y: auto;
+    flex: 1;
+}
+.pa-feed-item { border-bottom: 1px solid var(--pa-border, #e6f0eb); }
 .pa-feed-item:last-child { border-bottom: 0; }
 .pa-feed-item > a {
     display: grid;
-    grid-template-columns: 1fr auto;
-    justify-items: start;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    text-align: left;
-    gap: 4px 10px;
-    padding: 10px 4px;
-    text-decoration: none;
+    gap: 8px;
+    padding: 8px 2px;
+    text-decoration: none !important;
     color: inherit;
-    position: relative;
-}
-.pa-feed-date { grid-column: 1 / -1; font-size: 11px; font-weight: 700; color: #b45309; text-align: left; }
-.pa-feed-title { font-size: 13.5px; line-height: 1.4; color: var(--pa-text, #0f172a); transition: color 0.15s ease; text-align: left; }
-.pa-feed-item > a:hover .pa-feed-title { color: #056e4f; }
-.pa-feed-ext { font-weight: 800; color: #C9A227; align-self: center; justify-self: end; }
-.pa-feed-excerpt {
-    grid-column: 1 / -1;
-    display: block;
     text-align: left;
-    font-size: 12px;
-    line-height: 1.45;
-    color: var(--pa-muted, #475569);
-    max-height: 0;
-    opacity: 0;
+}
+.pa-feed-date {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #92400e;
+    background: #fef9e7;
+    border: 1px solid #f3dfa0;
+    border-radius: 6px;
+    padding: 2px 6px;
+    white-space: nowrap;
+    min-width: 48px;
+    text-align: center;
+}
+.pa-feed-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--pa-text, #0f172a);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    transition: max-height 0.2s ease, opacity 0.2s ease;
+    text-align: left;
+    transition: color 0.15s ease;
 }
-.pa-feed-item:hover .pa-feed-excerpt,
-.pa-feed-item:focus-within .pa-feed-excerpt { max-height: 80px; opacity: 1; padding: 0 4px 8px; }
-.pa-feed-empty { padding: 14px 4px; font-size: 13px; color: var(--pa-muted, #64748b); }
-.pa-feed-card-foot {
-    padding: 11px 16px;
-    background: var(--pa-surface-soft, #f8fafc);
-    border-top: 1px solid var(--pa-border, #e2e8f0);
-    text-align: right;
-}
-.pa-feed-card-foot a { font-size: 12.5px; font-weight: 700; color: var(--pa-primary, #056e4f); text-decoration: none; }
+.pa-feed-item > a:hover .pa-feed-title { color: #056e4f; text-decoration: underline; }
+.pa-feed-ext { font-size: 12px; font-weight: 800; color: #C9A227; justify-self: end; }
+.pa-feed-empty { padding: 12px 4px; font-size: 12.5px; color: var(--pa-muted, #64748b); }
 
 /* Modul Data Operasional Terstruktur (Pegawai, Sidang, Ghaib, Statistik) */
 .pa-ops-wrap { margin: 18px 0; }
@@ -1774,20 +2283,22 @@ html[data-pa-theme="dark"] #pa-cmdk-dialog {
     border-color: #355241;
     color: #e6f4ee;
 }
+html[data-pa-theme="dark"] .pa-feed-card {
+    background: #13221a;
+    border-color: #284738;
+    color: #e6f4ee;
+}
 html[data-pa-theme="dark"] .pa-feed-item,
 html[data-pa-theme="dark"] .pa-ops-table td,
 html[data-pa-theme="dark"] .pa-table-scroll { border-color: #2c4637; }
 html[data-pa-theme="dark"] .pa-feed-title { color: #e6f4ee; }
-html[data-pa-theme="dark"] .pa-feed-date { color: #E5C158; }
-html[data-pa-theme="dark"] .pa-feed-excerpt,
+html[data-pa-theme="dark"] .pa-feed-date { background: #262010; border-color: #5c4818; color: #fde68a; }
 html[data-pa-theme="dark"] .pa-pegawai-role,
 html[data-pa-theme="dark"] .pa-pegawai-hover-meta,
 html[data-pa-theme="dark"] .pa-cmdk-item small,
 html[data-pa-theme="dark"] .pa-kpi-box span { color: #cbd5e1; }
 html[data-pa-theme="dark"] .pa-kpi-box strong,
-html[data-pa-theme="dark"] .pa-cmdk-item strong,
-html[data-pa-theme="dark"] .pa-feed-card-foot a { color: #E5C158; }
-html[data-pa-theme="dark"] .pa-feed-card-foot { background: #13221a; border-color: #2c4637; }
+html[data-pa-theme="dark"] .pa-cmdk-item strong { color: #E5C158; }
 html[data-pa-theme="dark"] .pa-feed-item > a:hover .pa-feed-title { color: #6ee7b7; }
 html[data-pa-theme="dark"] .pa-ops-badge { background: rgba(110, 231, 183, 0.14); color: #6ee7b7; }
 html[data-pa-theme="dark"] .pa-cmdk-badge { background: rgba(229, 193, 88, 0.2); color: #fcd34d; }
@@ -1875,11 +2386,13 @@ add_action('wp_body_open', static function () {
                 <p class="pa-shell-brand-sub"><?php echo esc_html($tagline); ?></p>
             </div>
         </a>
-        <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>" aria-label="Pencarian Informasi Website">
-            <input type="search" name="s" class="pa-header-search-input" aria-label="Cari informasi dan berita" placeholder="Cari informasi, berita..." value="<?php echo esc_attr(get_search_query()); ?>">
-            <button type="submit" class="pa-header-search-btn" aria-label="Cari">Cari</button>
-            <button type="button" id="pa-cmdk-open" class="pa-cmdk-trigger" aria-haspopup="dialog" data-pa-tip="Pencarian Instan Lintas Dokumen &amp; Jadwal (Ctrl+K)">⌘ <kbd>Ctrl K</kbd></button>
-        </form>
+        <button type="button" id="pa-cmdk-open" class="pa-unified-search-btn" aria-haspopup="dialog" aria-label="Cari layanan, dokumen, dan berita">
+            <span class="pa-us-left">
+                <svg class="pa-us-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+                <span class="pa-us-placeholder">Cari layanan, dokumen, berita...</span>
+            </span>
+            <kbd class="pa-us-kbd">Ctrl K</kbd>
+        </button>
     </div>
 </header>
 <?php if (!empty($topItems)) : ?>
@@ -1971,6 +2484,27 @@ add_action('wp_footer', static function () {
     </div>
 </footer>
     <?php endif; ?>
+<?php
+    $acoUrlRaw  = trim((string) ($cfg['aco_url'] ?? 'https://cctv.badilag.net/'));
+    $acoFloatOn = (string) ($cfg['aco_float_enabled'] ?? '1') !== '0';
+    if (!pa_sinova_is_adoption_mode() && $acoUrlRaw !== '' && $acoFloatOn) :
+        $acoImgUrl = trim((string) ($cfg['aco_logo_url'] ?? ''));
+        if ($acoImgUrl === '') {
+            if (defined('WPMU_PLUGIN_DIR') && defined('WPMU_PLUGIN_URL') && file_exists(WPMU_PLUGIN_DIR . '/assets/cctv-aco.gif')) {
+                $acoImgUrl = WPMU_PLUGIN_URL . '/assets/cctv-aco.gif';
+            } else {
+                $acoImgUrl = content_url('/mu-plugins/assets/cctv-aco.gif');
+            }
+        }
+?>
+<a id="pa-aco-float" class="pa-aco-float" href="<?php echo esc_url($acoUrlRaw); ?>" target="_blank" rel="noopener noreferrer" aria-label="Buka Access CCTV Online (ACO) Ditjen Badilag" data-pa-tip="Access CCTV Online (ACO) · Klik untuk memantau">
+    <img class="pa-aco-float-img" src="<?php echo esc_url($acoImgUrl); ?>" alt="ACO Access CCTV Online" width="56" height="50" loading="lazy" decoding="async">
+    <span class="pa-aco-float-static" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        <span>ACO</span>
+    </span>
+</a>
+<?php endif; ?>
 <button type="button" id="pa-btn-top" aria-label="Kembali ke atas" data-pa-tip="Kembali ke bagian atas halaman">↑</button>
 <div id="pa-a11y-dock" role="region" aria-label="Sarana Aksesibilitas Website">
     <button type="button" id="pa-a11y-toggle" aria-expanded="false" aria-controls="pa-a11y-panel" data-pa-tip="Buka panel pengaturan aksesibilitas WCAG 2.2">♿ Aksesibilitas</button>
@@ -1994,13 +2528,19 @@ add_action('wp_footer', static function () {
     </div>
 </div>
 <dialog id="pa-cmdk-dialog" aria-labelledby="pa-cmdk-label">
-    <div class="pa-cmdk-head">
-        <span id="pa-cmdk-label" style="font-weight:800;color:#E5C158;font-size:13px;">PENCARIAN INSTAN</span>
-        <input type="search" id="pa-cmdk-input" aria-label="Ketik kata kunci pencarian instan" placeholder="Ketik kata kunci: LRA, jadwal sidang, DIPA, disabilitas..." autocomplete="off">
+    <form role="search" method="get" action="<?php echo esc_url(home_url('/')); ?>" id="pa-cmdk-form" class="pa-cmdk-head">
+        <svg class="pa-cmdk-head-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+        <span id="pa-cmdk-label" class="screen-reader-text">Pencarian Terpadu Website</span>
+        <input type="search" name="s" id="pa-cmdk-input" aria-label="Cari layanan, menu, dokumen, atau berita" placeholder="Cari layanan, menu, dokumen (LRA/DIPA), atau berita..." autocomplete="off">
+        <button type="submit" class="pa-cmdk-submit">Cari</button>
         <button type="button" id="pa-cmdk-close" aria-label="Tutup pencarian">ESC</button>
-    </div>
+    </form>
     <div class="pa-cmdk-results" id="pa-cmdk-results" role="region" aria-live="polite">
         <div class="pa-cmdk-empty">Ketik minimal 2 karakter atau jelajahi pintasan: DIPA, LRA, Jadwal Sidang, e-Court, Disabilitas.</div>
+    </div>
+    <div class="pa-cmdk-foot">
+        <span>Pencarian terpadu: Menu · 23 Arsip Dokumen · Layanan · Berita</span>
+        <span>Tekan <kbd>Enter</kbd> untuk pencarian penuh</span>
     </div>
 </dialog>
 <?php if (!function_exists('wp_print_speculation_rules') && !pa_sinova_is_adoption_mode()) : ?>
@@ -2091,19 +2631,263 @@ add_action('wp_footer', static function () {
     }
 
     var menuTips = {
-        'beranda': 'Halaman utama portal keterbukaan informasi',
-        'profil pengadilan': 'Visi, misi, tupoksi, yurisdiksi, struktur, & profil pegawai',
-        'layanan hukum': 'Jadwal sidang, e-Court, putusan, panjar, LIPA 7, & panggilan ghaib',
-        'transparansi': 'LRA, DIPA 01/04, PNBP, SAKIP, LKJiP, & LHKPN',
-        'layanan publik & pengaduan': 'Survei SKM/SPAK/SPKP, posbakum, disabilitas, & pengaduan',
-        'berita & publikasi': 'Berita satker, pengumuman MA RI & Badilag, serta MoU'
+        'beranda': 'Halaman utama portal keterbukaan informasi'
     };
     document.querySelectorAll('#ast-hf-menu-1 > .menu-item > .menu-link, .ast-builder-menu-1 .main-header-menu > .menu-item > .menu-link, .pa-shell-menu > li > a').forEach(function(a){
+        var parentLi = a.parentElement;
+        if(parentLi && parentLi.querySelector(':scope > ul.sub-menu, :scope > ul.pa-shell-submenu')) return;
         if(!a.hasAttribute('data-pa-tip')){
             var key = (a.textContent || '').replace(/[▾\s]+/g, ' ').trim().toLowerCase();
             if(menuTips[key]) a.setAttribute('data-pa-tip', menuTips[key]);
         }
     });
+
+    (function initPaMegaMenu(){
+        var canEnhance = document.body.classList.contains('pa-sinova-classic-shell') || document.querySelector('.pa-shell-menu');
+        if(!canEnhance) return;
+        var navLists = document.querySelectorAll('#ast-hf-menu-1, .pa-shell-menu');
+        if(!navLists.length) return;
+
+        function extractLabel(el){
+            var clone = el.cloneNode(true);
+            clone.querySelectorAll('.ast-icon,.dropdown-menu-toggle,svg').forEach(function(rm){ rm.remove(); });
+            return (clone.textContent || '').replace(/[▾\s]+/g, ' ').trim();
+        }
+
+        var megaEntries = [];
+        var defaultCrumb = 'Arahkan kursor pada kartu untuk pratinjau jalur menu';
+
+        function closeAllExcept(activeEntry, withGuard){
+            megaEntries.forEach(function(en){
+                if(en === activeEntry) return;
+                clearTimeout(en.timer);
+                en.li.classList.remove('is-mega-open');
+                if(withGuard) en.li.classList.add('is-mega-closed');
+                en.trigger.setAttribute('aria-expanded', 'false');
+            });
+        }
+
+        function resetEntry(en){
+            if(en.crumbTxt) en.crumbTxt.textContent = defaultCrumb;
+        }
+
+        function shortUrlPath(rawHref){
+            if(!rawHref) return '';
+            try{
+                var u = new URL(rawHref, window.location.origin);
+                return u.origin === window.location.origin ? (u.pathname || '/') : u.hostname;
+            }catch(err){
+                return rawHref;
+            }
+        }
+
+        navLists.forEach(function(navUl){
+            var topItems = Array.prototype.slice.call(navUl.children);
+            topItems.forEach(function(li){
+                var trigger = li.querySelector(':scope > a');
+                if(!trigger) return;
+                var topTitle = extractLabel(trigger);
+                var sub = li.querySelector(':scope > ul.sub-menu, :scope > ul.pa-shell-submenu');
+                if(!sub) return;
+
+                var rawLinks = Array.prototype.slice.call(sub.querySelectorAll('a'));
+                var items = [];
+                var seen = {};
+                rawLinks.forEach(function(a){
+                    var label = extractLabel(a);
+                    var href = a.getAttribute('href') || '#';
+                    if(!label || seen[label + '|' + href]) return;
+                    seen[label + '|' + href] = true;
+                    items.push({
+                        label: label,
+                        href: href,
+                        target: a.getAttribute('target') || '',
+                        rel: a.getAttribute('rel') || ''
+                    });
+                });
+                if(!items.length) return;
+
+                while(sub.firstChild){ sub.removeChild(sub.firstChild); }
+                sub.classList.add('pa-mega-panel');
+
+                var totalCount = items.length;
+                var cols = (totalCount <= 2) ? '2' : ((totalCount === 3 || (totalCount > 4 && totalCount <= 6)) ? '3' : '4');
+
+                var headLi = document.createElement('li');
+                headLi.className = 'pa-mega-head';
+                headLi.setAttribute('role', 'presentation');
+
+                var headLeft = document.createElement('div');
+                headLeft.className = 'pa-mega-head-left';
+                var headTitle = document.createElement('p');
+                headTitle.className = 'pa-mega-head-title';
+                headTitle.textContent = topTitle;
+                var countPill = document.createElement('span');
+                countPill.className = 'pa-mega-count-pill';
+                countPill.textContent = totalCount + ' Sub-Menu';
+                headLeft.appendChild(headTitle);
+                headLeft.appendChild(countPill);
+
+                var headHint = document.createElement('span');
+                headHint.className = 'pa-mega-head-hint';
+                headHint.textContent = 'Klik kartu untuk membuka layanan';
+
+                headLi.appendChild(headLeft);
+                headLi.appendChild(headHint);
+
+                var bodyLi = document.createElement('li');
+                bodyLi.className = 'pa-mega-body';
+                bodyLi.setAttribute('role', 'presentation');
+
+                var grid = document.createElement('ul');
+                grid.className = 'pa-mega-grid';
+                grid.setAttribute('data-mega-cols', cols);
+
+                var footLi = document.createElement('li');
+                footLi.className = 'pa-mega-foot';
+                footLi.setAttribute('role', 'presentation');
+                var crumbWrap = document.createElement('div');
+                crumbWrap.className = 'pa-mega-crumb-wrap';
+                var dot = document.createElement('span');
+                dot.className = 'pa-mega-dot';
+                var crumbCat = document.createElement('span');
+                crumbCat.className = 'pa-mega-crumb-cat';
+                crumbCat.textContent = topTitle;
+                var crumbSep = document.createElement('span');
+                crumbSep.className = 'pa-mega-crumb-sep';
+                crumbSep.textContent = '›';
+                var crumbTxt = document.createElement('span');
+                crumbTxt.className = 'pa-mega-crumb-txt';
+                crumbTxt.textContent = defaultCrumb;
+                crumbWrap.appendChild(dot);
+                crumbWrap.appendChild(crumbCat);
+                crumbWrap.appendChild(crumbSep);
+                crumbWrap.appendChild(crumbTxt);
+
+                var availEl = document.createElement('span');
+                availEl.className = 'pa-mega-avail';
+                availEl.textContent = totalCount + ' layanan tersedia';
+
+                footLi.appendChild(crumbWrap);
+                footLi.appendChild(availEl);
+
+                items.forEach(function(it){
+                    var cardLi = document.createElement('li');
+                    var a = document.createElement('a');
+                    a.className = 'pa-mega-card-link';
+                    a.setAttribute('href', it.href);
+                    if(it.target) a.setAttribute('target', it.target);
+                    if(it.rel) a.setAttribute('rel', it.rel);
+                    var lbl = document.createElement('span');
+                    lbl.className = 'pa-mega-card-label';
+                    lbl.textContent = it.label;
+                    a.appendChild(lbl);
+                    cardLi.appendChild(a);
+                    grid.appendChild(cardLi);
+
+                    function preview(){
+                        crumbTxt.textContent = it.label + '  —  ' + shortUrlPath(it.href);
+                    }
+                    a.addEventListener('mouseenter', preview);
+                    a.addEventListener('focus', preview);
+                });
+
+                grid.addEventListener('mouseleave', function(){
+                    crumbTxt.textContent = defaultCrumb;
+                });
+
+                bodyLi.appendChild(grid);
+
+                sub.appendChild(headLi);
+                sub.appendChild(bodyLi);
+                sub.appendChild(footLi);
+
+                var entry = {
+                    li: li,
+                    trigger: trigger,
+                    sub: sub,
+                    crumbTxt: crumbTxt,
+                    totalCount: totalCount,
+                    timer: null
+                };
+                megaEntries.push(entry);
+
+                function openThis(){
+                    clearTimeout(entry.timer);
+                    closeAllExcept(entry, false);
+                    li.classList.remove('is-mega-closed');
+                    li.classList.add('is-mega-open');
+                    trigger.setAttribute('aria-expanded', 'true');
+                }
+                function closeThis(withGuard){
+                    clearTimeout(entry.timer);
+                    li.classList.remove('is-mega-open');
+                    if(withGuard) li.classList.add('is-mega-closed');
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+
+                li.addEventListener('mouseenter', function(){
+                    if(window.innerWidth <= 960) return;
+                    openThis();
+                });
+                li.addEventListener('mouseleave', function(){
+                    if(window.innerWidth <= 960) return;
+                    clearTimeout(entry.timer);
+                    entry.timer = setTimeout(function(){
+                        closeThis(false);
+                        li.classList.remove('is-mega-closed');
+                        resetEntry(entry);
+                    }, 140);
+                });
+                trigger.addEventListener('click', function(e){
+                    var rawHref = trigger.getAttribute('href') || '';
+                    var isMobile = window.innerWidth <= 960;
+                    var isHash = rawHref === '#' || rawHref.indexOf('#') === 0;
+                    if(!isHash && !isMobile) return;
+                    e.preventDefault();
+                    if(isMobile && li.classList.contains('is-mega-open')){
+                        closeThis(true);
+                        resetEntry(entry);
+                    } else {
+                        openThis();
+                    }
+                });
+                sub.addEventListener('keydown', function(e){
+                    if(e.key === 'Escape'){
+                        e.stopPropagation();
+                        closeThis(true);
+                        resetEntry(entry);
+                        trigger.focus();
+                    }
+                });
+            });
+        });
+
+        document.addEventListener('click', function(e){
+            if(!e.target.closest('#ast-hf-menu-1, .pa-shell-menu')){
+                megaEntries.forEach(function(en){
+                    clearTimeout(en.timer);
+                    en.li.classList.remove('is-mega-open');
+                    en.trigger.setAttribute('aria-expanded', 'false');
+                    resetEntry(en);
+                });
+            }
+        });
+        document.addEventListener('keydown', function(e){
+            if(e.key === 'Escape'){
+                megaEntries.forEach(function(en){
+                    if(en.li.classList.contains('is-mega-open')){
+                        clearTimeout(en.timer);
+                        en.li.classList.remove('is-mega-open');
+                        en.li.classList.add('is-mega-closed');
+                        en.trigger.setAttribute('aria-expanded', 'false');
+                        resetEntry(en);
+                        en.trigger.focus();
+                    }
+                });
+            }
+        });
+    })();
 
     var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var rafLock = false;
@@ -2341,7 +3125,7 @@ add_action('wp_footer', static function () {
     // Hydrate Official RSS Feeds via DOM API (Trusted Types Safe)
     var feedSec = document.querySelector('.pa-feeds-section[data-pa-feeds-hydrate="1"]');
     if(feedSec && window.fetch){
-        var fLimit = parseInt(feedSec.getAttribute('data-pa-feeds-limit') || '5', 10) || 5;
+        var fLimit = parseInt(feedSec.getAttribute('data-pa-feeds-limit') || '4', 10) || 4;
         fetch(<?php echo wp_json_encode(rest_url('pa-portal/v1/official-feeds')); ?>, { credentials: 'same-origin' })
             .then(function(r){ return r.ok ? r.json() : null; })
             .then(function(d){
@@ -2357,13 +3141,14 @@ add_action('wp_footer', static function () {
                         a.setAttribute('href', safeHref(it.link));
                         a.setAttribute('target', '_blank');
                         a.setAttribute('rel', 'noopener noreferrer');
+                        if(it.title) a.setAttribute('title', it.title);
                         if(it.date_label){
                             var dt = document.createElement('span');
                             dt.className = 'pa-feed-date';
-                            dt.textContent = it.date_label;
+                            dt.textContent = String(it.date_label).replace(/\s+\d{4}$/, '').trim();
                             a.appendChild(dt);
                         }
-                        var ttl = document.createElement('strong');
+                        var ttl = document.createElement('span');
                         ttl.className = 'pa-feed-title';
                         ttl.textContent = it.title || '';
                         a.appendChild(ttl);
@@ -2373,12 +3158,6 @@ add_action('wp_footer', static function () {
                         ext.textContent = '↗';
                         a.appendChild(ext);
                         li.appendChild(a);
-                        if(it.excerpt){
-                            var ex = document.createElement('span');
-                            ex.className = 'pa-feed-excerpt';
-                            ex.textContent = it.excerpt;
-                            li.appendChild(ex);
-                        }
                         frag.appendChild(li);
                     });
                     ul.replaceChildren(frag);
@@ -2390,18 +3169,38 @@ add_action('wp_footer', static function () {
 
     // Command Palette Ctrl+K (Trusted Types Safe)
     var cmdDlg = document.getElementById('pa-cmdk-dialog');
+    var cmdForm = document.getElementById('pa-cmdk-form');
     var cmdInput = document.getElementById('pa-cmdk-input');
     var cmdRes = document.getElementById('pa-cmdk-results');
     var cmdClose = document.getElementById('pa-cmdk-close');
     var cmdTimer = null;
     var quickUrl = <?php echo wp_json_encode(rest_url('pa-portal/v1/quick-search')); ?>;
 
+    function getMenuMatches(q){
+        var needle = (q || '').trim().toLowerCase();
+        if(!needle) return [];
+        var matches = [];
+        var seen = {};
+        document.querySelectorAll('#ast-hf-menu-1 a, .pa-shell-menu a').forEach(function(a){
+            var href = a.getAttribute('href') || '';
+            if(!href || href === '#' || href.indexOf('#') === 0) return;
+            var lbl = a.querySelector('.pa-mega-card-label');
+            var text = (lbl ? lbl.textContent : a.textContent || '').replace(/[▾→\s]+/g, ' ').trim();
+            if(!text || text.toLowerCase().indexOf(needle) === -1) return;
+            var k = text.toLowerCase() + '|' + href;
+            if(seen[k]) return;
+            seen[k] = true;
+            matches.push({ type: 'menu', badge: 'Menu', title: text, url: href, desc: 'Navigasi Portal' });
+        });
+        return matches.slice(0, 6);
+    }
+
     function renderCmdItems(list){
         if(!cmdRes) return;
         if(!list || !list.length){
             var empty = document.createElement('div');
             empty.className = 'pa-cmdk-empty';
-            empty.textContent = 'Tidak ditemukan hasil yang cocok. Coba kata kunci lain atau tekan Enter pada pencarian utama.';
+            empty.textContent = 'Tidak ditemukan hasil instan. Tekan Enter untuk mencari seluruh artikel & halaman.';
             cmdRes.replaceChildren(empty);
             return;
         }
@@ -2432,11 +3231,26 @@ add_action('wp_footer', static function () {
         cmdRes.replaceChildren(frag);
     }
     function fetchCmd(q){
+        var menuHits = getMenuMatches(q);
+        if(menuHits.length){
+            renderCmdItems(menuHits);
+        }
         if(!window.fetch) return;
         fetch(quickUrl + '?q=' + encodeURIComponent(q || ''), { credentials: 'same-origin' })
             .then(function(r){ return r.ok ? r.json() : null; })
-            .then(function(d){ if(d && Array.isArray(d.items)) renderCmdItems(d.items); })
-            .catch(function(){});
+            .then(function(d){
+                var apiItems = (d && Array.isArray(d.items)) ? d.items : [];
+                var merged = [];
+                var seen = {};
+                menuHits.concat(apiItems).forEach(function(it){
+                    var k = String(it.title || '').toLowerCase() + '|' + String(it.url || '');
+                    if(seen[k]) return;
+                    seen[k] = true;
+                    merged.push(it);
+                });
+                renderCmdItems(merged.slice(0, 14));
+            })
+            .catch(function(){ if(menuHits.length) renderCmdItems(menuHits); });
     }
     function openCmd(){
         if(!cmdDlg || typeof cmdDlg.showModal !== 'function') return;
@@ -2445,6 +3259,14 @@ add_action('wp_footer', static function () {
             cmdInput.focus();
             fetchCmd(cmdInput.value || '');
         }
+    }
+    if(cmdForm && cmdInput){
+        cmdForm.addEventListener('submit', function(e){
+            if(!(cmdInput.value || '').trim()){
+                e.preventDefault();
+                cmdInput.focus();
+            }
+        });
     }
     document.querySelectorAll('#pa-cmdk-open').forEach(function(b){ b.addEventListener('click', openCmd); });
     if(cmdClose && cmdDlg){ cmdClose.addEventListener('click', function(){ cmdDlg.close(); }); }

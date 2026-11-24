@@ -303,28 +303,101 @@ add_action('rest_api_init', static function () {
 });
 
 add_shortcode('pa_official_announcements', static function ($atts) {
-    $cfgAtts = shortcode_atts(array('limit' => 5), $atts, 'pa_official_announcements');
+    $cfgAtts = shortcode_atts(array('limit' => 4), $atts, 'pa_official_announcements');
     $limit   = max(1, min(10, (int) $cfgAtts['limit']));
     $feeds   = pa_portal_get_official_feeds(false);
     $maList  = array_slice((array) ($feeds['ma'] ?? array()), 0, $limit);
     $bdList  = array_slice((array) ($feeds['badilag'] ?? array()), 0, $limit);
     $needsHydrate = empty($maList) && empty($bdList);
 
-    $renderItems = static function (array $list, string $fallbackLabel, string $fallbackUrl): string {
+    $satkerList    = array();
+    $satkerPostCnt = 0;
+    if (function_exists('get_posts')) {
+        $annPosts = get_posts(array(
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'category_name'  => 'pengumuman,pengumuman-satker',
+            'posts_per_page' => $limit,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ));
+        foreach ((array) $annPosts as $ap) {
+            $ts           = strtotime((string) ($ap->post_date ?? ''));
+            $satkerList[] = array(
+                'title'      => (string) get_the_title($ap),
+                'link'       => (string) get_permalink($ap),
+                'date_label' => $ts ? pa_portal_format_id_date($ts) : '',
+            );
+            $satkerPostCnt++;
+        }
+    }
+
+    if (count($satkerList) < $limit && function_exists('pa_sinova_get_settings')) {
+        $cfgS   = pa_sinova_get_settings();
+        $emgTxt = trim((string) ($cfgS['emergency_notice'] ?? ''));
+        if ($emgTxt !== '') {
+            $emgHref = trim((string) ($cfgS['emergency_notice_url'] ?? ''));
+            if ($emgHref === '') {
+                $emgHref = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('informasi-serta-merta') : home_url('/informasi-serta-merta/');
+            }
+            array_unshift($satkerList, array(
+                'title'      => $emgTxt,
+                'link'       => $emgHref,
+                'date_label' => 'Serta-Merta',
+            ));
+        }
+    }
+
+    if (count($satkerList) < $limit && function_exists('pa_portal_get_records')) {
+        $ghaibUrl = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/');
+        $ghaibRecs = pa_portal_get_records('ghaib', $limit);
+        foreach ($ghaibRecs as $gr) {
+            if (count($satkerList) >= $limit) {
+                break;
+            }
+            $meta = json_decode((string) ($gr['meta_json'] ?? ''), true);
+            if (!is_array($meta)) {
+                $meta = array();
+            }
+            $pihak = trim((string) ($meta['pihak'] ?? ''));
+            $tsEv  = !empty($gr['event_date']) ? strtotime((string) $gr['event_date']) : 0;
+            $satkerList[] = array(
+                'title'      => 'Panggilan Ghaib ' . (string) ($gr['title'] ?? '') . ($pihak !== '' ? ' — ' . $pihak : ''),
+                'link'       => !empty($meta['doc_url']) ? (string) $meta['doc_url'] : $ghaibUrl,
+                'date_label' => $tsEv ? pa_portal_format_id_date($tsEv) : 'Ghaib',
+            );
+        }
+    }
+    $satkerList = array_slice($satkerList, 0, $limit);
+
+    $satkerMoreUrl = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/');
+    if ($satkerPostCnt > 0 && function_exists('get_category_by_slug') && function_exists('get_category_link')) {
+        $pCat = get_category_by_slug('pengumuman');
+        if ($pCat && !is_wp_error($pCat)) {
+            $satkerMoreUrl = (string) get_category_link((int) $pCat->term_id);
+        }
+    }
+
+    $renderItems = static function (array $list, string $fallbackLabel, string $fallbackUrl, bool $isExternal = true): string {
         if (empty($list)) {
-            return '<li class="pa-feed-empty">Memuat informasi terbaru dari portal resmi… <a href="' . esc_url($fallbackUrl) . '" target="_blank" rel="noopener noreferrer">' . esc_html($fallbackLabel) . ' ↗</a></li>';
+            $attr = $isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+            $arr  = $isExternal ? '&#8599;' : '&#8594;';
+            return '<li class="pa-feed-empty">Belum ada pengumuman terbaru. <a href="' . esc_url($fallbackUrl) . '"' . $attr . '>' . esc_html($fallbackLabel) . ' ' . $arr . '</a></li>';
         }
         $html = '';
+        $attr = $isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+        $arr  = $isExternal ? '&#8599;' : '&#8594;';
         foreach ($list as $it) {
-            $dt  = !empty($it['date_label']) ? '<span class="pa-feed-date">' . esc_html($it['date_label']) . '</span>' : '';
-            $exc = !empty($it['excerpt']) ? '<span class="pa-feed-excerpt">' . esc_html($it['excerpt']) . '</span>' : '';
+            $dtRaw   = trim((string) ($it['date_label'] ?? ''));
+            $dtShort = $dtRaw !== '' ? trim((string) preg_replace('/\s+\d{4}$/', '', $dtRaw)) : '';
+            $dt      = $dtShort !== '' ? '<span class="pa-feed-date">' . esc_html($dtShort) . '</span>' : '';
+            $title   = (string) ($it['title'] ?? '');
             $html .= '<li class="pa-feed-item">'
-                . '<a href="' . esc_url((string) $it['link']) . '" target="_blank" rel="noopener noreferrer">'
+                . '<a href="' . esc_url((string) $it['link']) . '"' . $attr . ' title="' . esc_attr($title) . '">'
                 . $dt
-                . '<strong class="pa-feed-title">' . esc_html((string) $it['title']) . '</strong>'
-                . '<span class="pa-feed-ext" aria-hidden="true">↗</span>'
+                . '<span class="pa-feed-title">' . esc_html($title) . '</span>'
+                . '<span class="pa-feed-ext" aria-hidden="true">' . $arr . '</span>'
                 . '</a>'
-                . $exc
                 . '</li>';
         }
         return $html;
@@ -332,55 +405,50 @@ add_shortcode('pa_official_announcements', static function ($atts) {
 
     ob_start();
     ?>
-    <section class="pa-section-block pa-feeds-section" aria-label="Pengumuman Resmi Mahkamah Agung RI dan Ditjen Badilag" data-pa-feeds-hydrate="<?php echo $needsHydrate ? '1' : '0'; ?>" data-pa-feeds-limit="<?php echo esc_attr((string) $limit); ?>">
-        <h2 class="pa-starter-heading">PENGUMUMAN RESMI MA RI &amp; DITJEN BADILAG <span class="pa-hint-i" aria-hidden="true">i</span></h2>
-        <p class="pa-starter-sub">Sindikasi Langsung Informasi Resmi Mahkamah Agung RI dan Direktorat Jenderal Badan Peradilan Agama</p>
+    <section class="pa-section-block pa-feeds-section" aria-label="Pengumuman Satker, Mahkamah Agung RI dan Ditjen Badilag" data-pa-feeds-hydrate="<?php echo $needsHydrate ? '1' : '0'; ?>" data-pa-feeds-limit="<?php echo esc_attr((string) $limit); ?>">
+        <h2 class="pa-starter-heading">PENGUMUMAN SATKER, MA RI &amp; DITJEN BADILAG <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+        <p class="pa-starter-sub">Pengumuman Resmi Satuan Kerja serta Sindikasi Langsung Mahkamah Agung RI dan Ditjen Badilag</p>
         <div class="pa-feeds-grid">
             <article class="pa-feed-card">
                 <header class="pa-feed-card-head">
-                    <div class="pa-feed-brand">
-                        <span class="pa-feed-crest" aria-hidden="true">
-                            <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M20 3L34 8V19C34 28 27.8 34.4 20 37C12.2 34.4 6 28 6 19V8L20 3Z" fill="#022c22" stroke="#E5C158" stroke-width="2"/>
-                                <path d="M20 10V27M13 15H27M13 15L10.5 21H15.5L13 15ZM27 15L24.5 21H29.5L27 15ZM16 27H24" stroke="#E5C158" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                        <div>
-                            <span class="pa-feed-pill">RSS Resmi MA RI</span>
-                            <h3>Mahkamah Agung RI</h3>
-                        </div>
+                    <div class="pa-feed-head-left">
+                        <span class="pa-feed-dot" aria-hidden="true"></span>
+                        <h3>Pengumuman Satker</h3>
+                        <span class="pa-feed-pill">SATKER</span>
                     </div>
+                    <a class="pa-feed-more" href="<?php echo esc_url($satkerMoreUrl); ?>">Semua &#8594;</a>
                 </header>
-                <ul class="pa-feed-list" id="pa-feed-list-ma">
-                    <?php echo $renderItems($maList, 'Buka Portal MA RI', 'https://www.mahkamahagung.go.id/id/pengumuman'); ?>
+                <ul class="pa-feed-list" id="pa-feed-list-satker">
+                    <?php echo $renderItems($satkerList, 'Panggilan Ghaib', $satkerMoreUrl, false); ?>
                 </ul>
-                <footer class="pa-feed-card-foot">
-                    <a href="https://www.mahkamahagung.go.id/id/pengumuman" target="_blank" rel="noopener noreferrer" data-pa-tip="Kunjungi laman pengumuman resmi Mahkamah Agung RI.">Portal Mahkamah Agung RI ↗</a>
-                </footer>
             </article>
 
             <article class="pa-feed-card">
                 <header class="pa-feed-card-head">
-                    <div class="pa-feed-brand">
-                        <span class="pa-feed-crest" aria-hidden="true">
-                            <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="3" y="3" width="34" height="34" rx="9" fill="#022c22" stroke="#E5C158" stroke-width="2"/>
-                                <path d="M12 14H28M12 20H24M12 26H21" stroke="#E5C158" stroke-width="2.2" stroke-linecap="round"/>
-                                <circle cx="29" cy="25" r="4" fill="#056e4f" stroke="#E5C158" stroke-width="1.8"/>
-                            </svg>
-                        </span>
-                        <div>
-                            <span class="pa-feed-pill">RSS Resmi Badilag</span>
-                            <h3>Ditjen Badilag MA RI</h3>
-                        </div>
+                    <div class="pa-feed-head-left">
+                        <span class="pa-feed-dot" aria-hidden="true"></span>
+                        <h3>Mahkamah Agung RI</h3>
+                        <span class="pa-feed-pill">RSS</span>
                     </div>
+                    <a class="pa-feed-more" href="https://www.mahkamahagung.go.id/id/pengumuman" target="_blank" rel="noopener noreferrer">Portal MA &#8599;</a>
+                </header>
+                <ul class="pa-feed-list" id="pa-feed-list-ma">
+                    <?php echo $renderItems($maList, 'Portal MA RI', 'https://www.mahkamahagung.go.id/id/pengumuman', true); ?>
+                </ul>
+            </article>
+
+            <article class="pa-feed-card">
+                <header class="pa-feed-card-head">
+                    <div class="pa-feed-head-left">
+                        <span class="pa-feed-dot" aria-hidden="true"></span>
+                        <h3>Ditjen Badilag MA RI</h3>
+                        <span class="pa-feed-pill">RSS</span>
+                    </div>
+                    <a class="pa-feed-more" href="https://badilag.mahkamahagung.go.id/pengumuman-elektronik" target="_blank" rel="noopener noreferrer">Badilag &#8599;</a>
                 </header>
                 <ul class="pa-feed-list" id="pa-feed-list-badilag">
-                    <?php echo $renderItems($bdList, 'Buka Pengumuman Badilag', 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik'); ?>
+                    <?php echo $renderItems($bdList, 'Pengumuman Badilag', 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik', true); ?>
                 </ul>
-                <footer class="pa-feed-card-foot">
-                    <a href="https://badilag.mahkamahagung.go.id/pengumuman-elektronik" target="_blank" rel="noopener noreferrer" data-pa-tip="Kunjungi kanal Pengumuman Elektronik Ditjen Badilag.">Pengumuman Elektronik Badilag ↗</a>
-                </footer>
             </article>
         </div>
     </section>
