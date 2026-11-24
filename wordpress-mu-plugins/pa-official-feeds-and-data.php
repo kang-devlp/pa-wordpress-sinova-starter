@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA Starter - Official RSS Feeds (MA RI & Badilag), Data Operasional, Quick Search & SEO JSON-LD
  * Description: Mengambil dan menayangkan pengumuman resmi Mahkamah Agung RI & Ditjen Badilag via RSS (SWR cache + SSRF guard), tabel & shortcode terstruktur Pegawai/Jadwal Sidang/Panggilan Ghaib/Statistik Perkara, REST API Pencarian Kilat Ctrl+K, serta Open Graph & JSON-LD GovernmentOrganization.
- * Version: 1.0.0-starter
+ * Version: 2.3.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -582,6 +582,19 @@ add_shortcode('pa_pegawai_grid', static function () {
                         <span class="pa-pegawai-cat"><?php echo esc_html((string) ($r['category'] ?: 'Aparatur')); ?></span>
                         <h3><?php echo esc_html($name); ?></h3>
                         <p class="pa-pegawai-role"><?php echo esc_html((string) $r['subtitle']); ?></p>
+                        <button type="button" class="pa-peg-detail-btn" data-peg-detail="<?php echo esc_attr(wp_json_encode(array(
+                            'name'  => $name,
+                            'role'  => (string) $r['subtitle'],
+                            'group' => (string) ($r['category'] ?: 'Aparatur'),
+                            'photo' => $photo,
+                            'init'  => $initials ?: 'PA',
+                            'nip'   => (string) ($meta['nip'] ?? ''),
+                            'gol'   => (string) ($meta['gol'] ?? ''),
+                            'tmt'   => (string) ($meta['tmt'] ?? ''),
+                            'edu'   => (string) ($meta['edu'] ?? ''),
+                            'r_edu' => (string) ($meta['riwayat_pendidikan'] ?? ''),
+                            'r_jab' => (string) ($meta['riwayat_jabatan'] ?? ''),
+                        )) ?: '{}'); ?>">Detail Profil</button>
                     </div>
                     <div class="pa-pegawai-hover-meta">
                         <?php if (!empty($meta['nip'])) : ?><div><strong>NIP:</strong> <?php echo esc_html((string) $meta['nip']); ?></div><?php endif; ?>
@@ -591,6 +604,13 @@ add_shortcode('pa_pegawai_grid', static function () {
                 </article>
             <?php endforeach; ?>
         </div>
+        <dialog id="pa-pegawai-dlg" class="pa-peg-dlg" closedby="any" aria-labelledby="pa-peg-dlg-name">
+            <div class="pa-peg-dlg-head">
+                <h1 id="pa-peg-dlg-name">Profil Pejabat / Pegawai</h1>
+                <form method="dialog"><button type="submit" class="pa-peg-dlg-close" aria-label="Tutup profil">✕</button></form>
+            </div>
+            <div class="pa-peg-dlg-body" id="pa-peg-dlg-body"></div>
+        </dialog>
     </div>
     <?php
     return (string) ob_get_clean();
@@ -807,6 +827,234 @@ add_shortcode('pa_statistik_perkara', static function () {
             </table>
         </div>
     </div>
+    <?php
+    return (string) ob_get_clean();
+});
+
+// Helper ringkas Statistik Perkara untuk blok Beranda 12 kolom (5/12 atau 12/12)
+function pa_portal_render_stats_widget(string $heading = 'Statistik Perkara'): string {
+    $rows = pa_portal_get_records('statistik', 12);
+    $totIn = 0; $totOut = 0; $lastRem = 0;
+    foreach ($rows as $idx => $r) {
+        $m = json_decode((string) ($r['meta_json'] ?? ''), true);
+        if (!is_array($m)) $m = array();
+        $totIn  += (int) ($m['diterima'] ?? 0);
+        $totOut += (int) ($m['diputus'] ?? 0);
+        if ($idx === 0) {
+            $lastRem = (int) ($m['sisa'] ?? 0);
+        }
+    }
+    $ratio    = $totIn > 0 ? round(($totOut / $totIn) * 100, 1) : 0;
+    $statUrl  = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('statistik-perkara') : home_url('/statistik-perkara/');
+    ob_start();
+    ?>
+    <section class="pa-grid-panel pa-stats-panel" aria-label="<?php echo esc_attr($heading); ?>">
+        <div class="pa-gp-head">
+            <h2 class="pa-gp-title"><?php echo esc_html($heading); ?></h2>
+            <a class="pa-gp-more" href="<?php echo esc_url($statUrl); ?>">Detail →</a>
+        </div>
+        <div class="pa-stats-mini-kpis">
+            <div class="pa-smk"><span>Diterima</span><strong><?php echo esc_html(number_format($totIn, 0, ',', '.')); ?></strong></div>
+            <div class="pa-smk"><span>Diputus</span><strong><?php echo esc_html(number_format($totOut, 0, ',', '.')); ?></strong></div>
+            <div class="pa-smk"><span>Sisa</span><strong><?php echo esc_html(number_format($lastRem, 0, ',', '.')); ?></strong></div>
+            <div class="pa-smk pa-smk-accent"><span>Penyelesaian</span><strong><?php echo esc_html((string) $ratio); ?>%</strong></div>
+        </div>
+        <?php if (!empty($rows)) : ?>
+            <div class="pa-stats-mini-bars">
+                <?php foreach (array_slice($rows, 0, 4) as $r) :
+                    $m   = json_decode((string) ($r['meta_json'] ?? ''), true);
+                    $in  = (int) ($m['diterima'] ?? 0);
+                    $out = (int) ($m['diputus'] ?? 0);
+                    $pct = $in > 0 ? min(100, round(($out / $in) * 100, 1)) : 0;
+                ?>
+                    <div class="pa-smb-row">
+                        <div class="pa-smb-top">
+                            <strong><?php echo esc_html((string) $r['title']); ?></strong>
+                            <span><?php echo esc_html("{$out}/{$in} ({$pct}%)"); ?></span>
+                        </div>
+                        <div class="pa-prog-bar" role="progressbar" aria-valuenow="<?php echo esc_attr((string) $pct); ?>" aria-valuemin="0" aria-valuemax="100"><span style="width:<?php echo esc_attr((string) $pct); ?>%;"></span></div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php else : ?>
+            <p class="pa-sched-empty">Belum ada data statistik perkara bulanan.</p>
+        <?php endif; ?>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+}
+
+// Helper Pengumuman & Panggilan Ghaib ringkas (tab Satker / MA RI / Badilag) untuk blok sempit (w <= 6)
+function pa_portal_render_announcements_compact(string $heading = 'Pengumuman & Panggilan Ghaib', int $limit = 5): string {
+    $limit    = max(2, min(10, $limit));
+    $satkerIt = function_exists('pa_portal_get_satker_announcements') ? pa_portal_get_satker_announcements($limit) : array();
+    $feeds    = function_exists('pa_portal_get_official_feeds') ? pa_portal_get_official_feeds(false) : array('ma' => array(), 'badilag' => array());
+    $maIt     = array_slice((array) ($feeds['ma'] ?? array()), 0, $limit);
+    $bdIt     = array_slice((array) ($feeds['badilag'] ?? array()), 0, $limit);
+    $allUrl   = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('pengumuman-resmi') : home_url('/pengumuman-resmi/');
+    $uid      = 'pa-ann-' . substr(md5($heading . (string) $limit), 0, 5);
+    ob_start();
+    ?>
+    <section class="pa-grid-panel pa-ann-compact" data-pa-sched-hub aria-label="<?php echo esc_attr($heading); ?>">
+        <div class="pa-gp-head">
+            <h2 class="pa-gp-title"><?php echo esc_html($heading); ?></h2>
+            <a class="pa-gp-more" href="<?php echo esc_url($allUrl); ?>">Semua →</a>
+        </div>
+        <div class="pa-ann-tabs" role="tablist" aria-label="Sumber Pengumuman">
+            <button type="button" role="tab" id="<?php echo esc_attr($uid . '-t1'); ?>" aria-controls="<?php echo esc_attr($uid . '-p1'); ?>" aria-selected="true" tabindex="0" class="pa-ann-tab is-active" data-sched-tab="satker">Satker</button>
+            <button type="button" role="tab" id="<?php echo esc_attr($uid . '-t2'); ?>" aria-controls="<?php echo esc_attr($uid . '-p2'); ?>" aria-selected="false" tabindex="-1" class="pa-ann-tab" data-sched-tab="ma">MA RI</button>
+            <button type="button" role="tab" id="<?php echo esc_attr($uid . '-t3'); ?>" aria-controls="<?php echo esc_attr($uid . '-p3'); ?>" aria-selected="false" tabindex="-1" class="pa-ann-tab" data-sched-tab="badilag">Badilag</button>
+        </div>
+        <?php
+        $groups = array(
+            array('key' => 'satker', 'tid' => $uid . '-t1', 'pid' => $uid . '-p1', 'items' => $satkerIt, 'ext' => false),
+            array('key' => 'ma',     'tid' => $uid . '-t2', 'pid' => $uid . '-p2', 'items' => $maIt,     'ext' => true),
+            array('key' => 'badilag','tid' => $uid . '-t3', 'pid' => $uid . '-p3', 'items' => $bdIt,     'ext' => true),
+        );
+        foreach ($groups as $gIdx => $g) :
+        ?>
+            <div role="tabpanel" id="<?php echo esc_attr($g['pid']); ?>" aria-labelledby="<?php echo esc_attr($g['tid']); ?>" data-sched-panel="<?php echo esc_attr($g['key']); ?>" <?php echo $gIdx > 0 ? 'hidden' : ''; ?>>
+                <ul class="pa-feed-list">
+                    <?php if (empty($g['items'])) : ?>
+                        <li class="pa-feed-empty">Belum ada pengumuman terbaru.</li>
+                    <?php else : foreach ($g['items'] as $it) :
+                        $title = (string) ($it['title'] ?? '');
+                        $url   = (string) ($it['url'] ?? ($it['link'] ?? '#'));
+                        $date  = (string) ($it['date'] ?? '');
+                    ?>
+                        <li class="pa-feed-item">
+                            <a href="<?php echo esc_url($url); ?>" <?php echo $g['ext'] ? 'target="_blank" rel="noopener noreferrer"' : ''; ?>>
+                                <?php if ($date !== '') : ?><span class="pa-feed-date"><?php echo esc_html($date); ?></span><?php endif; ?>
+                                <span class="pa-feed-title"><?php echo esc_html($title); ?></span>
+                            </a>
+                        </li>
+                    <?php endforeach; endif; ?>
+                </ul>
+            </div>
+        <?php endforeach; ?>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+}
+
+// Shortcode [pa_yurisdiksi_grid]: Daftar Wilayah Yurisdiksi & Radius
+add_shortcode('pa_yurisdiksi_grid', static function () {
+    $rows = pa_portal_get_records('yurisdiksi', 150);
+    ob_start();
+    ?>
+    <div class="pa-ops-wrap">
+        <div class="pa-ops-toolbar">
+            <input type="search" class="pa-ops-search" data-ops-table="pa-table-yurisdiksi" aria-label="Cari kecamatan, desa, atau radius" placeholder="Cari kecamatan, kelurahan/desa, atau radius...">
+            <span class="pa-ops-badge"><?php echo (int) count($rows); ?> Kecamatan</span>
+        </div>
+        <div class="pa-table-scroll">
+            <table class="pa-ops-table" id="pa-table-yurisdiksi">
+                <caption class="screen-reader-text">Wilayah Yurisdiksi Pengadilan Agama</caption>
+                <thead><tr><th scope="col">Kecamatan</th><th scope="col">Radius</th><th scope="col">Desa / Kelurahan</th><th scope="col">Jarak / Ket.</th></tr></thead>
+                <tbody>
+                    <?php if (empty($rows)) : ?>
+                        <tr><td colspan="4">Belum ada data wilayah yurisdiksi. Isi melalui WP Admin → SINOVA Hub → Wilayah Yurisdiksi.</td></tr>
+                    <?php else : foreach ($rows as $r) :
+                        $m = json_decode((string) ($r['meta_json'] ?? ''), true);
+                        if (!is_array($m)) $m = array();
+                    ?>
+                        <tr>
+                            <td><strong><?php echo esc_html((string) $r['title']); ?></strong><?php if (!empty($r['subtitle'])) : ?><br><small><?php echo esc_html((string) $r['subtitle']); ?></small><?php endif; ?></td>
+                            <td><span class="pa-ops-badge"><?php echo esc_html((string) ($r['category'] ?: 'Radius')); ?></span></td>
+                            <td><?php echo esc_html((string) ($m['desa'] ?? '-')); ?></td>
+                            <td><?php echo esc_html(trim(((string) ($m['jarak'] ?? '')) . (!empty($m['biaya']) ? ' · ' . (string) $m['biaya'] : '')) ?: '-'); ?></td>
+                        </tr>
+                    <?php endforeach; endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+});
+
+// Helper ekstrak YouTube ID aman untuk Galeri Video (youtube-nocookie.com)
+function pa_portal_extract_youtube_id(string $url): string {
+    if (preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{11})~', $url, $m)) {
+        return $m[1];
+    }
+    return '';
+}
+
+// Shortcode [pa_video_gallery limit="4"]: Galeri Video Satker
+add_shortcode('pa_video_gallery', static function ($atts = array()) {
+    $a    = shortcode_atts(array('limit' => 4, 'title' => 'Galeri Video'), $atts, 'pa_video_gallery');
+    $rows = pa_portal_get_records('video', max(1, min(12, (int) $a['limit'])));
+    ob_start();
+    ?>
+    <section class="pa-grid-panel pa-video-panel" aria-label="<?php echo esc_attr((string) $a['title']); ?>">
+        <div class="pa-gp-head">
+            <h2 class="pa-gp-title"><?php echo esc_html((string) $a['title']); ?></h2>
+        </div>
+        <?php if (empty($rows)) : ?>
+            <p class="pa-sched-empty">Belum ada video terpublikasi.</p>
+        <?php else : ?>
+            <div class="pa-media-grid">
+                <?php foreach ($rows as $r) :
+                    $m    = json_decode((string) ($r['meta_json'] ?? ''), true);
+                    $vUrl = is_array($m) ? esc_url_raw((string) ($m['video_url'] ?? ''), array('https')) : '';
+                    $ytId = pa_portal_extract_youtube_id($vUrl);
+                ?>
+                    <article class="pa-video-card">
+                        <?php if ($ytId !== '') : ?>
+                            <div class="pa-video-embed">
+                                <iframe src="<?php echo esc_url('https://www.youtube-nocookie.com/embed/' . $ytId); ?>" title="<?php echo esc_attr((string) $r['title']); ?>" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen" allowfullscreen></iframe>
+                            </div>
+                        <?php elseif ($vUrl !== '') : ?>
+                            <a class="pa-video-link-box" href="<?php echo esc_url($vUrl); ?>" target="_blank" rel="noopener noreferrer">▶ Putar Video ↗</a>
+                        <?php endif; ?>
+                        <div class="pa-video-body">
+                            <strong><?php echo esc_html((string) $r['title']); ?></strong>
+                            <?php if (!empty($r['subtitle'])) : ?><p><?php echo esc_html((string) $r['subtitle']); ?></p><?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+});
+
+// Shortcode [pa_ucapan_board limit="4"]: Papan Ucapan & Belasungkawa Satker
+add_shortcode('pa_ucapan_board', static function ($atts = array()) {
+    $a    = shortcode_atts(array('limit' => 4, 'title' => 'Ucapan & Belasungkawa'), $atts, 'pa_ucapan_board');
+    $rows = pa_portal_get_records('ucapan', max(1, min(12, (int) $a['limit'])));
+    ob_start();
+    ?>
+    <section class="pa-grid-panel pa-ucapan-panel" aria-label="<?php echo esc_attr((string) $a['title']); ?>">
+        <div class="pa-gp-head">
+            <h2 class="pa-gp-title"><?php echo esc_html((string) $a['title']); ?></h2>
+        </div>
+        <?php if (empty($rows)) : ?>
+            <p class="pa-sched-empty">Belum ada papan ucapan atau belasungkawa.</p>
+        <?php else : ?>
+            <div class="pa-ucapan-grid">
+                <?php foreach ($rows as $r) :
+                    $m       = json_decode((string) ($r['meta_json'] ?? ''), true);
+                    $badge   = is_array($m) ? (string) ($m['badge'] ?? ($r['category'] ?: 'Ucapan Selamat')) : (string) ($r['category'] ?: 'Ucapan Selamat');
+                    $sender  = is_array($m) ? (string) ($m['sender'] ?? 'Keluarga Besar Pengadilan Agama') : '';
+                    $photo   = is_array($m) ? esc_url_raw((string) ($m['photo_url'] ?? ''), array('http', 'https')) : '';
+                    $isDuka  = (stripos($badge . ' ' . (string) $r['category'], 'duka') !== false || stripos($badge . ' ' . (string) $r['category'], 'belasungkawa') !== false);
+                ?>
+                    <article class="pa-ucapan-card<?php echo $isDuka ? ' is-duka' : ''; ?>">
+                        <span class="pa-ucapan-badge"><?php echo esc_html($badge); ?></span>
+                        <?php if ($photo !== '') : ?>
+                            <img class="pa-ucapan-img" src="<?php echo esc_url($photo); ?>" alt="<?php echo esc_attr((string) $r['title']); ?>" loading="lazy" decoding="async">
+                        <?php endif; ?>
+                        <strong><?php echo esc_html((string) $r['title']); ?></strong>
+                        <?php if (!empty($r['subtitle'])) : ?><p><?php echo esc_html((string) $r['subtitle']); ?></p><?php endif; ?>
+                        <?php if ($sender !== '') : ?><small><?php echo esc_html($sender); ?></small><?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
     <?php
     return (string) ob_get_clean();
 });

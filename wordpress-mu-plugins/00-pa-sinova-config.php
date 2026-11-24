@@ -2,12 +2,12 @@
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
  * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen (Edit & Hapus Massal), & Audit Keamanan + MFA di WP Admin.
- * Version: 2.2.0-starter
+ * Version: 2.3.0-starter
  */
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.2.0');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.3.0');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -203,9 +203,23 @@ function pa_starter_security_headers_map(bool $isPublic = true, ?string $nonce =
         'https://www.youtube-nocookie.com',
     );
     $cfg          = pa_sinova_get_settings();
-    $sippSlideChk = pa_sinova_sanitize_https_embed_url((string) ($cfg['sipp_slide_url'] ?? ''));
-    if ($sippSlideChk['valid'] && $sippSlideChk['origin'] !== '' && !in_array($sippSlideChk['origin'], $frameOrigins, true)) {
-        $frameOrigins[] = $sippSlideChk['origin'];
+    $embedTargets = array((string) ($cfg['sipp_slide_url'] ?? ''));
+    if (function_exists('pa_sinova_get_home_blocks')) {
+        foreach (pa_sinova_get_home_blocks() as $blk) {
+            if (empty($blk['enabled'])) {
+                continue;
+            }
+            $bCfg = isset($blk['config']) && is_array($blk['config']) ? $blk['config'] : array();
+            if (!empty($bCfg['embed_url'])) {
+                $embedTargets[] = (string) $bCfg['embed_url'];
+            }
+        }
+    }
+    foreach ($embedTargets as $et) {
+        $chk = pa_sinova_sanitize_https_embed_url($et);
+        if ($chk['valid'] && $chk['origin'] !== '' && !in_array($chk['origin'], $frameOrigins, true)) {
+            $frameOrigins[] = $chk['origin'];
+        }
     }
 
     $csp = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; "
@@ -435,7 +449,7 @@ function pa_sinova_static_seed_pages(): array {
             'title'   => 'Wilayah Yurisdiksi',
             'parent'  => 'Profil Pengadilan',
             'code'    => 'W1.3',
-            'content' => '<h2>Peta &amp; Cakupan Wilayah Yurisdiksi</h2><p>[LENGKAPI: Daftar kecamatan/kelurahan wilayah hukum satker dan sematan Google Maps kantor.]</p>',
+            'content' => '<h2>Peta &amp; Cakupan Wilayah Yurisdiksi</h2><p>Daftar kecamatan, desa/kelurahan, dan pembagian radius wilayah hukum satuan kerja.</p>[pa_yurisdiksi_grid]',
         ),
         'struktur-organisasi' => array(
             'title'   => 'Struktur Organisasi',
@@ -736,9 +750,12 @@ function pa_sinova_wp_compliance_report(): array {
                 if ($recType !== '' && stripos($rawContent, '[pa_') !== false) {
                     $recCnt = (int) ($recStats[$recType] ?? 0);
                     if ($recCnt > 0) {
-                        $status = 'lengkap';
-                        $pts    = 10;
-                        $note   = "Halaman & data terstruktur aktif ({$recCnt} entri terpublikasi).";
+                        $status   = 'lengkap';
+                        $pts      = 10;
+                        $sippPush = ($recType === 'jadwal') ? (string) get_option('pa_sipp_last_push_at', '') : '';
+                        $note     = ($sippPush !== '')
+                            ? "Dikirim otomatis dari SIPP ({$recCnt} entri · terakhir {$sippPush})."
+                            : "Halaman & data terstruktur aktif ({$recCnt} entri terpublikasi).";
                     } else {
                         $status = 'perhatian';
                         $pts    = 5;
@@ -1358,6 +1375,139 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
 }
 
 /**
+ * Katalog 13 jenis blok Beranda untuk Editor Grid Bebas 12 Kolom (Drag & Resize).
+ */
+function pa_sinova_home_block_catalog(): array {
+    return array(
+        'hero_slider'   => array('label' => 'Slider Utama / Hero', 'default_w' => 12, 'default_h' => 1, 'icon' => '🖼'),
+        'services'      => array('label' => 'Pintasan Layanan Utama', 'default_w' => 12, 'default_h' => 1, 'icon' => '⊞'),
+        'schedule'      => array('label' => 'Jadwal Sidang & Live SIPP', 'default_w' => 7, 'default_h' => 1, 'icon' => '📅'),
+        'stats'         => array('label' => 'Statistik Perkara', 'default_w' => 5, 'default_h' => 1, 'icon' => '📊'),
+        'announcements' => array('label' => 'Pengumuman & Panggilan Ghaib', 'default_w' => 5, 'default_h' => 1, 'icon' => '📢'),
+        'news'          => array('label' => 'Berita & Publikasi Satker', 'default_w' => 7, 'default_h' => 1, 'icon' => '📰'),
+        'welcome'       => array('label' => 'Sambutan Pimpinan & Maklumat', 'default_w' => 12, 'default_h' => 1, 'icon' => '🏛'),
+        'zi'            => array('label' => 'Zona Integritas (6 Area)', 'default_w' => 12, 'default_h' => 1, 'icon' => '🛡'),
+        'survey'        => array('label' => 'Indeks Kepuasan & Integritas', 'default_w' => 5, 'default_h' => 1, 'icon' => '★'),
+        'directory'     => array('label' => 'Direktori Dokumen Publik', 'default_w' => 7, 'default_h' => 1, 'icon' => '📂'),
+        'videos'        => array('label' => 'Galeri Video', 'default_w' => 6, 'default_h' => 1, 'icon' => '▶'),
+        'greetings'     => array('label' => 'Ucapan & Belasungkawa', 'default_w' => 6, 'default_h' => 1, 'icon' => '💐'),
+        'custom'        => array('label' => 'Konten Bebas / Sematan', 'default_w' => 6, 'default_h' => 1, 'icon' => '✦'),
+    );
+}
+
+/**
+ * Susunan standar seimbang 12 kolom (SK 2722/2026 Bab III huruf C).
+ */
+function pa_sinova_default_home_blocks(): array {
+    return array(
+        array('id' => 'blk_hero', 'type' => 'hero_slider', 'title' => 'Slider Utama / Hero', 'x' => 1, 'y' => 1, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_services', 'type' => 'services', 'title' => 'Pintasan Layanan Utama', 'x' => 1, 'y' => 2, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_schedule', 'type' => 'schedule', 'title' => 'Jadwal Sidang & Live SIPP', 'x' => 1, 'y' => 3, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('height' => 480)),
+        array('id' => 'blk_stats', 'type' => 'stats', 'title' => 'Statistik Perkara', 'x' => 8, 'y' => 3, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_ann', 'type' => 'announcements', 'title' => 'Pengumuman & Panggilan Ghaib', 'x' => 1, 'y' => 4, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array('limit' => 5)),
+        array('id' => 'blk_news', 'type' => 'news', 'title' => 'Berita Pelayanan & Inovasi Satker', 'x' => 6, 'y' => 4, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('count' => 3)),
+        array('id' => 'blk_welcome', 'type' => 'welcome', 'title' => 'Sambutan Pimpinan & Maklumat', 'x' => 1, 'y' => 5, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_zi', 'type' => 'zi', 'title' => 'Zona Integritas (6 Area)', 'x' => 1, 'y' => 6, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_survey', 'type' => 'survey', 'title' => 'Indeks Kepuasan & Integritas Pelayanan', 'x' => 1, 'y' => 7, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_directory', 'type' => 'directory', 'title' => 'Direktori Dokumen Publik', 'x' => 6, 'y' => 7, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array()),
+    );
+}
+
+function pa_sinova_sanitize_home_blocks($rawBlocks): array {
+    $catalog = pa_sinova_home_block_catalog();
+    if (!is_array($rawBlocks)) {
+        return pa_sinova_default_home_blocks();
+    }
+    $clean = array();
+    $seen  = array();
+    foreach ($rawBlocks as $idx => $b) {
+        if (!is_array($b)) {
+            continue;
+        }
+        $type = sanitize_key((string) ($b['type'] ?? ''));
+        if (!isset($catalog[$type])) {
+            continue;
+        }
+        $id = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) ($b['id'] ?? ''));
+        if ($id === '' || isset($seen[$id])) {
+            $id = 'blk_' . $type . '_' . ($idx + 1);
+        }
+        $seen[$id] = true;
+
+        $w = max(2, min(12, (int) ($b['w'] ?? $catalog[$type]['default_w'])));
+        $x = max(1, min(13 - $w, (int) ($b['x'] ?? 1)));
+        $y = max(1, min(40, (int) ($b['y'] ?? ($idx + 1))));
+        $h = max(1, min(4, (int) ($b['h'] ?? 1)));
+
+        $title = sanitize_text_field((string) ($b['title'] ?? $catalog[$type]['label']));
+        if ($title === '') {
+            $title = $catalog[$type]['label'];
+        }
+        $enabled = isset($b['enabled']) ? (bool) $b['enabled'] : true;
+
+        $rawCfg = isset($b['config']) && is_array($b['config']) ? $b['config'] : array();
+        $bCfg   = array();
+        if (!empty($rawCfg['embed_url'])) {
+            $eChk = pa_sinova_sanitize_https_embed_url((string) $rawCfg['embed_url']);
+            if ($eChk['valid'] && $eChk['url'] !== '') {
+                $bCfg['embed_url'] = $eChk['url'];
+            }
+        }
+        if (isset($rawCfg['height'])) {
+            $bCfg['height'] = max(260, min(900, (int) $rawCfg['height']));
+        }
+        if (isset($rawCfg['count'])) {
+            $bCfg['count'] = max(1, min(9, (int) $rawCfg['count']));
+        }
+        if (isset($rawCfg['limit'])) {
+            $bCfg['limit'] = max(2, min(12, (int) $rawCfg['limit']));
+        }
+        if (!empty($rawCfg['default_tab']) && in_array((string) $rawCfg['default_tab'], array('auto', 'agenda', 'sipp'), true)) {
+            $bCfg['default_tab'] = (string) $rawCfg['default_tab'];
+        }
+        if (!empty($rawCfg['body'])) {
+            $bCfg['body'] = wp_kses_post((string) $rawCfg['body']);
+        }
+        if (!empty($rawCfg['cta_label'])) {
+            $bCfg['cta_label'] = sanitize_text_field((string) $rawCfg['cta_label']);
+        }
+        if (!empty($rawCfg['cta_url'])) {
+            $bCfg['cta_url'] = esc_url_raw((string) $rawCfg['cta_url'], array('http', 'https'));
+        }
+
+        $clean[] = array(
+            'id'      => $id,
+            'type'    => $type,
+            'title'   => $title,
+            'x'       => $x,
+            'y'       => $y,
+            'w'       => $w,
+            'h'       => $h,
+            'enabled' => $enabled,
+            'config'  => $bCfg,
+        );
+        if (count($clean) >= 24) {
+            break;
+        }
+    }
+    if (empty($clean)) {
+        return pa_sinova_default_home_blocks();
+    }
+    usort($clean, static function (array $a, array $b): int {
+        return ($a['y'] !== $b['y']) ? ($a['y'] <=> $b['y']) : ($a['x'] <=> $b['x']);
+    });
+    return $clean;
+}
+
+function pa_sinova_get_home_blocks(): array {
+    $saved = get_option('pa_sinova_home_blocks', null);
+    if (is_array($saved) && !empty($saved)) {
+        return pa_sinova_sanitize_home_blocks($saved);
+    }
+    return pa_sinova_default_home_blocks();
+}
+
+/**
  * Aktifkan atau migrasi 1-klik halaman Beranda ke mode Dinamis [pa_sinova_beranda] (tanpa kehilangan berita/dokumen).
  */
 function pa_sinova_activate_dynamic_beranda(): array {
@@ -1561,6 +1711,38 @@ function pa_sinova_github_apply_update(): array {
         wp_mkdir_p($assetsDir);
     }
 
+    // Cadangkan berkas aktif sebelum menimpa agar tombol "Batalkan Pembaruan Terakhir" (Rollback) selalu siap
+    $backupDir = WP_CONTENT_DIR . '/uploads/sinova-backups/last-update';
+    if (!is_dir($backupDir)) {
+        wp_mkdir_p($backupDir);
+    }
+    if (is_dir($backupDir)) {
+        $htaPath = dirname($backupDir) . '/.htaccess';
+        if (!is_file($htaPath)) {
+            @file_put_contents($htaPath, "Options -Indexes\n<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n", LOCK_EX);
+        }
+        if (!is_file($backupDir . '/index.php')) {
+            @file_put_contents($backupDir . '/index.php', "<?php // Silence is golden.\n", LOCK_EX);
+        }
+        $backupMap = array();
+        foreach ($staged as $destPath => $_bytes) {
+            if (is_file($destPath) && is_readable($destPath)) {
+                $bName = md5($destPath) . '-' . basename($destPath) . '.bak';
+                if (@copy($destPath, $backupDir . '/' . $bName)) {
+                    $backupMap[$destPath] = $backupDir . '/' . $bName;
+                }
+            }
+        }
+        if (!empty($backupMap)) {
+            update_option('pa_sinova_last_update_backup', array(
+                'from_version' => PA_SINOVA_STARTER_VERSION,
+                'to_version'   => (string) $check['latest'],
+                'at'           => wp_date('d/m/Y H:i') . ' WIB',
+                'files'        => $backupMap,
+            ), false);
+        }
+    }
+
     $written = 0;
     foreach ($staged as $destPath => $bytes) {
         $tmpPath = $destPath . '.pa-upd-' . wp_generate_password(6, false, false) . '.tmp';
@@ -1590,10 +1772,56 @@ function pa_sinova_github_apply_update(): array {
     return array(
         'ok'      => true,
         'message' => sprintf(
-            'Pembaruan berhasil ke v%s (%d berkas diperbarui, cache HTML dibersihkan, & baseline FIM SHA-256 diperbarui otomatis). Muat ulang halaman untuk memakai versi terbaru.',
+            'Pembaruan berhasil ke v%s (%d berkas diperbarui, cadangan rollback tersimpan, cache & FIM disegarkan).',
             $check['latest'],
             $written
         ),
+    );
+}
+
+/**
+ * Batalkan pembaruan terakhir (Rollback) dari cadangan otomatis sebelum update.
+ */
+function pa_sinova_github_rollback_update(): array {
+    if (!current_user_can('manage_options')) {
+        return array('ok' => false, 'message' => 'Gagal: Hanya Administrator yang berwenang membatalkan pembaruan.');
+    }
+    $meta = get_option('pa_sinova_last_update_backup', array());
+    if (!is_array($meta) || empty($meta['files']) || !is_array($meta['files'])) {
+        return array('ok' => false, 'message' => 'Gagal: Tidak ditemukan cadangan pembaruan sebelumnya.');
+    }
+    $restored = 0;
+    foreach ($meta['files'] as $destPath => $bakPath) {
+        if (!is_string($destPath) || !is_string($bakPath) || !is_file($bakPath) || !is_readable($bakPath)) {
+            continue;
+        }
+        $bytes = @file_get_contents($bakPath);
+        if ($bytes === false || strlen($bytes) < 100) {
+            continue;
+        }
+        $tmp = $destPath . '.pa-rb-' . wp_generate_password(6, false, false) . '.tmp';
+        if (@file_put_contents($tmp, $bytes, LOCK_EX) !== false && @rename($tmp, $destPath)) {
+            $restored++;
+        } else {
+            @unlink($tmp);
+        }
+    }
+    if ($restored === 0) {
+        return array('ok' => false, 'message' => 'Gagal memulihkan berkas dari cadangan.');
+    }
+    delete_option('pa_sinova_last_update_backup');
+    pa_sinova_purge_html_cache_files();
+    if (function_exists('opcache_reset')) {
+        @opcache_reset();
+    }
+    update_option('pa_starter_fim_baseline', array(
+        'recorded_at' => gmdate('Y-m-d H:i:s') . ' UTC',
+        'hashes'      => pa_starter_fim_current_hashes(),
+    ), false);
+
+    return array(
+        'ok'      => true,
+        'message' => sprintf('Rollback berhasil ke v%s (%d berkas dipulihkan, cache & FIM disegarkan).', (string) ($meta['from_version'] ?? 'sebelumnya'), $restored),
     );
 }
 
@@ -2086,10 +2314,25 @@ function pa_sinova_delete_docs_by_ids(array $rawIds, array $allowedSlugs = array
     return array('deleted' => $deleted, 'denied' => $denied, 'slugs' => $affectedSlugs);
 }
 
+/** Daftar 8 jenis data operasional & publikasi satker pada tabel pa_portal_records. */
+function pa_sinova_record_types_catalog(): array {
+    return array(
+        'jadwal'     => 'Jadwal Sidang',
+        'pegawai'    => 'Pejabat & Pegawai',
+        'ghaib'      => 'Panggilan Ghaib',
+        'statistik'  => 'Statistik Perkara',
+        'slider'     => 'Slider Beranda',
+        'video'      => 'Galeri Video',
+        'ucapan'     => 'Ucapan & Belasungkawa',
+        'yurisdiksi' => 'Wilayah Yurisdiksi',
+    );
+}
+
 /** Build validated column payload for pa_portal_records insert or update. */
 function pa_sinova_build_record_payload(array $input): array {
-    $recType = sanitize_key((string) ($input['rec_type'] ?? 'jadwal'));
-    if (!in_array($recType, array('pegawai', 'jadwal', 'ghaib', 'statistik'), true)) {
+    $allowedTypes = array_keys(pa_sinova_record_types_catalog());
+    $recType      = sanitize_key((string) ($input['rec_type'] ?? 'jadwal'));
+    if (!in_array($recType, $allowedTypes, true)) {
         $recType = 'jadwal';
     }
     $recTitle = sanitize_text_field(wp_unslash((string) ($input['rec_title'] ?? '')));
@@ -2098,6 +2341,10 @@ function pa_sinova_build_record_payload(array $input): array {
     $recM1    = sanitize_text_field(wp_unslash((string) ($input['rec_meta_1'] ?? '')));
     $recM2    = sanitize_text_field(wp_unslash((string) ($input['rec_meta_2'] ?? '')));
     $recM3    = sanitize_text_field(wp_unslash((string) ($input['rec_meta_3'] ?? '')));
+    $recM4    = sanitize_text_field(wp_unslash((string) ($input['rec_meta_4'] ?? '')));
+    $recM5    = sanitize_text_field(wp_unslash((string) ($input['rec_meta_5'] ?? '')));
+    $recM6    = sanitize_textarea_field(wp_unslash((string) ($input['rec_meta_6'] ?? '')));
+    $recM7    = sanitize_textarea_field(wp_unslash((string) ($input['rec_meta_7'] ?? '')));
     $recDate  = sanitize_text_field(wp_unslash((string) ($input['rec_date'] ?? '')));
     $recOrder = (int) ($input['rec_sort_order'] ?? 0);
 
@@ -2105,11 +2352,43 @@ function pa_sinova_build_record_payload(array $input): array {
         return array('error' => 'Gagal: Judul / nama entri wajib diisi.');
     }
     if ($recType === 'pegawai') {
-        $metaArr = array('nip' => $recM1, 'gol' => $recM2, 'edu' => $recM3);
+        $metaArr = array(
+            'nip'                => $recM1,
+            'gol'                => $recM2,
+            'edu'                => $recM3,
+            'photo'              => esc_url_raw($recM4, array('http', 'https')),
+            'tmt'                => $recM5,
+            'riwayat_pendidikan' => $recM6,
+            'riwayat_jabatan'    => $recM7,
+        );
     } elseif ($recType === 'ghaib') {
         $metaArr = array('pihak' => ($recM1 !== '' ? $recM1 : $recSub), 'doc_url' => esc_url_raw($recM2, array('http', 'https')));
     } elseif ($recType === 'statistik') {
         $metaArr = array('diterima' => (int) $recM1, 'diputus' => (int) $recM2, 'sisa' => (int) $recM3);
+    } elseif ($recType === 'slider') {
+        $metaArr = array(
+            'image_url' => esc_url_raw($recM1, array('http', 'https')),
+            'btn_url'   => esc_url_raw($recM2, array('http', 'https')),
+            'btn_label' => ($recM3 !== '' ? $recM3 : 'Selengkapnya'),
+        );
+    } elseif ($recType === 'video') {
+        $metaArr = array(
+            'video_url' => esc_url_raw($recM1, array('https')),
+            'thumb_url' => esc_url_raw($recM2, array('http', 'https')),
+            'duration'  => $recM3,
+        );
+    } elseif ($recType === 'ucapan') {
+        $metaArr = array(
+            'photo_url' => esc_url_raw($recM1, array('http', 'https')),
+            'sender'    => ($recM2 !== '' ? $recM2 : 'Keluarga Besar Pengadilan Agama'),
+            'badge'     => ($recM3 !== '' ? $recM3 : ($recCat ?: 'Ucapan Selamat')),
+        );
+    } elseif ($recType === 'yurisdiksi') {
+        $metaArr = array(
+            'desa'  => $recM1,
+            'jarak' => $recM2,
+            'biaya' => $recM3,
+        );
     } else {
         $metaArr = array('jam' => ($recM1 !== '' ? $recM1 : '09.00 WIB'));
     }
@@ -2312,6 +2591,52 @@ function pa_sinova_render_admin_page(): void {
             if ($sippSlideWarn) {
                 $notice .= ' Catatan: URL Slide Jadwal Sidang SIPP wajib HTTPS dengan domain valid.';
             }
+        } elseif ($action === 'save_home_grid' && $requireAdmin()) {
+            $activeTab = 'homepage';
+            $rawJson   = wp_unslash((string) ($_POST['pa_home_blocks_json'] ?? ''));
+            $decoded   = json_decode($rawJson, true);
+            if (!is_array($decoded)) {
+                $notice = 'Gagal: Format data tata letak grid tidak valid.';
+            } else {
+                $sanitized = pa_sinova_sanitize_home_blocks($decoded);
+                update_option('pa_sinova_home_blocks', $sanitized, false);
+
+                // Sinkronkan pengaturan Hero/Ticker/Survei/SIPP jika ikut dikirim dari modal/panel
+                $cur = pa_sinova_get_settings();
+                $patch = array();
+                foreach (array('home_ticker_text', 'home_hero_kicker', 'home_hero_title', 'home_hero_lead', 'home_survey_period', 'home_survey_grade', 'home_survey_skm', 'home_survey_spak', 'home_survey_spkp') as $hk) {
+                    if (isset($_POST[$hk])) {
+                        $patch[$hk] = ($hk === 'home_hero_lead' || $hk === 'home_ticker_text')
+                            ? sanitize_textarea_field(wp_unslash((string) $_POST[$hk]))
+                            : sanitize_text_field(wp_unslash((string) $_POST[$hk]));
+                    }
+                }
+                if (isset($_POST['home_show_ticker'])) {
+                    $patch['home_show_ticker'] = !empty($_POST['home_show_ticker']) ? '1' : '0';
+                }
+                foreach ($sanitized as $sb) {
+                    if ($sb['type'] === 'schedule' && !empty($sb['config']['embed_url'])) {
+                        $patch['sipp_slide_url'] = (string) $sb['config']['embed_url'];
+                    }
+                }
+                if (!empty($patch)) {
+                    update_option('pa_sinova_starter_settings', array_merge($cur, $patch), false);
+                }
+                pa_sinova_purge_html_cache_files();
+                $notice = sprintf('Tampilan Beranda 12 kolom berhasil disimpan (%d blok aktif/terdaftar, cache disegarkan).', count($sanitized));
+            }
+        } elseif ($action === 'reset_home_grid' && $requireAdmin()) {
+            $activeTab = 'homepage';
+            delete_option('pa_sinova_home_blocks');
+            pa_sinova_purge_html_cache_files();
+            $notice = 'Tata letak Beranda 12 kolom dikembalikan ke susunan standar seimbang.';
+        } elseif ($action === 'purge_html_cache' && current_user_can('pa_access_sinova_hub')) {
+            pa_sinova_purge_html_cache_files();
+            $notice = 'Cache HTML portal berhasil dibersihkan.';
+        } elseif ($action === 'rollback_github_update' && $requireAdmin()) {
+            $activeTab = 'security';
+            $rbRes     = pa_sinova_github_rollback_update();
+            $notice    = (string) ($rbRes['message'] ?? 'Rollback selesai.');
         } elseif ($action === 'activate_dynamic_home' && $requireAdmin()) {
             $activeTab = 'homepage';
             $res       = pa_sinova_activate_dynamic_beranda();
@@ -2881,38 +3206,158 @@ function pa_sinova_render_admin_page(): void {
         'settings'   => 'Identitas Satker &amp; Seeder',
         'security'   => 'Keamanan, Update &amp; Audit',
     );
-    $updInfo = current_user_can('manage_options') ? pa_sinova_github_check_update(false) : array('has_update' => false);
+    $updInfo    = current_user_can('manage_options') ? pa_sinova_github_check_update(false) : array('has_update' => false);
+    $rbMeta     = current_user_can('manage_options') ? get_option('pa_sinova_last_update_backup', array()) : array();
+    $hasRb      = is_array($rbMeta) && !empty($rbMeta['files']);
+    $curRecType = ($activeTab === 'data' && isset($_GET['rec_type'])) ? sanitize_key((string) $_GET['rec_type']) : '';
+    $satkerLbl  = pa_sinova_satker_name();
+    $isAdm      = current_user_can('manage_options');
     ?>
-    <div class="wrap">
-        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;">
-            <h1 style="color:#056e4f;font-weight:800;margin:0;">SINOVA Hub — Panel Backend &amp; Kepatuhan (SK Dirjen Badilag 2722/2026)</h1>
-            <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;background:#ecfdf5;border:1px solid #056e4f;color:#043927;font-size:12px;font-weight:700;">
-                Versi <?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?> · Mode <?php echo esc_html(PA_SINOVA_RUNTIME_MODE === 'plugin' ? 'Plugin WP' : 'MU-Plugins'); ?>
-            </span>
-        </div>
-        <p style="color:#475569;margin-top:4px;">Halaman backend khusus operator untuk memantau kesiapan 3 Pilar SINOVA &amp; Standar Chrome Modern Web, mengatur Beranda secara visual tanpa kode, mengunggah arsip PDF/Drive, serta mengelola data operasional &amp; pembaruan. Istilah <em>SINOVA</em> tidak ditampilkan di halaman publik masyarakat.</p>
-        <?php if (!empty($updInfo['has_update']) && current_user_can('manage_options')) : ?>
-            <div class="notice notice-warning inline" style="margin:8px 0 12px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-                <span><strong>Pembaruan Tersedia (v<?php echo esc_html($updInfo['latest']); ?>):</strong> <?php echo esc_html((string) ($updInfo['changelog'] ?? 'Versi baru tersedia di GitHub resmi.')); ?></span>
-                <a class="button button-primary" href="<?php echo esc_url($tabBaseUrl . 'security'); ?>">Buka Panel Update 1-Klik →</a>
+    <style>
+        .pa-adm-shell{display:grid;grid-template-columns:232px minmax(0,1fr);gap:0;margin:14px 16px 24px 0;background:#f4f7f5;border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;box-shadow:0 10px 28px -16px rgba(2,44,34,.22)}
+        @media(max-width:960px){.pa-adm-shell{grid-template-columns:1fr}}
+        .pa-adm-side{background:linear-gradient(180deg,#033022 0%,#04422f 100%);color:#e6f4ee;padding:16px 12px;display:flex;flex-direction:column;gap:12px}
+        .pa-adm-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 12px;border-bottom:1px solid rgba(255,255,255,.12)}
+        .pa-adm-emblem{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#C9A227,#E5C158);color:#022c22;font-weight:900;font-size:13px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+        .pa-adm-brand strong{display:block;font-size:13px;line-height:1.25;color:#fff}
+        .pa-adm-brand span{display:block;font-size:11px;color:#a7f3d0}
+        .pa-adm-grp-lbl{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#86efac;opacity:.75;padding:6px 10px 3px}
+        .pa-adm-nav{display:flex;flex-direction:column;gap:2px}
+        .pa-adm-nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 11px;border-radius:8px;color:#d1fae5;text-decoration:none;font-size:12.5px;font-weight:600;transition:background-color .15s,color .15s}
+        .pa-adm-nav a:hover{background:rgba(255,255,255,.1);color:#fff}
+        .pa-adm-nav a.is-active{background:rgba(229,193,88,.2);color:#E5C158;box-shadow:inset 3px 0 0 #E5C158;font-weight:700}
+        .pa-adm-main{padding:18px 22px 24px;min-width:0}
+        .pa-adm-topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid #dbe5df}
+        .pa-adm-topbar h1{margin:0;padding:0;font-size:20px;font-weight:800;color:#043927;display:inline-flex;align-items:center;gap:8px}
+        .pa-adm-top-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+        .pa-adm-ver{padding:4px 10px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#043927;font-size:11.5px;font-weight:700}
+        .pa-adm-tip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;border:1px solid #C9A227;color:#6e5204;background:#fffbeb;font:800 11px/1 Georgia,serif;font-style:italic;cursor:help;vertical-align:middle;margin-left:4px}
+        .pa-adm-tip::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%) translateY(4px);width:max-content;max-width:270px;padding:7px 10px;border-radius:8px;background:#022c22;color:#f8fafc;font:600 11.5px/1.4 system-ui,sans-serif;font-style:normal;text-align:left;white-space:normal;box-shadow:0 10px 24px rgba(0,0,0,.24);opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;z-index:99999}
+        .pa-adm-tip:hover::after,.pa-adm-tip:focus-visible::after{opacity:1;transform:translateX(-50%) translateY(0)}
+        .pa-adm-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-radius:10px;margin-bottom:14px;font-size:12.5px}
+        .pa-adm-banner-warn{background:#fffbeb;border:1px solid #fcd34d;color:#78350f}
+        .pa-adm-banner-info{background:#f8fafc;border:1px solid #cbd5e1;color:#334155}
+        .pa-grid-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:12px 16px;margin-bottom:14px}
+        .pa-grid-board-wrap{background:#e9eeec;border:1px solid #cbd5e1;border-radius:14px;padding:14px;margin-bottom:18px;overflow-x:auto}
+        .pa-grid-col-nums{display:grid;grid-template-columns:repeat(12,minmax(52px,1fr));gap:10px;margin-bottom:8px;text-align:center;font-size:11px;font-weight:700;color:#64748b}
+        .pa-grid-canvas{position:relative;display:grid;grid-template-columns:repeat(12,minmax(52px,1fr));grid-auto-rows:84px;gap:10px;min-height:460px;background-image:linear-gradient(to right,rgba(5,110,79,.07) 1px,transparent 1px),linear-gradient(to bottom,rgba(5,110,79,.07) 1px,transparent 1px);background-size:calc((100% + 10px) / 12) 94px;border-radius:10px;padding:2px}
+        .pa-gb-card{position:relative;background:#fff;border:1.5px solid #cbd5e1;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between;cursor:grab;user-select:none;box-shadow:0 3px 10px rgba(2,44,34,.06);transition:border-color .14s,box-shadow .14s,opacity .14s;overflow:hidden}
+        .pa-gb-card:hover{border-color:#056e4f}
+        .pa-gb-card.is-selected{border-color:#C9A227;box-shadow:0 0 0 3px rgba(201,162,39,.26)}
+        .pa-gb-card.is-hidden-blk{opacity:.48;background:#f1f5f9;border-style:dashed}
+        .pa-gb-card.is-dragging{opacity:.85;z-index:30;cursor:grabbing;box-shadow:0 14px 28px rgba(2,44,34,.22)}
+        .pa-gb-head{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+        .pa-gb-title{font-size:13px;font-weight:800;color:#0f172a;line-height:1.25;display:flex;align-items:center;gap:6px;min-width:0}
+        .pa-gb-title span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pa-gb-sub{font-size:11px;color:#64748b;margin-top:2px}
+        .pa-gb-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;font-weight:700;color:#475569}
+        .pa-gb-size{padding:1px 7px;border-radius:999px;background:#f1f5f9;color:#043927}
+        .pa-gb-acts{display:inline-flex;gap:4px;flex-shrink:0}
+        .pa-gb-iconbtn{border:1px solid #cbd5e1;background:#fff;border-radius:6px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;color:#334155;padding:0}
+        .pa-gb-iconbtn:hover{border-color:#056e4f;color:#056e4f;background:#ecfdf5}
+        .pa-gb-resize{position:absolute;right:3px;bottom:3px;width:18px;height:18px;cursor:nwse-resize;display:inline-flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;border-radius:4px}
+        .pa-gb-resize:hover{color:#056e4f;background:#ecfdf5}
+        dialog#pa-grid-edit-dlg{border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:14px;padding:0;width:min(560px,94vw);max-height:88vh;box-shadow:0 24px 60px rgba(2,44,34,.32)}
+        dialog#pa-grid-edit-dlg[open]{display:flex;flex-direction:column}
+        dialog#pa-grid-edit-dlg:modal{overscroll-behavior:contain}
+        dialog#pa-grid-edit-dlg::backdrop{background:rgba(2,44,34,.52);backdrop-filter:blur(2px);overflow:hidden;overscroll-behavior:contain}
+        .pa-dlg-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0}
+        .pa-dlg-head h2{margin:0;font-size:16px;font-weight:800;color:#043927}
+        .pa-dlg-body{padding:16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .pa-dlg-field label{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:4px}
+        .pa-dlg-field input[type="text"],.pa-dlg-field input[type="url"],.pa-dlg-field input[type="number"],.pa-dlg-field select,.pa-dlg-field textarea{width:100%;box-sizing:border-box}
+        .pa-dlg-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+        .pa-dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid #e2e8f0;background:#f8fafc}
+    </style>
+
+    <div class="pa-adm-shell">
+        <aside class="pa-adm-side" aria-label="Navigasi Panel Admin SINOVA">
+            <div class="pa-adm-brand">
+                <span class="pa-adm-emblem">PA</span>
+                <div>
+                    <strong><?php echo esc_html(function_exists('mb_substr') ? mb_substr($satkerLbl, 0, 26, 'UTF-8') : substr($satkerLbl, 0, 26)); ?></strong>
+                    <span>Panel Admin v<?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?></span>
+                </div>
             </div>
-        <?php endif; ?>
 
-        <?php if ($notice !== '') :
-            $noticeClass = (stripos($notice, 'Gagal:') === 0) ? 'notice-error' : 'notice-success';
-        ?>
-            <div class="notice <?php echo esc_attr($noticeClass); ?> is-dismissible"><p><strong><?php echo esc_html($notice); ?></strong></p></div>
-        <?php endif; ?>
+            <nav class="pa-adm-nav">
+                <a href="<?php echo esc_url($tabBaseUrl . 'compliance'); ?>" class="<?php echo $activeTab === 'compliance' ? 'is-active' : ''; ?>"><span>Dashboard SINOVA</span><small><?php echo esc_html((string) $audit['weighted_total']); ?></small></a>
 
-        <h2 class="nav-tab-wrapper" style="margin:14px 0 18px;">
-            <?php foreach ($tabLabels as $tKey => $tLabel) :
-                if (!in_array($tKey, $allowedTabs, true)) {
-                    continue;
-                }
+                <?php if ($isAdm) : ?>
+                    <div class="pa-adm-grp-lbl">Konten &amp; Beranda</div>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'homepage'); ?>" class="<?php echo $activeTab === 'homepage' ? 'is-active' : ''; ?>"><span>Tampilan Beranda</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'settings'); ?>" class="<?php echo $activeTab === 'settings' ? 'is-active' : ''; ?>"><span>Identitas &amp; Seeder</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>" class="<?php echo $activeTab === 'migration' ? 'is-active' : ''; ?>"><span>Migrasi &amp; Adopsi</span></a>
+                <?php endif; ?>
+
+                <?php if (in_array('data', $allowedTabs, true)) : ?>
+                    <div class="pa-adm-grp-lbl">Publikasi</div>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=slider'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'slider') ? 'is-active' : ''; ?>"><span>Slider Beranda</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=video'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'video') ? 'is-active' : ''; ?>"><span>Galeri Video</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=ucapan'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'ucapan') ? 'is-active' : ''; ?>"><span>Ucapan &amp; Belasungkawa</span></a>
+                <?php endif; ?>
+
+                <?php if (in_array('upload', $allowedTabs, true)) : ?>
+                    <div class="pa-adm-grp-lbl">Dokumen</div>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'upload'); ?>" class="<?php echo $activeTab === 'upload' ? 'is-active' : ''; ?>"><span>Arsip Dokumen</span></a>
+                <?php endif; ?>
+
+                <?php if (in_array('data', $allowedTabs, true)) : ?>
+                    <div class="pa-adm-grp-lbl">Kepaniteraan</div>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=jadwal'); ?>" class="<?php echo ($activeTab === 'data' && ($curRecType === 'jadwal' || $curRecType === '')) ? 'is-active' : ''; ?>"><span>Jadwal Sidang</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=ghaib'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'ghaib') ? 'is-active' : ''; ?>"><span>Panggilan Ghaib</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=statistik'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'statistik') ? 'is-active' : ''; ?>"><span>Statistik Perkara</span></a>
+
+                    <div class="pa-adm-grp-lbl">Kesekretariatan</div>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=pegawai'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'pegawai') ? 'is-active' : ''; ?>"><span>Pejabat &amp; Pegawai</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=yurisdiksi'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'yurisdiksi') ? 'is-active' : ''; ?>"><span>Wilayah Yurisdiksi</span></a>
+                <?php endif; ?>
+
+                <div class="pa-adm-grp-lbl">Sistem</div>
+                <a href="<?php echo esc_url($tabBaseUrl . 'security'); ?>" class="<?php echo $activeTab === 'security' ? 'is-active' : ''; ?>"><span>Keamanan &amp; Update</span></a>
+            </nav>
+        </aside>
+
+        <main class="pa-adm-main">
+            <div class="pa-adm-topbar">
+                <h1>
+                    <?php echo esc_html(wp_strip_all_tags($tabLabels[$activeTab] ?? 'SINOVA Hub')); ?>
+                    <span class="pa-adm-tip" tabindex="0" data-tip="Panel operator khusus standar SK Dirjen Badilag 2722/2026. Istilah teknis SINOVA tidak tampil di website publik." aria-label="Info panel">i</span>
+                </h1>
+                <div class="pa-adm-top-actions">
+                    <span class="pa-adm-ver">v<?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?> · <?php echo esc_html(PA_SINOVA_RUNTIME_MODE === 'plugin' ? 'Plugin' : 'MU'); ?></span>
+                    <a class="button" href="<?php echo esc_url(home_url('/')); ?>" target="_blank" rel="noopener noreferrer">Lihat Situs ↗</a>
+                    <form method="post" style="margin:0;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="purge_html_cache">
+                        <button type="submit" class="button">↻ Bersihkan Cache</button>
+                    </form>
+                </div>
+            </div>
+
+            <?php if (!empty($updInfo['has_update']) && $isAdm) : ?>
+                <div class="pa-adm-banner pa-adm-banner-warn">
+                    <span><strong>Pembaruan v<?php echo esc_html($updInfo['latest']); ?> tersedia</strong> · <?php echo esc_html((string) ($updInfo['changelog'] ?? '')); ?></span>
+                    <a class="button button-primary button-small" href="<?php echo esc_url($tabBaseUrl . 'security'); ?>">Update 1-Klik →</a>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($hasRb && $isAdm) : ?>
+                <div class="pa-adm-banner pa-adm-banner-info">
+                    <span>Diperbarui dari <strong>v<?php echo esc_html((string) ($rbMeta['from_version'] ?? '-')); ?></strong> ke <strong>v<?php echo esc_html((string) ($rbMeta['to_version'] ?? PA_SINOVA_STARTER_VERSION)); ?></strong> (<?php echo esc_html((string) ($rbMeta['at'] ?? '')); ?>).</span>
+                    <form method="post" style="margin:0;" onsubmit="return confirm('Batalkan pembaruan terakhir dan kembalikan berkas ke versi sebelumnya?');">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="rollback_github_update">
+                        <button type="submit" class="button button-small" style="color:#b91c1c;border-color:#fca5a5;">↺ Batalkan Pembaruan Terakhir</button>
+                    </form>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($notice !== '') :
+                $noticeClass = (stripos($notice, 'Gagal:') === 0) ? 'notice-error' : 'notice-success';
             ?>
-                <a href="<?php echo esc_url($tabBaseUrl . $tKey); ?>" class="nav-tab <?php echo $activeTab === $tKey ? 'nav-tab-active' : ''; ?>"><?php echo $tLabel; ?></a>
-            <?php endforeach; ?>
-        </h2>
+                <div class="notice <?php echo esc_attr($noticeClass); ?> inline is-dismissible" style="margin:0 0 14px;"><p><strong><?php echo esc_html($notice); ?></strong></p></div>
+            <?php endif; ?>
 
         <?php if ($activeTab === 'compliance') : ?>
             <div style="background:linear-gradient(135deg,#043927 0%,#056e4f 100%);color:#fff;border:1px solid #C9A227;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;">
@@ -3323,12 +3768,8 @@ function pa_sinova_render_admin_page(): void {
             }
             global $wpdb;
             $rTable   = function_exists('pa_portal_records_table') ? pa_portal_records_table() : ($wpdb->prefix . 'pa_portal_records');
-            $recTypes = array(
-                'jadwal'    => 'Jadwal Sidang Harian',
-                'pegawai'   => 'Profil Hakim & Pegawai',
-                'ghaib'     => 'Panggilan Ghaib (Pasal 27)',
-                'statistik' => 'Statistik Perkara Bulanan',
-            );
+            $recTypes = pa_sinova_record_types_catalog();
+            $sippLastPush = (string) get_option('pa_sipp_last_push_at', '');
             $filterRecType = isset($_GET['rec_type']) ? sanitize_key((string) $_GET['rec_type']) : 'all';
             if ($filterRecType !== 'all' && !isset($recTypes[$filterRecType])) {
                 $filterRecType = 'all';
@@ -3364,26 +3805,52 @@ function pa_sinova_render_admin_page(): void {
                 $formRecM1 = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_1'] ?? '')));
                 $formRecM2 = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_2'] ?? '')));
                 $formRecM3 = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_3'] ?? '')));
+                $formRecM4 = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_4'] ?? '')));
+                $formRecM5 = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_5'] ?? '')));
+                $formRecM6 = sanitize_textarea_field(wp_unslash((string) ($_POST['rec_meta_6'] ?? '')));
+                $formRecM7 = sanitize_textarea_field(wp_unslash((string) ($_POST['rec_meta_7'] ?? '')));
             } elseif ($isEditingRec && $formRecType === 'pegawai') {
                 $formRecM1 = (string) ($editMeta['nip'] ?? '');
                 $formRecM2 = (string) ($editMeta['gol'] ?? '');
                 $formRecM3 = (string) ($editMeta['edu'] ?? '');
+                $formRecM4 = (string) ($editMeta['photo'] ?? '');
+                $formRecM5 = (string) ($editMeta['tmt'] ?? '');
+                $formRecM6 = (string) ($editMeta['riwayat_pendidikan'] ?? '');
+                $formRecM7 = (string) ($editMeta['riwayat_jabatan'] ?? '');
             } elseif ($isEditingRec && $formRecType === 'ghaib') {
                 $formRecM1 = (string) ($editMeta['pihak'] ?? '');
                 $formRecM2 = (string) ($editMeta['doc_url'] ?? '');
-                $formRecM3 = '';
+                $formRecM3 = $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
             } elseif ($isEditingRec && $formRecType === 'statistik') {
                 $formRecM1 = (string) ($editMeta['diterima'] ?? '');
                 $formRecM2 = (string) ($editMeta['diputus'] ?? '');
                 $formRecM3 = (string) ($editMeta['sisa'] ?? '');
+                $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
+            } elseif ($isEditingRec && $formRecType === 'slider') {
+                $formRecM1 = (string) ($editMeta['image_url'] ?? '');
+                $formRecM2 = (string) ($editMeta['btn_url'] ?? '');
+                $formRecM3 = (string) ($editMeta['btn_label'] ?? '');
+                $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
+            } elseif ($isEditingRec && $formRecType === 'video') {
+                $formRecM1 = (string) ($editMeta['video_url'] ?? '');
+                $formRecM2 = (string) ($editMeta['thumb_url'] ?? '');
+                $formRecM3 = (string) ($editMeta['duration'] ?? '');
+                $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
+            } elseif ($isEditingRec && $formRecType === 'ucapan') {
+                $formRecM1 = (string) ($editMeta['photo_url'] ?? '');
+                $formRecM2 = (string) ($editMeta['sender'] ?? '');
+                $formRecM3 = (string) ($editMeta['badge'] ?? '');
+                $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
+            } elseif ($isEditingRec && $formRecType === 'yurisdiksi') {
+                $formRecM1 = (string) ($editMeta['desa'] ?? '');
+                $formRecM2 = (string) ($editMeta['jarak'] ?? '');
+                $formRecM3 = (string) ($editMeta['biaya'] ?? '');
+                $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
             } elseif ($isEditingRec) {
                 $formRecM1 = (string) ($editMeta['jam'] ?? '');
-                $formRecM2 = '';
-                $formRecM3 = '';
+                $formRecM2 = $formRecM3 = $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
             } else {
-                $formRecM1 = '';
-                $formRecM2 = '';
-                $formRecM3 = '';
+                $formRecM1 = $formRecM2 = $formRecM3 = $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
             }
 
             $recRows = ($filterRecType !== 'all')
@@ -3412,43 +3879,76 @@ function pa_sinova_render_admin_page(): void {
 
             <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start;">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingRec ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
-                        <h2 style="margin:0;color:#056e4f;"><?php echo $isEditingRec ? 'Edit Data Operasional' : 'Tambah Data Operasional Terstruktur'; ?></h2>
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                        <h2 style="margin:0;color:#056e4f;">
+                            <?php echo $isEditingRec ? 'Edit Entri' : 'Tambah Entri'; ?>
+                            <span class="pa-adm-tip" tabindex="0" data-tip="Entri langsung tampil di halaman terkait dan blok Beranda 12 kolom. Untuk sinkronisasi SIPP otomatis gunakan endpoint POST /wp-json/pa-sinova/v1/sipp/push-hearings (HMAC-SHA256)." aria-label="Info entri">i</span>
+                        </h2>
+                        <?php if ($sippLastPush !== '' && $formRecType === 'jadwal') : ?>
+                            <span style="background:#ecfdf5;color:#043927;border:1px solid #86efac;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;">Push SIPP: <?php echo esc_html($sippLastPush); ?></span>
+                        <?php endif; ?>
                         <?php if ($isEditingRec) : ?>
-                            <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Mode Edit · ID #<?php echo esc_html((string) $editRec['id']); ?></span>
+                            <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Edit #<?php echo esc_html((string) $editRec['id']); ?></span>
                         <?php endif; ?>
                     </div>
-                    <p style="font-size:12.5px;color:#475569;margin-top:0;">Entri langsung tampil pada halaman <code>/profil-pegawai/</code>, <code>/agenda-jadwal-persidangan/</code>, <code>/panggilan-ghaib/</code>, dan <code>/statistik-perkara/</code>.</p>
                     <form method="post" action="<?php echo esc_url($dataViewUrl); ?>">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="<?php echo $isEditingRec ? 'update_record' : 'add_record'; ?>">
                         <?php if ($isEditingRec) : ?>
                             <input type="hidden" name="edit_rec_id" value="<?php echo esc_attr((string) $editRec['id']); ?>">
                         <?php endif; ?>
-                        <table class="form-table">
-                            <tr><th>Jenis Data</th><td>
-                                <select name="rec_type" class="regular-text">
+                        <table class="form-table" style="margin-top:0;">
+                            <tr><th>Jenis</th><td>
+                                <select name="rec_type" id="pa-rec-type-sel" class="regular-text">
                                     <?php foreach ($recTypes as $rk => $rl) : ?>
                                         <option value="<?php echo esc_attr($rk); ?>" <?php selected($formRecType, $rk); ?>><?php echo esc_html($rl); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </td></tr>
-                            <tr><th>Judul / Nama / No. Perkara</th><td><input type="text" name="rec_title" class="regular-text" required value="<?php echo esc_attr($formRecTitle); ?>" placeholder="Contoh: 1201/Pdt.G/2026/PA.Sm"></td></tr>
-                            <tr><th>Subjudul / Jabatan / Agenda</th><td><input type="text" name="rec_subtitle" class="regular-text" value="<?php echo esc_attr($formRecSub); ?>" placeholder="Contoh: Sidang Pertama / Ketua Pengadilan Agama"></td></tr>
-                            <tr><th>Kategori / Ruang / Tahun</th><td><input type="text" name="rec_category" class="regular-text" value="<?php echo esc_attr($formRecCat); ?>" placeholder="Contoh: Ruang Sidang 1 / Pimpinan / 2026"></td></tr>
-                            <tr><th>Jam / NIP / Pihak / Diterima</th><td><input type="text" name="rec_meta_1" class="regular-text" value="<?php echo esc_attr($formRecM1); ?>" placeholder="Contoh: 09.00 WIB atau NIP atau Nama Pihak atau 145"></td></tr>
-                            <tr><th>Golongan / URL Relaas / Diputus</th><td><input type="text" name="rec_meta_2" class="regular-text" value="<?php echo esc_attr($formRecM2); ?>" placeholder="Contoh: Pembina (IV/a) atau https://... atau 138"></td></tr>
-                            <tr><th>Pendidikan / Sisa</th><td><input type="text" name="rec_meta_3" class="regular-text" value="<?php echo esc_attr($formRecM3); ?>" placeholder="Contoh: S2 Hukum Islam atau 42"></td></tr>
-                            <tr><th>Tanggal (Opsional)</th><td><input type="date" name="rec_date" value="<?php echo esc_attr($formRecDate); ?>"></td></tr>
-                            <tr><th>Urutan Tampil</th><td><input type="number" name="rec_sort_order" value="<?php echo esc_attr((string) $formRecOrder); ?>" style="width:90px;"></td></tr>
+                            <tr><th id="pa-lbl-title">Judul / Nama</th><td><input type="text" name="rec_title" class="regular-text" required value="<?php echo esc_attr($formRecTitle); ?>"></td></tr>
+                            <tr><th id="pa-lbl-sub">Subjudul / Jabatan</th><td><input type="text" name="rec_subtitle" class="regular-text" value="<?php echo esc_attr($formRecSub); ?>"></td></tr>
+                            <tr><th id="pa-lbl-cat">Kategori / Ruang</th><td><input type="text" name="rec_category" class="regular-text" value="<?php echo esc_attr($formRecCat); ?>"></td></tr>
+                            <tr><th id="pa-lbl-m1">Meta 1</th><td><input type="text" name="rec_meta_1" class="regular-text" value="<?php echo esc_attr($formRecM1); ?>"></td></tr>
+                            <tr><th id="pa-lbl-m2">Meta 2</th><td><input type="text" name="rec_meta_2" class="regular-text" value="<?php echo esc_attr($formRecM2); ?>"></td></tr>
+                            <tr><th id="pa-lbl-m3">Meta 3</th><td><input type="text" name="rec_meta_3" class="regular-text" value="<?php echo esc_attr($formRecM3); ?>"></td></tr>
+                            <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>URL Foto Pegawai</th><td><input type="url" name="rec_meta_4" class="regular-text" value="<?php echo esc_attr($formRecM4); ?>" placeholder="https://.../foto.jpg"></td></tr>
+                            <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>TMT / Pangkat</th><td><input type="text" name="rec_meta_5" class="regular-text" value="<?php echo esc_attr($formRecM5); ?>" placeholder="01-04-2024"></td></tr>
+                            <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>Riwayat Pendidikan</th><td><textarea name="rec_meta_6" rows="2" class="regular-text" placeholder="S1 Syariah (2005); S2 Ilmu Hukum (2012)"><?php echo esc_textarea($formRecM6); ?></textarea></td></tr>
+                            <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>Riwayat Jabatan / Diklat</th><td><textarea name="rec_meta_7" rows="2" class="regular-text" placeholder="Hakim PA A (2018); Wakil Ketua PA B (2023)"><?php echo esc_textarea($formRecM7); ?></textarea></td></tr>
+                            <tr><th>Tanggal</th><td><input type="date" name="rec_date" value="<?php echo esc_attr($formRecDate); ?>"></td></tr>
+                            <tr><th>Urutan</th><td><input type="number" name="rec_sort_order" value="<?php echo esc_attr((string) $formRecOrder); ?>" style="width:90px;"></td></tr>
                         </table>
                         <p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                            <button type="submit" class="button button-primary"><?php echo $isEditingRec ? 'Simpan Perubahan' : 'Simpan Data Operasional'; ?></button>
+                            <button type="submit" class="button button-primary"><?php echo $isEditingRec ? 'Simpan Perubahan' : 'Simpan'; ?></button>
                             <?php if ($isEditingRec) : ?>
-                                <a href="<?php echo esc_url($dataViewUrl); ?>" class="button">Batal Edit</a>
+                                <a href="<?php echo esc_url($dataViewUrl); ?>" class="button">Batal</a>
                             <?php endif; ?>
                         </p>
                     </form>
+                    <script>
+                        (function(){
+                            var sel = document.getElementById('pa-rec-type-sel');
+                            if (!sel) return;
+                            var map = {
+                                jadwal:     ['Nomor Perkara', 'Agenda Sidang', 'Ruang Sidang', 'Jam (WIB)', 'Catatan', 'Opsional'],
+                                pegawai:    ['Nama Lengkap', 'Jabatan', 'Kelompok (Pimpinan/Hakim/dll)', 'NIP', 'Pangkat / Golongan', 'Pendidikan Terakhir'],
+                                ghaib:      ['Nomor Perkara', 'Status Pihak', 'Keterangan Pasal 27', 'Nama Pihak Dipanggil', 'URL Relaas PDF/Drive', 'Opsional'],
+                                statistik:  ['Periode (Bulan Tahun)', 'Keterangan', 'Tahun', 'Jumlah Diterima', 'Jumlah Diputus', 'Jumlah Sisa'],
+                                slider:     ['Judul Slide', 'Subjudul Singkat', 'Label Atas (Kicker)', 'URL Gambar Slide (HTTPS)', 'URL Tombol (Opsional)', 'Label Tombol'],
+                                video:      ['Judul Video', 'Deskripsi Singkat', 'Kategori Video', 'URL YouTube / Drive (HTTPS)', 'URL Thumbnail (Opsional)', 'Durasi (mis. 03:45)'],
+                                ucapan:     ['Judul Ucapan / Nama', 'Pesan Singkat', 'Ucapan Selamat / Belasungkawa', 'URL Foto / Poster (Opsional)', 'Pengirim', 'Label Badge'],
+                                yurisdiksi: ['Nama Kecamatan', 'Keterangan Wilayah', 'Radius (mis. Radius I)', 'Daftar Desa / Kelurahan', 'Jarak (± km)', 'Keterangan Biaya']
+                            };
+                            function syncLabels() {
+                                var cfg = map[sel.value] || map.jadwal;
+                                var ids = ['pa-lbl-title','pa-lbl-sub','pa-lbl-cat','pa-lbl-m1','pa-lbl-m2','pa-lbl-m3'];
+                                ids.forEach(function(id, i){ var el = document.getElementById(id); if (el) el.textContent = cfg[i]; });
+                                document.querySelectorAll('.pa-peg-extra').forEach(function(tr){ tr.style.display = (sel.value === 'pegawai') ? '' : 'none'; });
+                            }
+                            sel.addEventListener('change', syncLabels);
+                            syncLabels();
+                        })();
+                    </script>
                 </div>
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;">
@@ -3728,116 +4228,466 @@ function pa_sinova_render_admin_page(): void {
             $frontIdNow    = (int) get_option('page_on_front', 0);
             $frontPostNow  = ($frontIdNow > 0 && get_post_status($frontIdNow) === 'publish') ? get_post($frontIdNow) : null;
             $isDynamicHome = ($frontPostNow instanceof WP_Post && strpos((string) $frontPostNow->post_content, '[pa_sinova_beranda') !== false);
+            $homeBlocks    = pa_sinova_get_home_blocks();
+            $blkCatalog    = pa_sinova_home_block_catalog();
+            $homeGlobals   = array(
+                'sipp_slide_url'     => (string) ($cfg['sipp_slide_url'] ?? ''),
+                'home_show_ticker'   => (string) ($cfg['home_show_ticker'] ?? '1'),
+                'home_ticker_text'   => (string) ($cfg['home_ticker_text'] ?? ''),
+                'home_hero_kicker'   => (string) ($cfg['home_hero_kicker'] ?? ''),
+                'home_hero_title'    => (string) ($cfg['home_hero_title'] ?? ''),
+                'home_hero_lead'     => (string) ($cfg['home_hero_lead'] ?? ''),
+                'home_survey_period' => (string) ($cfg['home_survey_period'] ?? 'Triwulan III'),
+                'home_survey_grade'  => (string) ($cfg['home_survey_grade'] ?? '★ Mutu A (Sangat Baik)'),
+                'home_survey_skm'    => (string) ($cfg['home_survey_skm'] ?? '4.00 / 4.00'),
+                'home_survey_spak'   => (string) ($cfg['home_survey_spak'] ?? '4.00 / 4.00'),
+                'home_survey_spkp'   => (string) ($cfg['home_survey_spkp'] ?? '4.00 / 4.00'),
+            );
         ?>
-            <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid <?php echo $isDynamicHome ? '#15803d' : '#d97706'; ?>;border-radius:10px;padding:16px 18px;margin-bottom:18px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px;">
-                <div style="flex:1;min-width:260px;">
-                    <?php if ($isDynamicHome) : ?>
-                        <strong style="color:#15803d;font-size:14.5px;">● Beranda Dinamis Aktif (<code>[pa_sinova_beranda]</code>)</strong>
-                        <p style="margin:4px 0 0;color:#475569;font-size:13px;">Tampilan Beranda dikendalikan penuh lewat formulir visual di bawah ini — tidak perlu Elementor, tidak perlu edit kode HTML, dan otomatis ikut terbarui setiap kali Anda memperbarui versi Starter Kit.</p>
-                    <?php else : ?>
-                        <strong style="color:#b45309;font-size:14.5px;">⚠ Beranda Masih Menggunakan HTML Statis Lama</strong>
-                        <p style="margin:4px 0 0;color:#475569;font-size:13px;">Klik tombol di samping agar Beranda langsung beralih ke <strong>Beranda Dinamis</strong> (desain penuh terbaru + Dashboard Jadwal Sidang + bisa diatur visual tanpa menyentuh kode). <em>Berita, dokumen, dan halaman lain tidak dihapus.</em></p>
-                    <?php endif; ?>
+            <?php if (!$isDynamicHome) : ?>
+                <div class="pa-adm-banner pa-adm-banner-warn">
+                    <span><strong>Beranda masih HTML statis lama.</strong> Aktifkan Beranda Dinamis agar susunan 12 kolom di bawah langsung tampil.</span>
+                    <form method="post" style="margin:0;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="activate_dynamic_home">
+                        <button type="submit" class="button button-primary button-small">Aktifkan Beranda Dinamis (1-Klik)</button>
+                    </form>
                 </div>
-                <form method="post" <?php echo $isDynamicHome ? '' : 'onsubmit="return confirm(\'Beralih ke Beranda Dinamis [pa_sinova_beranda]? Konten HTML statis lama pada halaman Beranda akan diganti shortcode dinamis (berita, dokumen, &amp; halaman lain tetap aman).\');"'; ?>>
-                    <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                    <input type="hidden" name="pa_sinova_action" value="activate_dynamic_home">
-                    <button type="submit" class="button <?php echo $isDynamicHome ? 'button-secondary' : 'button-primary'; ?>">
-                        <?php echo $isDynamicHome ? 'Segarkan Beranda Dinamis' : 'Aktifkan Beranda Dinamis (1-Klik)'; ?>
-                    </button>
-                </form>
+            <?php endif; ?>
+
+            <div class="pa-grid-toolbar">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                    <select id="pa-gb-add-type" aria-label="Pilih jenis blok" style="min-width:210px;">
+                        <?php foreach ($blkCatalog as $bk => $bm) : ?>
+                            <option value="<?php echo esc_attr($bk); ?>"><?php echo esc_html($bm['icon'] . ' ' . $bm['label']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="button" id="pa-gb-add-btn" class="button">+ Tambah Blok</button>
+                    <span class="pa-adm-tip" tabindex="0" data-tip="Seret kotak untuk pindah kolom/baris. Tarik sudut kanan bawah kotak untuk atur lebar (1–12 kolom) dan tinggi. Klik ikon pensil untuk ubah isi blok." aria-label="Cara pakai editor grid">i</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                    <form method="post" style="margin:0;" onsubmit="return confirm('Kembalikan tata letak Beranda ke susunan standar 12 kolom?');">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="reset_home_grid">
+                        <button type="submit" class="button">Reset Standar</button>
+                    </form>
+                    <form method="post" id="pa-gb-save-form" style="margin:0;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="save_home_grid">
+                        <input type="hidden" name="pa_home_blocks_json" id="pa-gb-json-input" value="">
+                        <input type="hidden" name="home_show_ticker" id="pa-gb-h-show-ticker" value="<?php echo esc_attr($homeGlobals['home_show_ticker']); ?>">
+                        <input type="hidden" name="home_ticker_text" id="pa-gb-h-ticker" value="<?php echo esc_attr($homeGlobals['home_ticker_text']); ?>">
+                        <input type="hidden" name="home_hero_kicker" id="pa-gb-h-kicker" value="<?php echo esc_attr($homeGlobals['home_hero_kicker']); ?>">
+                        <input type="hidden" name="home_hero_title" id="pa-gb-h-title" value="<?php echo esc_attr($homeGlobals['home_hero_title']); ?>">
+                        <input type="hidden" name="home_hero_lead" id="pa-gb-h-lead" value="<?php echo esc_attr($homeGlobals['home_hero_lead']); ?>">
+                        <input type="hidden" name="home_survey_period" id="pa-gb-h-sper" value="<?php echo esc_attr($homeGlobals['home_survey_period']); ?>">
+                        <input type="hidden" name="home_survey_grade" id="pa-gb-h-sgrd" value="<?php echo esc_attr($homeGlobals['home_survey_grade']); ?>">
+                        <input type="hidden" name="home_survey_skm" id="pa-gb-h-skm" value="<?php echo esc_attr($homeGlobals['home_survey_skm']); ?>">
+                        <input type="hidden" name="home_survey_spak" id="pa-gb-h-spak" value="<?php echo esc_attr($homeGlobals['home_survey_spak']); ?>">
+                        <input type="hidden" name="home_survey_spkp" id="pa-gb-h-spkp" value="<?php echo esc_attr($homeGlobals['home_survey_spkp']); ?>">
+                        <button type="submit" class="button button-primary">Simpan Tampilan Beranda</button>
+                    </form>
+                </div>
             </div>
 
-            <form method="post">
-                <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                <input type="hidden" name="pa_sinova_action" value="save_home_layout">
-                <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:20px;align-items:start;">
-                    <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
-                        <h2 style="margin-top:0;color:#056e4f;">1. Dashboard Jadwal Sidang &amp; Live SIPP</h2>
-                        <table class="form-table" style="margin-top:0;">
-                            <tr>
-                                <th>Letak di Beranda</th>
-                                <td>
-                                    <select name="home_schedule_position" class="regular-text">
-                                        <option value="after_hero" <?php selected($cfg['home_schedule_position'] ?? 'after_hero', 'after_hero'); ?>>Tepat di bawah Hero Banner (Direkomendasikan — paling terlihat)</option>
-                                        <option value="after_services" <?php selected($cfg['home_schedule_position'] ?? 'after_hero', 'after_services'); ?>>Di bawah 8 Kartu Layanan Peradilan</option>
-                                        <option value="after_welcome" <?php selected($cfg['home_schedule_position'] ?? 'after_hero', 'after_welcome'); ?>>Di bawah Sambutan Pimpinan &amp; Maklumat</option>
-                                        <option value="hidden" <?php selected($cfg['home_schedule_position'] ?? 'after_hero', 'hidden'); ?>>Sembunyikan dari Beranda</option>
-                                    </select>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Tab Awal Yang Ditampilkan</th>
-                                <td>
-                                    <select name="home_schedule_default_tab" class="regular-text">
-                                        <option value="auto" <?php selected($cfg['home_schedule_default_tab'] ?? 'auto', 'auto'); ?>>Otomatis (Layar Live SIPP bila URL diisi, selain itu Agenda Hari Ini)</option>
-                                        <option value="agenda" <?php selected($cfg['home_schedule_default_tab'] ?? 'auto', 'agenda'); ?>>Agenda Sidang Hari Ini (Data Terstruktur)</option>
-                                        <option value="sipp" <?php selected($cfg['home_schedule_default_tab'] ?? 'auto', 'sipp'); ?>>Layar Live Slide SIPP</option>
-                                    </select>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>URL Slide Jadwal Sidang SIPP</th>
-                                <td>
-                                    <input type="url" name="sipp_slide_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_slide_url'] ?? ''); ?>" placeholder="https://sipp.pa-satker.go.id/Slide_sidang">
-                                    <br><small style="color:#64748b;">Cukup tempel tautan HTTPS <code>Slide_sidang</code> SIPP satker Anda. Otomatis diizinkan pada header CSP <code>frame-src</code> tanpa edit kode.</small>
-                                </td>
-                            </tr>
-                        </table>
+            <div class="pa-grid-board-wrap">
+                <div class="pa-grid-col-nums" aria-hidden="true">
+                    <?php for ($ci = 1; $ci <= 12; $ci++) : ?><span><?php echo (int) $ci; ?></span><?php endfor; ?>
+                </div>
+                <div class="pa-grid-canvas" id="pa-gb-canvas" aria-label="Kanvas Editor Grid 12 Kolom Beranda"></div>
+            </div>
 
-                        <hr style="margin:16px 0;">
-                        <h2 style="margin-top:0;color:#056e4f;">2. Teks Hero Banner &amp; Pita Informasi</h2>
-                        <table class="form-table" style="margin-top:0;">
-                            <tr>
-                                <th>Pita Info Layanan (Ticker)</th>
-                                <td>
-                                    <label style="display:block;margin-bottom:6px;"><input type="checkbox" name="home_show_ticker" value="1" <?php checked(($cfg['home_show_ticker'] ?? '1') !== '0'); ?>> Tampilkan pita informasi di atas Hero</label>
-                                    <textarea name="home_ticker_text" rows="2" class="large-text"><?php echo esc_textarea($cfg['home_ticker_text'] ?? ''); ?></textarea>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Label Atas Hero (Kicker)</th>
-                                <td><input type="text" name="home_hero_kicker" class="large-text" value="<?php echo esc_attr($cfg['home_hero_kicker'] ?? ''); ?>"></td>
-                            </tr>
-                            <tr>
-                                <th>Judul Utama Hero (H1)</th>
-                                <td><input type="text" name="home_hero_title" class="large-text" value="<?php echo esc_attr($cfg['home_hero_title'] ?? ''); ?>"></td>
-                            </tr>
-                            <tr>
-                                <th>Deskripsi Singkat Hero</th>
-                                <td><textarea name="home_hero_lead" rows="3" class="large-text"><?php echo esc_textarea($cfg['home_hero_lead'] ?? ''); ?></textarea></td>
-                            </tr>
-                        </table>
+            <div style="background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <h2 style="margin:0;font-size:15px;color:#043927;">Daftar Tampilan</h2>
+                    <span class="pa-adm-tip" tabindex="0" data-tip="SK 2722/2026 Bab III huruf C: jaga beranda tetap ringkas, jadwal sidang & SIPP mudah ditemukan, hindari animasi berat." aria-label="Catatan SK 2722">i</span>
+                </div>
+                <table class="widefat striped" id="pa-gb-list-table">
+                    <thead>
+                        <tr><th>Tampilan</th><th>Jenis</th><th>Posisi</th><th>Ukuran</th><th>Status</th><th style="width:165px;">Aksi</th></tr>
+                    </thead>
+                    <tbody id="pa-gb-tbody"></tbody>
+                </table>
+            </div>
+
+            <dialog id="pa-grid-edit-dlg" closedby="any" aria-labelledby="pa-grid-edit-title">
+                <div class="pa-dlg-head">
+                    <h2 id="pa-grid-edit-title">Ubah Blok Beranda</h2>
+                    <form method="dialog" style="margin:0;"><button type="submit" class="button button-small" aria-label="Tutup dialog">✕</button></form>
+                </div>
+                <div class="pa-dlg-body">
+                    <input type="hidden" id="pa-ed-id">
+                    <div class="pa-dlg-field">
+                        <label for="pa-ed-title">Judul Blok</label>
+                        <input type="text" id="pa-ed-title">
+                    </div>
+                    <div class="pa-dlg-grid4">
+                        <div class="pa-dlg-field"><label for="pa-ed-x">Kolom (1–12)</label><input type="number" id="pa-ed-x" min="1" max="12"></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-y">Baris</label><input type="number" id="pa-ed-y" min="1" max="40"></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-w">Lebar (2–12)</label><input type="number" id="pa-ed-w" min="2" max="12"></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-h">Tinggi (1–4)</label><input type="number" id="pa-ed-h" min="1" max="4"></div>
                     </div>
 
-                    <div style="display:flex;flex-direction:column;gap:18px;">
-                        <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
-                            <h2 style="margin-top:0;color:#056e4f;">3. Tampilkan / Sembunyikan Bagian Beranda</h2>
-                            <p style="margin-top:0;font-size:12.5px;color:#475569;">Centang bagian yang ingin muncul di halaman depan tanpa menyentuh editor Gutenberg.</p>
-                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_services" value="1" <?php checked(($cfg['home_show_services'] ?? '1') !== '0'); ?>> <strong>8 Kartu Layanan Inti</strong> (SIPP, e-Court, Putusan, Prodeo, PPID)</label></p>
-                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_welcome" value="1" <?php checked(($cfg['home_show_welcome'] ?? '1') !== '0'); ?>> <strong>Sambutan Pimpinan &amp; Maklumat PTSP</strong></label></p>
-                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_zi" value="1" <?php checked(($cfg['home_show_zi'] ?? '1') !== '0'); ?>> <strong>6 Area Pembangunan Zona Integritas</strong></label></p>
-                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_news" value="1" <?php checked(($cfg['home_show_news'] ?? '1') !== '0'); ?>> <strong>Berita Terkini Satker</strong> (3 berita terbaru)</label></p>
-                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_announcements" value="1" <?php checked(($cfg['home_show_announcements'] ?? '1') !== '0'); ?>> <strong>Pengumuman 3 Kolom</strong> (Satker, MA RI, Badilag RSS)</label></p>
-                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_survey" value="1" <?php checked(($cfg['home_show_survey'] ?? '1') !== '0'); ?>> <strong>Indeks Survei Pelayanan &amp; Direktori Transparansi</strong></label></p>
-                        </div>
+                    <div id="pa-ed-sec-hero" hidden>
+                        <div class="pa-dlg-field"><label><input type="checkbox" id="pa-ed-show-ticker" value="1"> Tampilkan Pita Ticker Info</label></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-ticker">Teks Ticker</label><textarea id="pa-ed-ticker" rows="2"></textarea></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-kicker">Label Atas Hero</label><input type="text" id="pa-ed-kicker"></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-htitle">Judul Utama Hero</label><input type="text" id="pa-ed-htitle"></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-hlead">Deskripsi Hero</label><textarea id="pa-ed-hlead" rows="2"></textarea></div>
+                    </div>
 
-                        <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
-                            <h2 style="margin-top:0;color:#056e4f;">4. Nilai Indeks Pelayanan Publik (Beranda)</h2>
-                            <table class="form-table" style="margin-top:0;">
-                                <tr><th style="width:130px;">Periode Aktif</th><td><input type="text" name="home_survey_period" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_period'] ?? 'Triwulan III'); ?>" style="width:100%;"></td></tr>
-                                <tr><th>Predikat Mutu</th><td><input type="text" name="home_survey_grade" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_grade'] ?? '★ Mutu A (Sangat Baik)'); ?>" style="width:100%;"></td></tr>
-                                <tr><th>Nilai SKM</th><td><input type="text" name="home_survey_skm" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_skm'] ?? '4.00 / 4.00'); ?>" style="width:100%;"></td></tr>
-                                <tr><th>Nilai SPAK</th><td><input type="text" name="home_survey_spak" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_spak'] ?? '4.00 / 4.00'); ?>" style="width:100%;"></td></tr>
-                                <tr><th>Nilai SPKP</th><td><input type="text" name="home_survey_spkp" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_spkp'] ?? '4.00 / 4.00'); ?>" style="width:100%;"></td></tr>
-                            </table>
-                            <p style="margin:12px 0 0;">
-                                <button type="submit" class="button button-primary button-large" style="width:100%;">Simpan Desain &amp; Tata Letak Beranda</button>
-                            </p>
+                    <div id="pa-ed-sec-schedule" hidden>
+                        <div class="pa-dlg-field"><label for="pa-ed-sipp-url">URL Slide Jadwal Sidang SIPP (HTTPS)</label><input type="url" id="pa-ed-sipp-url" placeholder="https://sipp.pa-satker.go.id/Slide_sidang"></div>
+                        <div class="pa-dlg-field">
+                            <label for="pa-ed-sched-tab">Tab Awal</label>
+                            <select id="pa-ed-sched-tab">
+                                <option value="auto">Otomatis (Live SIPP bila URL diisi)</option>
+                                <option value="sipp">Layar Live SIPP</option>
+                                <option value="agenda">Agenda Terstruktur</option>
+                            </select>
+                        </div>
+                        <div class="pa-dlg-field"><label for="pa-ed-sched-h">Tinggi Layar (px)</label><input type="number" id="pa-ed-sched-h" min="320" max="900" value="480"></div>
+                    </div>
+
+                    <div id="pa-ed-sec-survey" hidden>
+                        <div class="pa-dlg-field"><label for="pa-ed-sper">Periode</label><input type="text" id="pa-ed-sper"></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-sgrd">Predikat Mutu</label><input type="text" id="pa-ed-sgrd"></div>
+                        <div class="pa-dlg-grid4" style="grid-template-columns:repeat(3,1fr);">
+                            <div class="pa-dlg-field"><label for="pa-ed-skm">SKM</label><input type="text" id="pa-ed-skm"></div>
+                            <div class="pa-dlg-field"><label for="pa-ed-spak">SPAK</label><input type="text" id="pa-ed-spak"></div>
+                            <div class="pa-dlg-field"><label for="pa-ed-spkp">SPKP</label><input type="text" id="pa-ed-spkp"></div>
+                        </div>
+                    </div>
+
+                    <div id="pa-ed-sec-count" hidden>
+                        <div class="pa-dlg-field"><label for="pa-ed-count">Jumlah Item Ditampilkan</label><input type="number" id="pa-ed-count" min="1" max="12" value="4"></div>
+                    </div>
+
+                    <div id="pa-ed-sec-custom" hidden>
+                        <div class="pa-dlg-field"><label for="pa-ed-embed">URL Sematan Iframe (HTTPS — SIPP/Drive/Maps/YouTube)</label><input type="url" id="pa-ed-embed" placeholder="https://..."></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-embed-h">Tinggi Sematan (px)</label><input type="number" id="pa-ed-embed-h" min="260" max="900" value="420"></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-body">Isi Teks / HTML Ringkas</label><textarea id="pa-ed-body" rows="4" placeholder="Tulis pengumuman, informasi layanan, atau HTML aman..."></textarea></div>
+                        <div class="pa-dlg-grid4" style="grid-template-columns:1fr 1fr;">
+                            <div class="pa-dlg-field"><label for="pa-ed-ctalbl">Label Tombol (Opsional)</label><input type="text" id="pa-ed-ctalbl" placeholder="Lihat Selengkapnya"></div>
+                            <div class="pa-dlg-field"><label for="pa-ed-ctaurl">URL Tombol (Opsional)</label><input type="url" id="pa-ed-ctaurl" placeholder="https://..."></div>
                         </div>
                     </div>
                 </div>
-            </form>
+                <div class="pa-dlg-foot">
+                    <form method="dialog" style="margin:0;"><button type="submit" class="button">Batal</button></form>
+                    <button type="button" id="pa-ed-apply" class="button button-primary">Terapkan ke Kanvas</button>
+                </div>
+            </dialog>
+
+            <script>
+            (function(){
+                var catalog = <?php echo wp_json_encode($blkCatalog); ?>;
+                var blocks  = <?php echo wp_json_encode(array_values($homeBlocks)); ?>;
+                var globals = <?php echo wp_json_encode($homeGlobals); ?>;
+                var canvas  = document.getElementById('pa-gb-canvas');
+                var tbody   = document.getElementById('pa-gb-tbody');
+                var addSel  = document.getElementById('pa-gb-add-type');
+                var addBtn  = document.getElementById('pa-gb-add-btn');
+                var saveFrm = document.getElementById('pa-gb-save-form');
+                var jsonInp = document.getElementById('pa-gb-json-input');
+                var dlg     = document.getElementById('pa-grid-edit-dlg');
+                var selectedId = null;
+
+                if (dlg && !('closedBy' in HTMLDialogElement.prototype)) {
+                    var pressedOut = false;
+                    var isOut = function(e){
+                        var r = dlg.getBoundingClientRect();
+                        return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+                    };
+                    dlg.addEventListener('pointerdown', function(e){ pressedOut = isOut(e); });
+                    dlg.addEventListener('pointerup', function(e){ if (pressedOut && isOut(e)) dlg.close(); });
+                }
+
+                function clamp(v, mn, mx){ return Math.max(mn, Math.min(mx, v)); }
+                function byId(id){ return blocks.find(function(b){ return b.id === id; }); }
+                function sortBlocks(){ blocks.sort(function(a,b){ return (a.y !== b.y) ? (a.y - b.y) : (a.x - b.x); }); }
+                function maxRow(){
+                    var m = 1;
+                    blocks.forEach(function(b){ m = Math.max(m, (b.y || 1) + (b.h || 1) - 1); });
+                    return m;
+                }
+
+                function openEdit(id){
+                    var b = byId(id);
+                    if (!b || !dlg) return;
+                    selectedId = id;
+                    b.config = b.config || {};
+                    document.getElementById('pa-ed-id').value = b.id;
+                    document.getElementById('pa-ed-title').value = b.title || '';
+                    document.getElementById('pa-ed-x').value = b.x;
+                    document.getElementById('pa-ed-y').value = b.y;
+                    document.getElementById('pa-ed-w').value = b.w;
+                    document.getElementById('pa-ed-h').value = b.h;
+                    document.getElementById('pa-grid-edit-title').textContent = 'Ubah: ' + (b.title || (catalog[b.type] ? catalog[b.type].label : b.type));
+
+                    ['pa-ed-sec-hero','pa-ed-sec-schedule','pa-ed-sec-survey','pa-ed-sec-count','pa-ed-sec-custom'].forEach(function(sid){
+                        var el = document.getElementById(sid);
+                        if (el) el.hidden = true;
+                    });
+                    if (b.type === 'hero_slider') {
+                        document.getElementById('pa-ed-sec-hero').hidden = false;
+                        document.getElementById('pa-ed-show-ticker').checked = (globals.home_show_ticker !== '0');
+                        document.getElementById('pa-ed-ticker').value = globals.home_ticker_text || '';
+                        document.getElementById('pa-ed-kicker').value = globals.home_hero_kicker || '';
+                        document.getElementById('pa-ed-htitle').value = globals.home_hero_title || '';
+                        document.getElementById('pa-ed-hlead').value = globals.home_hero_lead || '';
+                    } else if (b.type === 'schedule') {
+                        document.getElementById('pa-ed-sec-schedule').hidden = false;
+                        document.getElementById('pa-ed-sipp-url').value = b.config.embed_url || globals.sipp_slide_url || '';
+                        document.getElementById('pa-ed-sched-tab').value = b.config.default_tab || 'auto';
+                        document.getElementById('pa-ed-sched-h').value = b.config.height || 480;
+                    } else if (b.type === 'survey') {
+                        document.getElementById('pa-ed-sec-survey').hidden = false;
+                        document.getElementById('pa-ed-sper').value = globals.home_survey_period || '';
+                        document.getElementById('pa-ed-sgrd').value = globals.home_survey_grade || '';
+                        document.getElementById('pa-ed-skm').value  = globals.home_survey_skm || '';
+                        document.getElementById('pa-ed-spak').value = globals.home_survey_spak || '';
+                        document.getElementById('pa-ed-spkp').value = globals.home_survey_spkp || '';
+                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings') {
+                        document.getElementById('pa-ed-sec-count').hidden = false;
+                        document.getElementById('pa-ed-count').value = b.config.count || b.config.limit || (b.type === 'news' ? 3 : 4);
+                    } else if (b.type === 'custom') {
+                        document.getElementById('pa-ed-sec-custom').hidden = false;
+                        document.getElementById('pa-ed-embed').value = b.config.embed_url || '';
+                        document.getElementById('pa-ed-embed-h').value = b.config.height || 420;
+                        document.getElementById('pa-ed-body').value = b.config.body || '';
+                        document.getElementById('pa-ed-ctalbl').value = b.config.cta_label || '';
+                        document.getElementById('pa-ed-ctaurl').value = b.config.cta_url || '';
+                    }
+                    dlg.showModal();
+                }
+
+                document.getElementById('pa-ed-apply').addEventListener('click', function(){
+                    var id = document.getElementById('pa-ed-id').value;
+                    var b = byId(id);
+                    if (!b) return;
+                    b.title = document.getElementById('pa-ed-title').value.trim() || b.title;
+                    b.w = clamp(parseInt(document.getElementById('pa-ed-w').value, 10) || b.w, 2, 12);
+                    b.x = clamp(parseInt(document.getElementById('pa-ed-x').value, 10) || b.x, 1, 13 - b.w);
+                    b.y = clamp(parseInt(document.getElementById('pa-ed-y').value, 10) || b.y, 1, 40);
+                    b.h = clamp(parseInt(document.getElementById('pa-ed-h').value, 10) || b.h, 1, 4);
+                    b.config = b.config || {};
+
+                    if (b.type === 'hero_slider') {
+                        globals.home_show_ticker = document.getElementById('pa-ed-show-ticker').checked ? '1' : '0';
+                        globals.home_ticker_text = document.getElementById('pa-ed-ticker').value.trim();
+                        globals.home_hero_kicker = document.getElementById('pa-ed-kicker').value.trim();
+                        globals.home_hero_title  = document.getElementById('pa-ed-htitle').value.trim();
+                        globals.home_hero_lead   = document.getElementById('pa-ed-hlead').value.trim();
+                    } else if (b.type === 'schedule') {
+                        var su = document.getElementById('pa-ed-sipp-url').value.trim();
+                        b.config.embed_url = su;
+                        globals.sipp_slide_url = su;
+                        b.config.default_tab = document.getElementById('pa-ed-sched-tab').value;
+                        b.config.height = clamp(parseInt(document.getElementById('pa-ed-sched-h').value, 10) || 480, 320, 900);
+                    } else if (b.type === 'survey') {
+                        globals.home_survey_period = document.getElementById('pa-ed-sper').value.trim();
+                        globals.home_survey_grade  = document.getElementById('pa-ed-sgrd').value.trim();
+                        globals.home_survey_skm    = document.getElementById('pa-ed-skm').value.trim();
+                        globals.home_survey_spak   = document.getElementById('pa-ed-spak').value.trim();
+                        globals.home_survey_spkp   = document.getElementById('pa-ed-spkp').value.trim();
+                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings') {
+                        var cnt = clamp(parseInt(document.getElementById('pa-ed-count').value, 10) || 3, 1, 12);
+                        b.config.count = cnt;
+                        b.config.limit = cnt;
+                    } else if (b.type === 'custom') {
+                        b.config.embed_url = document.getElementById('pa-ed-embed').value.trim();
+                        b.config.height    = clamp(parseInt(document.getElementById('pa-ed-embed-h').value, 10) || 420, 260, 900);
+                        b.config.body      = document.getElementById('pa-ed-body').value;
+                        b.config.cta_label = document.getElementById('pa-ed-ctalbl').value.trim();
+                        b.config.cta_url   = document.getElementById('pa-ed-ctaurl').value.trim();
+                    }
+                    dlg.close();
+                    render();
+                });
+
+                function startDragOrResize(ev, block, mode, cardEl){
+                    if (ev.button !== 0) return;
+                    ev.preventDefault();
+                    selectedId = block.id;
+                    var rect = canvas.getBoundingClientRect();
+                    var colW = (rect.width + 10) / 12;
+                    var rowH = 94;
+                    var startX = ev.clientX, startY = ev.clientY;
+                    var origX = block.x, origY = block.y, origW = block.w, origH = block.h;
+                    cardEl.classList.add('is-dragging');
+
+                    function onMove(mv){
+                        var dxCols = Math.round((mv.clientX - startX) / colW);
+                        var dyRows = Math.round((mv.clientY - startY) / rowH);
+                        if (mode === 'drag') {
+                            block.x = clamp(origX + dxCols, 1, 13 - block.w);
+                            block.y = clamp(origY + dyRows, 1, 40);
+                        } else {
+                            block.w = clamp(origW + dxCols, 2, 13 - origX);
+                            block.h = clamp(origH + dyRows, 1, 4);
+                        }
+                        cardEl.style.gridColumn = block.x + ' / span ' + block.w;
+                        cardEl.style.gridRow = block.y + ' / span ' + block.h;
+                        var sz = cardEl.querySelector('.pa-gb-size');
+                        if (sz) sz.textContent = block.w + '×' + block.h;
+                    }
+                    function onUp(){
+                        document.removeEventListener('pointermove', onMove);
+                        document.removeEventListener('pointerup', onUp);
+                        cardEl.classList.remove('is-dragging');
+                        render();
+                    }
+                    document.addEventListener('pointermove', onMove);
+                    document.addEventListener('pointerup', onUp);
+                }
+
+                function render(){
+                    sortBlocks();
+                    canvas.replaceChildren();
+                    tbody.replaceChildren();
+                    var rowsMin = Math.max(6, maxRow() + 1);
+                    canvas.style.minHeight = (rowsMin * 94) + 'px';
+
+                    blocks.forEach(function(b){
+                        var meta = catalog[b.type] || { label: b.type, icon: '▪' };
+                        var card = document.createElement('div');
+                        card.className = 'pa-gb-card' + (b.id === selectedId ? ' is-selected' : '') + (!b.enabled ? ' is-hidden-blk' : '');
+                        card.style.gridColumn = b.x + ' / span ' + b.w;
+                        card.style.gridRow = b.y + ' / span ' + b.h;
+
+                        var head = document.createElement('div');
+                        head.className = 'pa-gb-head';
+
+                        var tWrap = document.createElement('div');
+                        tWrap.style.minWidth = '0';
+                        var tLine = document.createElement('div');
+                        tLine.className = 'pa-gb-title';
+                        var ico = document.createElement('span');
+                        ico.textContent = meta.icon;
+                        var tTxt = document.createElement('span');
+                        tTxt.textContent = b.title;
+                        tLine.appendChild(ico);
+                        tLine.appendChild(tTxt);
+                        var sub = document.createElement('div');
+                        sub.className = 'pa-gb-sub';
+                        sub.textContent = meta.label;
+                        tWrap.appendChild(tLine);
+                        tWrap.appendChild(sub);
+
+                        var acts = document.createElement('div');
+                        acts.className = 'pa-gb-acts';
+                        var btnEd = document.createElement('button');
+                        btnEd.type = 'button'; btnEd.className = 'pa-gb-iconbtn'; btnEd.title = 'Ubah isi & posisi'; btnEd.textContent = '✎';
+                        btnEd.addEventListener('click', function(e){ e.stopPropagation(); openEdit(b.id); });
+                        var btnVis = document.createElement('button');
+                        btnVis.type = 'button'; btnVis.className = 'pa-gb-iconbtn'; btnVis.title = b.enabled ? 'Sembunyikan' : 'Tampilkan'; btnVis.textContent = b.enabled ? '👁' : '◌';
+                        btnVis.addEventListener('click', function(e){ e.stopPropagation(); b.enabled = !b.enabled; render(); });
+                        var btnDel = document.createElement('button');
+                        btnDel.type = 'button'; btnDel.className = 'pa-gb-iconbtn'; btnDel.title = 'Hapus blok'; btnDel.textContent = '🗑';
+                        btnDel.addEventListener('click', function(e){
+                            e.stopPropagation();
+                            if (!confirm('Hapus blok "' + b.title + '" dari Beranda?')) return;
+                            blocks = blocks.filter(function(it){ return it.id !== b.id; });
+                            render();
+                        });
+                        acts.appendChild(btnEd); acts.appendChild(btnVis); acts.appendChild(btnDel);
+
+                        head.appendChild(tWrap); head.appendChild(acts);
+
+                        var foot = document.createElement('div');
+                        foot.className = 'pa-gb-meta';
+                        var sz = document.createElement('span');
+                        sz.className = 'pa-gb-size';
+                        sz.textContent = b.w + '×' + b.h;
+                        var pos = document.createElement('span');
+                        pos.textContent = 'Kol ' + b.x + ' · Brs ' + b.y;
+                        foot.appendChild(sz); foot.appendChild(pos);
+
+                        var rz = document.createElement('span');
+                        rz.className = 'pa-gb-resize';
+                        rz.title = 'Tarik untuk ubah ukuran';
+                        rz.textContent = '↘';
+                        rz.addEventListener('pointerdown', function(e){ e.stopPropagation(); startDragOrResize(e, b, 'resize', card); });
+
+                        card.addEventListener('pointerdown', function(e){
+                            if (e.target.closest('button,.pa-gb-resize')) return;
+                            startDragOrResize(e, b, 'drag', card);
+                        });
+                        card.appendChild(head); card.appendChild(foot); card.appendChild(rz);
+                        canvas.appendChild(card);
+
+                        var tr = document.createElement('tr');
+                        var td1 = document.createElement('td');
+                        var st1 = document.createElement('strong'); st1.textContent = meta.icon + ' ' + b.title;
+                        td1.appendChild(st1);
+                        var td2 = document.createElement('td'); td2.textContent = meta.label;
+                        var td3 = document.createElement('td'); td3.textContent = 'kolom ' + b.x + ', baris ' + b.y;
+                        var td4 = document.createElement('td'); td4.textContent = b.w + '/12 × ' + b.h + ' baris';
+                        var td5 = document.createElement('td');
+                        var pill = document.createElement('span');
+                        pill.style.cssText = 'display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;' + (b.enabled ? 'background:#dcfce7;color:#166534;' : 'background:#f1f5f9;color:#64748b;');
+                        pill.textContent = b.enabled ? 'Tampil' : 'Tersembunyi';
+                        td5.appendChild(pill);
+                        var td6 = document.createElement('td');
+                        var aWrap = document.createElement('div'); aWrap.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;';
+                        var tbEd = document.createElement('button'); tbEd.type = 'button'; tbEd.className = 'button button-small'; tbEd.textContent = 'Ubah';
+                        tbEd.addEventListener('click', function(){ openEdit(b.id); });
+                        var tbVis = document.createElement('button'); tbVis.type = 'button'; tbVis.className = 'button button-small'; tbVis.textContent = b.enabled ? 'Sembunyi' : 'Tampil';
+                        tbVis.addEventListener('click', function(){ b.enabled = !b.enabled; render(); });
+                        var tbDel = document.createElement('button'); tbDel.type = 'button'; tbDel.className = 'button button-small'; tbDel.style.color = '#b91c1c'; tbDel.textContent = '✕';
+                        tbDel.addEventListener('click', function(){
+                            if (!confirm('Hapus blok "' + b.title + '"?')) return;
+                            blocks = blocks.filter(function(it){ return it.id !== b.id; });
+                            render();
+                        });
+                        aWrap.appendChild(tbEd); aWrap.appendChild(tbVis); aWrap.appendChild(tbDel);
+                        td6.appendChild(aWrap);
+                        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5); tr.appendChild(td6);
+                        tbody.appendChild(tr);
+                    });
+                }
+
+                if (addBtn && addSel) {
+                    addBtn.addEventListener('click', function(){
+                        var t = addSel.value;
+                        var m = catalog[t] || { label: t, default_w: 6, default_h: 1 };
+                        var nb = {
+                            id: 'blk_' + t + '_' + Date.now().toString(36),
+                            type: t,
+                            title: m.label,
+                            x: 1,
+                            y: maxRow() + 1,
+                            w: m.default_w || 6,
+                            h: m.default_h || 1,
+                            enabled: true,
+                            config: {}
+                        };
+                        blocks.push(nb);
+                        selectedId = nb.id;
+                        render();
+                        openEdit(nb.id);
+                    });
+                }
+
+                if (saveFrm) {
+                    saveFrm.addEventListener('submit', function(){
+                        jsonInp.value = JSON.stringify(blocks);
+                        document.getElementById('pa-gb-h-show-ticker').value = globals.home_show_ticker || '1';
+                        document.getElementById('pa-gb-h-ticker').value = globals.home_ticker_text || '';
+                        document.getElementById('pa-gb-h-kicker').value = globals.home_hero_kicker || '';
+                        document.getElementById('pa-gb-h-title').value  = globals.home_hero_title || '';
+                        document.getElementById('pa-gb-h-lead').value   = globals.home_hero_lead || '';
+                        document.getElementById('pa-gb-h-sper').value   = globals.home_survey_period || '';
+                        document.getElementById('pa-gb-h-sgrd').value   = globals.home_survey_grade || '';
+                        document.getElementById('pa-gb-h-skm').value    = globals.home_survey_skm || '';
+                        document.getElementById('pa-gb-h-spak').value   = globals.home_survey_spak || '';
+                        document.getElementById('pa-gb-h-spkp').value   = globals.home_survey_spkp || '';
+                    });
+                }
+                render();
+            })();
+            </script>
 
         <?php elseif ($activeTab === 'settings') :
             $isAdoption = (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1');
@@ -4126,6 +4976,7 @@ function pa_sinova_render_admin_page(): void {
                 </table>
             </div>
         <?php endif; ?>
+        </main>
     </div>
     <?php
 }

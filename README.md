@@ -3,8 +3,8 @@
 Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan merapikan website resmi **Pengadilan Agama** berbasis **WordPress** sesuai standar **SK Dirjen Badilag 2722/2026** dan **SK KMA 2-144/2022**.
 
 - **Tanpa Elementor & tanpa plugin berbayar** — ringan, cepat, dan ramah operator non-IT.
-- **Beranda Dinamis visual (`[pa_sinova_beranda]`)** — atur teks Hero, Ticker, nilai Survei SKM/SPAK/SPKP, dan **Dashboard Jadwal Sidang + Live SIPP** langsung lewat formulir di WP Admin (tanpa sentuh kode HTML).
-- **Update 1-Klik dari GitHub** — satker cukup klik satu tombol di WP Admin untuk mendapatkan pembaruan terbaru tanpa kehilangan berita, halaman, atau dokumen.
+- **Editor Grid Beranda 12 Kolom (*Drag & Resize*)** — seret kotak, tarik sudut atur lebar (`1–12` kolom), edit isi langsung lewat popup modal, termasuk **Slider Foto**, **Jadwal Sidang & Live SIPP**, **Statistik Perkara**, **Galeri Video**, **Ucapan & Belasungkawa**, hingga **Konten Bebas / Sematan**.
+- **Update 1-Klik + Rollback** — perbarui langsung dari GitHub di WP Admin dengan cadangan otomatis (*Batalkan Pembaruan Terakhir*) dan tombol **Bersihkan Cache** 1-klik.
 - **2 Pilihan Pemasangan:** via **Upload Plugin `.zip`** langsung dari WP Admin *(paling mudah, tanpa buka cPanel)* **atau** salin ke folder `wp-content/mu-plugins/`.
 
 ---
@@ -28,8 +28,8 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan merap
 ## Fitur Utama
 
 1. **Tampilan Publik Modern & Aksesibel (WCAG 2.2):** Header 2 baris + Mega Menu 4 kolom, 6 Menu Utama standar, Pencarian Kilat `Ctrl+K`, Mode Terang/Gelap, Jam WIB + status PTSP, Dock CCTV ACO lokal, Panel Aksesibilitas & Pembaca Suara Bahasa Indonesia, tanpa ketergantungan Google Fonts CDN.
-2. **Beranda Dinamis & Dashboard Jadwal Sidang Live SIPP:** Atur seluruh isi Beranda lewat formulir di **WP Admin → SINOVA Hub → Desain & Tata Letak Beranda**. Cukup tempel link `https://sipp.pa-satker.go.id/Slide_sidang` — otomatis tampil dalam tab modern (*Layar Live SIPP* + *Agenda Terstruktur*) dan otomatis diizinkan oleh CSP `frame-src`.
-3. **23 Modul Arsip Dokumen & Pengumuman 3 Kolom:** Kelola LRA, DIPA, LKJiP, LIPA 7, Sisa Panjar, LHKPN, Survei, dll. (PDF maks. 10 MB atau tautan Google Drive dengan pratinjau modal), plus pengumuman otomatis 3 kolom (**Satker**, **RSS MA RI**, **RSS Ditjen Badilag**).
+2. **Editor Grid Beranda 12 Kolom & Live SIPP:** Atur seluruh susunan Beranda lewat **WP Admin → SINOVA Hub → Tampilan Beranda** (seret posisi & tarik ukuran 13 jenis blok, termasuk **Konten Bebas/Sematan**). Tempel link `https://sipp.pa-satker.go.id/Slide_sidang` pada blok **Jadwal Sidang** — otomatis tampil bersama tab *Agenda Terstruktur* dan otomatis diizinkan oleh CSP `frame-src`. Tersedia pula endpoint **API Push SIPP** (`POST /wp-json/pa-sinova/v1/sipp/push-hearings` + contoh [scripts/sipp-push-example.php](scripts/sipp-push-example.php)).
+3. **23 Modul Arsip Dokumen & Publikasi Lengkap:** Kelola LRA, DIPA, LKJiP, LIPA 7, Sisa Panjar, LHKPN, Survei (PDF maks. 10 MB / Google Drive), **Pengumuman 3 Kolom** (Satker, RSS MA RI, Badilag), **Slider Foto**, **Galeri Video**, **Ucapan & Belasungkawa**, **Wilayah Yurisdiksi**, serta **Profil Pegawai lengkap dengan modal detail**.
 4. **Dashboard Audit 3 Pilar & 35 Kriteria:** Menghitung skor kepatuhan otomatis (target **Sangat Baik ≥ 90**) lengkap dengan tombol ekspor **CSV & JSON** dan pembagian peran operator (`pa_kepaniteraan`, `pa_kesekretariatan`, `pa_humas`).
 5. **Keamanan Berlapis Bawaan:** CSP Nonce + Trusted Types, **MFA TOTP** (Google Authenticator/Aegis, QR dibuat lokal), **Sembunyikan URL Login Admin** (404 untuk `/wp-login.php`), Rate Limiter, WAF Anti-Judol, CAPTCHA offline / Turnstile, dan *File Integrity Monitor (SHA-256)*.
 
@@ -62,10 +62,10 @@ Jika lebih suka mode `mu-plugins` (aktif otomatis & *Early Page Cache* berjalan 
 
 ## Cara Atur Beranda & Pasang Jadwal Sidang Live SIPP (Tanpa Edit Kode)
 
-1. Buka **WP Admin → SINOVA Hub → tab Desain & Tata Letak Beranda**.
-2. *(Khusus situs upgrade dari versi lama)* Jika muncul peringatan kuning *"Beranda Masih Menggunakan HTML Statis Lama"*, klik tombol **`Aktifkan Beranda Dinamis (1-Klik)`** *(berita, dokumen, dan halaman lain tetap aman)*.
-3. Tempel URL Slide Sidang SIPP satker Anda (contoh: `https://sipp.pa-satker.go.id/Slide_sidang`) dan pilih letaknya (*di bawah Hero*, *di bawah 8 Kartu Layanan*, atau *di bawah Sambutan*).
-4. Ubah teks Hero, Ticker, nilai Survei SKM/SPAK/SPKP, atau centang bagian yang ingin ditampilkan → klik **`Simpan Desain & Tata Letak Beranda`**.
+1. Buka **WP Admin → SINOVA Hub → Tampilan Beranda**.
+2. *(Khusus upgrade dari versi lama)* Jika muncul peringatan kuning *"Beranda masih HTML statis lama"*, klik **`Aktifkan Beranda Dinamis (1-Klik)`** *(berita, dokumen, dan halaman lain tetap aman)*.
+3. **Seret kotak** untuk memindah posisi baris/kolom, **tarik sudut kanan bawah (`↘`)** untuk mengubah lebar `2–12` kolom, atau klik **`+ Tambah Blok`** untuk menambah **Galeri Video**, **Ucapan & Belasungkawa**, maupun **Konten Bebas / Sematan**.
+4. Klik ikon pensil (**✎**) pada blok **Jadwal Sidang & Live SIPP**, tempel link `https://sipp.pa-satker.go.id/Slide_sidang` → **Terapkan ke Kanvas** → klik **`Simpan Tampilan Beranda`**.
 
 ---
 

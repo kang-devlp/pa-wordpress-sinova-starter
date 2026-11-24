@@ -1,10 +1,10 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "released_at": "2026-11-24",
   "requires_php": "8.1",
   "requires_wp": "6.2",
   "tested_wp": "7.0",
   "repo": "kang-devlp/pa-wordpress-sinova-starter",
   "download_url": "https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip",
-  "changelog": "v2.2.0: Beranda Dinamis [pa_sinova_beranda] + Pengaturan Visual di SINOVA Hub (tanpa Elementor & tanpa edit HTML), Dashboard Jadwal Sidang Modern + Live SIPP (posisi dapat dipilih), Update 1-Klik dari GitHub, Paket Plugin .zip Standar, serta perbaikan Seeder halaman Trash."
+  "changelog": "v2.3.0: Editor Grid Bebas 12 Kolom Drag & Resize (13 jenis blok termasuk Konten Bebas/Sematan), Sidebar Panel Admin Modern, tombol Bersihkan Cache & Rollback Pembaruan, Slider Foto, Galeri Video, Ucapan & Belasungkawa, Wilayah Yurisdiksi, Profil Pegawai Detail, dan API Push Jadwal Sidang SIPP (HMAC-SHA256)."
 }
