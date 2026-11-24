@@ -19,6 +19,7 @@ function pa_sinova_get_settings(): array {
         'leader_name'              => 'Ketua Pengadilan Agama',
         'leader_welcome'           => 'Selamat datang di portal resmi Pengadilan Agama. Melalui website ini kami menyajikan informasi layanan peradilan, transparansi keuangan, laporan kinerja, dan dokumen pembangunan Zona Integritas secara terbuka kepada seluruh masyarakat pencari keadilan.',
         'sipp_url'                 => 'https://sipp.pa-contoh.go.id/',
+        'sipp_slide_url'           => '',
         'ecourt_url'               => 'https://ecourt.mahkamahagung.go.id/',
         'direktori_url'            => 'https://putusan3.mahkamahagung.go.id/',
         'survey_url'               => 'https://survei.badilag.net/',
@@ -53,6 +54,9 @@ function pa_sinova_get_settings(): array {
 
     if (defined('PA_SINOVA_SATKER_NAME') && PA_SINOVA_SATKER_NAME !== '') {
         $merged['satker_name'] = (string) PA_SINOVA_SATKER_NAME;
+    }
+    if (defined('PA_SIPP_SLIDE_URL') && PA_SIPP_SLIDE_URL !== '') {
+        $merged['sipp_slide_url'] = (string) PA_SIPP_SLIDE_URL;
     }
     if (defined('PA_ACO_URL') && PA_ACO_URL !== '') {
         $merged['aco_url'] = (string) PA_ACO_URL;
@@ -120,6 +124,27 @@ function pa_starter_effective_csp_mode(): string {
     return in_array($mode, array('strict', 'compat', 'off'), true) ? $mode : 'strict';
 }
 
+function pa_sinova_sanitize_https_embed_url(string $rawUrl): array {
+    $trimmed = trim($rawUrl);
+    if ($trimmed === '') {
+        return array('url' => '', 'origin' => '', 'valid' => true);
+    }
+    $clean  = esc_url_raw($trimmed, array('https'));
+    $scheme = strtolower((string) parse_url($clean, PHP_URL_SCHEME));
+    $host   = strtolower((string) parse_url($clean, PHP_URL_HOST));
+    $port   = parse_url($clean, PHP_URL_PORT);
+    $okHost = ($scheme === 'https')
+        && $host !== ''
+        && strpos($host, '.') !== false
+        && preg_match('/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/', $host) === 1
+        && ($port === null || ((int) $port > 0 && (int) $port <= 65535));
+    if (!$okHost) {
+        return array('url' => '', 'origin' => '', 'valid' => false);
+    }
+    $origin = 'https://' . $host . ($port !== null ? (':' . (int) $port) : '');
+    return array('url' => $clean, 'origin' => $origin, 'valid' => true);
+}
+
 function pa_starter_security_headers_map(bool $isPublic = true, ?string $nonce = null): array {
     $isHttps = pa_starter_is_https_request();
     $headers = array(
@@ -145,10 +170,25 @@ function pa_starter_security_headers_map(bool $isPublic = true, ?string $nonce =
         return $headers;
     }
 
+    $frameOrigins = array(
+        "'self'",
+        'https://drive.google.com',
+        'https://docs.google.com',
+        'https://www.google.com',
+        'https://maps.google.com',
+        'https://challenges.cloudflare.com',
+        'https://www.youtube-nocookie.com',
+    );
+    $cfg          = pa_sinova_get_settings();
+    $sippSlideChk = pa_sinova_sanitize_https_embed_url((string) ($cfg['sipp_slide_url'] ?? ''));
+    if ($sippSlideChk['valid'] && $sippSlideChk['origin'] !== '' && !in_array($sippSlideChk['origin'], $frameOrigins, true)) {
+        $frameOrigins[] = $sippSlideChk['origin'];
+    }
+
     $csp = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; "
         . "img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; "
         . "connect-src 'self' https://challenges.cloudflare.com; "
-        . "frame-src 'self' https://drive.google.com https://docs.google.com https://www.google.com https://maps.google.com https://challenges.cloudflare.com https://www.youtube-nocookie.com; ";
+        . 'frame-src ' . implode(' ', $frameOrigins) . '; ';
 
     if ($mode === 'strict' && is_string($nonce) && $nonce !== '') {
         $csp .= "script-src 'self' 'nonce-{$nonce}' 'strict-dynamic' 'inline-speculation-rules' https://challenges.cloudflare.com; "
@@ -1077,7 +1117,7 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
 
     $upsertPage = static function (string $key, string $title, string $slug, string $content) use (&$seeded, &$createdCount): int {
         $existingId = isset($seeded[$key]) ? (int) $seeded[$key] : 0;
-        if ($existingId > 0 && get_post_status($existingId)) {
+        if ($existingId > 0 && get_post_status($existingId) === 'publish') {
             return $existingId;
         }
         $byPath = pa_sinova_find_existing_page($slug);
@@ -1219,16 +1259,16 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
             }
         }
         if ($frontHtml === '') {
-            $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h1 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h1><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_welcome_section]\n  [pa_sinova_zi_grid]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
+            $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h1 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h1><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_sipp_slide]\n  [pa_sinova_welcome_section]\n  [pa_sinova_zi_grid]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
         }
         $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
-        if ($frontId <= 0 || !get_post_status($frontId)) {
+        if ($frontId <= 0 || get_post_status($frontId) !== 'publish') {
             $existingFront = get_page_by_path($frontSlug);
             $wasKses = has_filter('content_save_pre', 'wp_filter_post_kses');
             if ($wasKses && function_exists('kses_remove_filters')) {
                 kses_remove_filters();
             }
-            if ($existingFront instanceof WP_Post) {
+            if ($existingFront instanceof WP_Post && $existingFront->post_status === 'publish') {
                 $frontId = (int) $existingFront->ID;
             } else {
                 $frontId = (int) wp_insert_post(array(
@@ -1288,7 +1328,8 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
         }
 
         if ($frontId > 0) {
-            if (get_option('show_on_front') !== 'page') {
+            $curFrontId = (int) get_option('page_on_front', 0);
+            if (get_option('show_on_front') !== 'page' || $curFrontId <= 0 || get_post_status($curFrontId) !== 'publish') {
                 update_option('show_on_front', 'page');
                 update_option('page_on_front', $frontId);
             }
@@ -1920,8 +1961,12 @@ function pa_sinova_render_admin_page(): void {
                 return array('url' => $u, 'warn' => false);
             };
 
-            $rssMaCheck  = $validateRssUrl(wp_unslash((string) ($_POST['rss_ma_url'] ?? '')), (string) ($cur['rss_ma_url'] ?? ''));
-            $rssBadCheck = $validateRssUrl(wp_unslash((string) ($_POST['rss_badilag_url'] ?? '')), (string) ($cur['rss_badilag_url'] ?? ''));
+            $rssMaCheck    = $validateRssUrl(wp_unslash((string) ($_POST['rss_ma_url'] ?? '')), (string) ($cur['rss_ma_url'] ?? ''));
+            $rssBadCheck   = $validateRssUrl(wp_unslash((string) ($_POST['rss_badilag_url'] ?? '')), (string) ($cur['rss_badilag_url'] ?? ''));
+            $sippSlideRaw  = wp_unslash((string) ($_POST['sipp_slide_url'] ?? ''));
+            $sippSlideChk  = pa_sinova_sanitize_https_embed_url($sippSlideRaw);
+            $sippSlideWarn = !$sippSlideChk['valid'];
+            $sippSlideSave = $sippSlideChk['valid'] ? $sippSlideChk['url'] : (string) ($cur['sipp_slide_url'] ?? '');
 
             $new = array(
                 'satker_name'              => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
@@ -1934,6 +1979,7 @@ function pa_sinova_render_admin_page(): void {
                 'leader_name'              => sanitize_text_field(wp_unslash((string) ($_POST['leader_name'] ?? $cur['leader_name']))),
                 'leader_welcome'           => sanitize_textarea_field(wp_unslash((string) ($_POST['leader_welcome'] ?? $cur['leader_welcome']))),
                 'sipp_url'                 => esc_url_raw(wp_unslash((string) ($_POST['sipp_url'] ?? ''))),
+                'sipp_slide_url'           => $sippSlideSave,
                 'ecourt_url'               => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
                 'direktori_url'            => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
                 'survey_url'               => esc_url_raw(wp_unslash((string) ($_POST['survey_url'] ?? ''))),
@@ -1970,6 +2016,9 @@ function pa_sinova_render_admin_page(): void {
             $notice = 'Pengaturan Satker, Identitas Visual, Umpan RSS, & API HMAC berhasil disimpan.';
             if ($rssMaCheck['warn'] || $rssBadCheck['warn']) {
                 $notice .= ' Catatan: URL RSS non-HTTPS atau di luar domain resmi (.go.id) ditolak dan dikembalikan ke URL aman sebelumnya.';
+            }
+            if ($sippSlideWarn) {
+                $notice .= ' Catatan: URL Slide Jadwal Sidang SIPP wajib memakai protokol HTTPS dengan domain valid.';
             }
         } elseif ($action === 'fim_reset_baseline' && $requireAdmin()) {
             $activeTab = 'security';
@@ -3381,6 +3430,7 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>Nama Pimpinan / Jabatan</th><td><input type="text" name="leader_name" class="regular-text" value="<?php echo esc_attr($cfg['leader_name']); ?>"></td></tr>
                             <tr><th>Sambutan Pimpinan</th><td><textarea name="leader_welcome" rows="3" class="large-text"><?php echo esc_textarea($cfg['leader_welcome']); ?></textarea></td></tr>
                             <tr><th>URL SIPP</th><td><input type="url" name="sipp_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_url']); ?>"></td></tr>
+                            <tr><th>URL Slide Jadwal Sidang SIPP (Beranda)</th><td><input type="url" name="sipp_slide_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_slide_url'] ?? ''); ?>" placeholder="https://sipp.pa-satker.go.id/Slide_sidang"><br><small style="color:#64748b;">Opsional (HTTPS): cukup tempel tautan <code>Slide_sidang</code> SIPP satker agar tampil otomatis sebagai panel jadwal sidang elegan di Beranda dan otomatis diizinkan pada header CSP <code>frame-src</code> (dapat juga ditaruh di halaman lain dengan shortcode <code>[pa_sinova_sipp_slide]</code>).</small></td></tr>
                             <tr><th>URL e-Court</th><td><input type="url" name="ecourt_url" class="regular-text" value="<?php echo esc_attr($cfg['ecourt_url']); ?>"></td></tr>
                             <tr><th>URL Direktori Putusan</th><td><input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>"></td></tr>
                             <tr><th>URL Survei Badilag</th><td><input type="url" name="survey_url" class="regular-text" value="<?php echo esc_attr($cfg['survey_url']); ?>"></td></tr>

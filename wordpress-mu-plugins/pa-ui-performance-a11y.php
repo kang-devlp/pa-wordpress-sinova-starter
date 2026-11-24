@@ -250,6 +250,100 @@ add_shortcode('pa_sinova_aco_card', static function ($atts = array()) {
     return (string) ob_get_clean();
 });
 
+// 3c. Shortcode [pa_sinova_sipp_slide]: Panel Live Slide Jadwal Sidang SIPP di Beranda / Halaman Lain
+function pa_sinova_render_sipp_slide_section(array $atts = array()): string {
+    $cfg      = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $cfgAtts  = shortcode_atts(array(
+        'url'    => (string) ($cfg['sipp_slide_url'] ?? ''),
+        'title'  => 'Monitor Slide Jadwal Persidangan',
+        'height' => '560',
+    ), $atts, 'pa_sinova_sipp_slide');
+
+    $rawUrl = trim((string) $cfgAtts['url']);
+    if ($rawUrl === '') {
+        return '';
+    }
+    if (function_exists('pa_sinova_sanitize_https_embed_url')) {
+        $chk = pa_sinova_sanitize_https_embed_url($rawUrl);
+        if (!$chk['valid'] || $chk['url'] === '') {
+            return '';
+        }
+        $embedUrl = $chk['url'];
+    } else {
+        $embedUrl = esc_url_raw($rawUrl, array('https'));
+        if ($embedUrl === '' || stripos($embedUrl, 'https://') !== 0) {
+            return '';
+        }
+    }
+
+    $satker  = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'Pengadilan Agama');
+    $heading = trim((string) $cfgAtts['title']) ?: 'Monitor Slide Jadwal Persidangan';
+    $height  = max(360, min(900, (int) $cfgAtts['height']));
+    $agenda  = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('agenda-jadwal-persidangan') : home_url('/agenda-jadwal-persidangan/');
+
+    ob_start();
+    ?>
+    <section class="pa-section-block pa-sipp-slide-section" aria-label="Jadwal Persidangan Hari Ini (Live SIPP)">
+        <h2 class="pa-starter-heading">JADWAL PERSIDANGAN HARI INI (LIVE SIPP) <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+        <p class="pa-starter-sub">Tampilan Langsung Agenda Sidang dari Sistem Informasi Penelusuran Perkara (SIPP)</p>
+        <div class="pa-sipp-card">
+            <div class="pa-sipp-card-head">
+                <div class="pa-sipp-head-left">
+                    <span class="pa-sipp-live-badge"><span class="pa-sipp-live-dot" aria-hidden="true"></span>LIVE SIPP</span>
+                    <h3 class="pa-sipp-head-title"><?php echo esc_html($heading); ?></h3>
+                </div>
+                <div class="pa-sipp-head-actions">
+                    <a class="pa-sipp-btn-sec" href="<?php echo esc_url($agenda); ?>">Daftar Jadwal Sidang</a>
+                    <a class="pa-sipp-btn-open" href="<?php echo esc_url($embedUrl); ?>" target="_blank" rel="noopener noreferrer">Buka Layar Penuh &#8599;</a>
+                </div>
+            </div>
+            <div class="pa-sipp-frame-wrap">
+                <iframe
+                    class="pa-sipp-frame"
+                    src="<?php echo esc_url($embedUrl); ?>"
+                    title="<?php echo esc_attr($heading . ' — ' . $satker); ?>"
+                    loading="lazy"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    allow="fullscreen"
+                    allowfullscreen
+                    style="height:clamp(420px, 65vh, <?php echo (int) $height; ?>px)"></iframe>
+            </div>
+            <div class="pa-sipp-card-foot">
+                <span>Sumber data real-time: <strong>SIPP <?php echo esc_html($satker); ?></strong></span>
+                <a href="<?php echo esc_url($embedUrl); ?>" target="_blank" rel="noopener noreferrer">Tampilan tidak muncul? Buka langsung di tab baru →</a>
+            </div>
+        </div>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+}
+add_shortcode('pa_sinova_sipp_slide', 'pa_sinova_render_sipp_slide_section');
+
+// Sisipkan otomatis panel Slide Sidang SIPP di Beranda apabila URL diisi namun halaman Beranda lama belum memuat shortcode [pa_sinova_sipp_slide]
+add_filter('the_content', static function ($content) {
+    if (is_admin() || !is_front_page() || !is_main_query() || !in_the_loop() || pa_sinova_is_adoption_mode()) {
+        return $content;
+    }
+    if (!is_string($content) || strpos($content, 'pa-sipp-slide-section') !== false) {
+        return $content;
+    }
+    $cfg = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    if (trim((string) ($cfg['sipp_slide_url'] ?? '')) === '') {
+        return $content;
+    }
+    $html = pa_sinova_render_sipp_slide_section();
+    if ($html === '') {
+        return $content;
+    }
+    if (strpos($content, '<section class="pa-welcome-grid"') !== false) {
+        return preg_replace('/<section class="pa-welcome-grid"/', $html . "\n" . '<section class="pa-welcome-grid"', $content, 1) ?: ($content . $html);
+    }
+    if (strpos($content, '<div class="pa-starter-showcase">') !== false) {
+        return preg_replace('/<\/div>\s*$/', "\n" . $html . "\n</div>", $content, 1) ?: ($content . $html);
+    }
+    return $content . $html;
+}, 25);
+
 // 4. Shortcode [pa_sinova_latest_posts count="3"]: Berita Terkini Satuan Kerja (Memisahkan Kategori Pengumuman)
 add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     $cfgAtts = shortcode_atts(array('count' => 3), $atts, 'pa_sinova_latest_posts');
@@ -1249,6 +1343,165 @@ body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa
 .pa-service-card > span:last-child { font-size: 12.2px; line-height: 1.45; color: #4b5563; }
 .pa-welcome-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 32px; text-align: left; }
 @media (max-width: 860px) { .pa-welcome-grid { grid-template-columns: 1fr; } }
+
+/* Panel Live Slide Jadwal Sidang SIPP di Beranda */
+.pa-sipp-slide-section {
+    content-visibility: auto;
+    contain-intrinsic-size: auto none auto 620px;
+}
+.pa-sipp-card {
+    background: var(--pa-surface, #ffffff);
+    border: 1.5px solid #d5e6dc;
+    border-top: 4px solid var(--pa-gold, #C9A227);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 14px 34px -14px rgba(2, 44, 34, 0.22);
+    text-align: left;
+}
+.pa-sipp-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 14px;
+    padding: 13px 20px;
+    background: linear-gradient(125deg, #033022 0%, #05583f 58%, #066c4e 100%);
+    color: #ffffff;
+    border-bottom: 1px solid rgba(229, 193, 88, 0.35);
+}
+.pa-sipp-head-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+.pa-sipp-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(201, 162, 39, 0.18);
+    border: 1px solid rgba(229, 193, 88, 0.62);
+    color: #E5C158;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.pa-sipp-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.28);
+    flex-shrink: 0;
+}
+.pa-sipp-head-title {
+    margin: 0 !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    line-height: 1.3 !important;
+}
+.pa-sipp-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.pa-sipp-btn-sec {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 13px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: #ffffff !important;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none !important;
+    transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+.pa-sipp-btn-sec:hover,
+.pa-sipp-btn-sec:focus-visible {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(229, 193, 88, 0.72);
+}
+.pa-sipp-btn-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%);
+    color: #022c22 !important;
+    font-size: 12.5px;
+    font-weight: 800;
+    text-decoration: none !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    transition: transform 0.16s ease, filter 0.16s ease;
+}
+.pa-sipp-btn-open:hover,
+.pa-sipp-btn-open:focus-visible {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+}
+.pa-sipp-frame-wrap {
+    position: relative;
+    width: 100%;
+    background: #ffffff;
+    color-scheme: only light;
+}
+.pa-sipp-frame {
+    display: block;
+    width: 100%;
+    min-height: 400px;
+    border: 0;
+    background: #ffffff;
+    color-scheme: only light;
+}
+.pa-sipp-card-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 20px;
+    background: #f8fbf9;
+    border-top: 1px solid #d5e6dc;
+    font-size: 12px;
+    color: #475569;
+}
+.pa-sipp-card-foot a {
+    color: #056e4f !important;
+    font-weight: 700;
+    text-decoration: none;
+}
+.pa-sipp-card-foot a:hover,
+.pa-sipp-card-foot a:focus-visible {
+    text-decoration: underline;
+}
+html[data-pa-theme="dark"] .pa-sipp-card {
+    background: #14241c;
+    border-color: #355241;
+}
+html[data-pa-theme="dark"] .pa-sipp-card-foot {
+    background: #101e17;
+    border-top-color: #2c4637;
+    color: #cbd5e1;
+}
+html[data-pa-theme="dark"] .pa-sipp-card-foot strong {
+    color: #e6f4ee;
+}
+html[data-pa-theme="dark"] .pa-sipp-card-foot a {
+    color: #E5C158 !important;
+}
+@media (max-width: 640px) {
+    .pa-sipp-card-head { padding: 12px 14px; }
+    .pa-sipp-card-foot { padding: 10px 14px; }
+}
 
 /* Strip Tenang Access CCTV Online (ACO) Badilag di Bagian Bawah Halaman */
 .pa-aco-banner {
