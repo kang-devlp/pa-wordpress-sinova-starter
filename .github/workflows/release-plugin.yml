@@ -1,0 +1,23 @@
+name: Build Plugin ZIP Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pa-sinova-starter.zip
+        run: sh scripts/build-plugin-zip.sh
+      - name: Upload Release Asset (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/pa-sinova-starter.zip

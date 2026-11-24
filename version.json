@@ -1,0 +1,10 @@
+{
+  "version": "2.2.0",
+  "released_at": "2026-11-24",
+  "requires_php": "8.1",
+  "requires_wp": "6.2",
+  "tested_wp": "7.0",
+  "repo": "kang-devlp/pa-wordpress-sinova-starter",
+  "download_url": "https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip",
+  "changelog": "v2.2.0: Beranda Dinamis [pa_sinova_beranda] + Pengaturan Visual di SINOVA Hub (tanpa Elementor & tanpa edit HTML), Dashboard Jadwal Sidang Modern + Live SIPP (posisi dapat dipilih), Update 1-Klik dari GitHub, Paket Plugin .zip Standar, serta perbaikan Seeder halaman Trash."
+}

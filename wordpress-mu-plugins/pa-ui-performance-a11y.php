@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - UI Portal Resmi PA, Pencarian, Statistik Pengunjung, Sidebar Halaman Dalam & Aksesibilitas Lengkap
  * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, bebas istilah internal di tampilan publik, kotak pencarian header, statistik pengunjung privasi ter-hash, sidebar & breadcrumb halaman dalam, serta dock disabilitas dengan Pembaca Suara Bahasa Indonesia.
- * Version: 1.3.0-starter
+ * Version: 2.2.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -250,88 +250,354 @@ add_shortcode('pa_sinova_aco_card', static function ($atts = array()) {
     return (string) ob_get_clean();
 });
 
-// 3c. Shortcode [pa_sinova_sipp_slide]: Panel Live Slide Jadwal Sidang SIPP di Beranda / Halaman Lain
-function pa_sinova_render_sipp_slide_section(array $atts = array()): string {
-    $cfg      = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
-    $cfgAtts  = shortcode_atts(array(
-        'url'    => (string) ($cfg['sipp_slide_url'] ?? ''),
-        'title'  => 'Monitor Slide Jadwal Persidangan',
-        'height' => '560',
-    ), $atts, 'pa_sinova_sipp_slide');
+// 3c. Dashboard Jadwal Sidang Modern ([pa_sinova_schedule_dashboard] & alias [pa_sinova_sipp_slide])
+function pa_sinova_render_schedule_dashboard(array $atts = array()): string {
+    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $cfgAtts = shortcode_atts(array(
+        'url'         => (string) ($cfg['sipp_slide_url'] ?? ''),
+        'title'       => 'Jadwal Persidangan & Monitor SIPP',
+        'height'      => '540',
+        'default_tab' => (string) ($cfg['home_schedule_default_tab'] ?? 'auto'),
+        'position'    => (string) ($cfg['home_schedule_position'] ?? 'after_hero'),
+    ), $atts, 'pa_sinova_schedule_dashboard');
 
-    $rawUrl = trim((string) $cfgAtts['url']);
-    if ($rawUrl === '') {
-        return '';
-    }
-    if (function_exists('pa_sinova_sanitize_https_embed_url')) {
-        $chk = pa_sinova_sanitize_https_embed_url($rawUrl);
-        if (!$chk['valid'] || $chk['url'] === '') {
-            return '';
+    $rawUrl   = trim((string) $cfgAtts['url']);
+    $embedUrl = '';
+    if ($rawUrl !== '') {
+        if (function_exists('pa_sinova_sanitize_https_embed_url')) {
+            $chk = pa_sinova_sanitize_https_embed_url($rawUrl);
+            if ($chk['valid'] && $chk['url'] !== '') {
+                $embedUrl = $chk['url'];
+            }
+        } else {
+            $tmp = esc_url_raw($rawUrl, array('https'));
+            if ($tmp !== '' && stripos($tmp, 'https://') === 0) {
+                $embedUrl = $tmp;
+            }
         }
-        $embedUrl = $chk['url'];
+    }
+
+    $hasSipp   = ($embedUrl !== '');
+    $defTabReq = sanitize_key((string) $cfgAtts['default_tab']);
+    if ($defTabReq === 'sipp' && $hasSipp) {
+        $activeTab = 'sipp';
+    } elseif ($defTabReq === 'agenda') {
+        $activeTab = 'agenda';
     } else {
-        $embedUrl = esc_url_raw($rawUrl, array('https'));
-        if ($embedUrl === '' || stripos($embedUrl, 'https://') !== 0) {
-            return '';
-        }
+        $activeTab = $hasSipp ? 'sipp' : 'agenda';
     }
 
-    $satker  = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'Pengadilan Agama');
-    $heading = trim((string) $cfgAtts['title']) ?: 'Monitor Slide Jadwal Persidangan';
-    $height  = max(360, min(900, (int) $cfgAtts['height']));
-    $agenda  = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('agenda-jadwal-persidangan') : home_url('/agenda-jadwal-persidangan/');
+    $sippRows = function_exists('pa_portal_fetch_sipp_hearings_today') ? pa_portal_fetch_sipp_hearings_today() : array();
+    $isLiveDb = !empty($sippRows);
+    $hearings = $isLiveDb ? $sippRows : (function_exists('pa_portal_get_records') ? pa_portal_get_records('jadwal', 6) : array());
+    $totalH   = count($hearings);
+
+    $satker      = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'Pengadilan Agama');
+    $sippPortal  = trim((string) ($cfg['sipp_url'] ?? ''));
+    $hearingHrs  = trim((string) ($cfg['hearing_hours'] ?? 'Senin–Kamis 09.00 WIB s.d. selesai'));
+    $agendaUrl   = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('agenda-jadwal-persidangan') : home_url('/agenda-jadwal-persidangan/');
+    $ghaibUrl    = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/');
+    $heading     = trim((string) $cfgAtts['title']) ?: 'Jadwal Persidangan & Monitor SIPP';
+    $height      = max(360, min(900, (int) $cfgAtts['height']));
+    $todayLabel  = wp_date('l, j F Y');
+    $uid         = 'pa-sched-' . substr(md5($embedUrl . $heading . (string) $totalH), 0, 6);
+    $isBelowFold = in_array((string) $cfgAtts['position'], array('after_services', 'after_welcome'), true);
 
     ob_start();
     ?>
-    <section class="pa-section-block pa-sipp-slide-section" aria-label="Jadwal Persidangan Hari Ini (Live SIPP)">
-        <h2 class="pa-starter-heading">JADWAL PERSIDANGAN HARI INI (LIVE SIPP) <span class="pa-hint-i" aria-hidden="true">i</span></h2>
-        <p class="pa-starter-sub">Tampilan Langsung Agenda Sidang dari Sistem Informasi Penelusuran Perkara (SIPP)</p>
-        <div class="pa-sipp-card">
-            <div class="pa-sipp-card-head">
-                <div class="pa-sipp-head-left">
-                    <span class="pa-sipp-live-badge"><span class="pa-sipp-live-dot" aria-hidden="true"></span>LIVE SIPP</span>
-                    <h3 class="pa-sipp-head-title"><?php echo esc_html($heading); ?></h3>
+    <section class="pa-section-block pa-sched-section<?php echo $isBelowFold ? ' pa-sched-below-fold' : ''; ?>" aria-label="Jadwal Persidangan Hari Ini">
+        <div class="pa-sched-hub" data-pa-sched-hub>
+            <div class="pa-sched-head">
+                <div class="pa-sched-head-left">
+                    <div class="pa-sched-badges">
+                        <span class="pa-sipp-live-badge"><span class="pa-sipp-live-dot" aria-hidden="true"></span><?php echo $hasSipp ? 'LIVE SIPP' : 'AGENDA SIDANG'; ?></span>
+                        <span class="pa-sched-date-pill"><?php echo esc_html($todayLabel); ?></span>
+                    </div>
+                    <h2 class="pa-sched-title"><?php echo esc_html($heading); ?></h2>
                 </div>
-                <div class="pa-sipp-head-actions">
-                    <a class="pa-sipp-btn-sec" href="<?php echo esc_url($agenda); ?>">Daftar Jadwal Sidang</a>
-                    <a class="pa-sipp-btn-open" href="<?php echo esc_url($embedUrl); ?>" target="_blank" rel="noopener noreferrer">Buka Layar Penuh &#8599;</a>
+                <div class="pa-sched-head-right">
+                    <?php if ($hasSipp) : ?>
+                        <div class="pa-sched-tabs" role="tablist" aria-label="Mode Tampilan Jadwal Sidang">
+                            <button type="button" role="tab" id="<?php echo esc_attr($uid . '-tab-sipp'); ?>" aria-controls="<?php echo esc_attr($uid . '-panel-sipp'); ?>" aria-selected="<?php echo $activeTab === 'sipp' ? 'true' : 'false'; ?>" tabindex="<?php echo $activeTab === 'sipp' ? '0' : '-1'; ?>" class="pa-sched-tab<?php echo $activeTab === 'sipp' ? ' is-active' : ''; ?>" data-sched-tab="sipp">Layar Live SIPP</button>
+                            <button type="button" role="tab" id="<?php echo esc_attr($uid . '-tab-agenda'); ?>" aria-controls="<?php echo esc_attr($uid . '-panel-agenda'); ?>" aria-selected="<?php echo $activeTab === 'agenda' ? 'true' : 'false'; ?>" tabindex="<?php echo $activeTab === 'agenda' ? '0' : '-1'; ?>" class="pa-sched-tab<?php echo $activeTab === 'agenda' ? ' is-active' : ''; ?>" data-sched-tab="agenda">Agenda Terstruktur (<?php echo (int) $totalH; ?>)</button>
+                        </div>
+                        <a class="pa-sipp-btn-open" href="<?php echo esc_url($embedUrl); ?>" target="_blank" rel="noopener noreferrer">Layar Penuh &#8599;</a>
+                    <?php else : ?>
+                        <a class="pa-sipp-btn-sec" href="<?php echo esc_url($ghaibUrl); ?>">Panggilan Ghaib</a>
+                        <a class="pa-sipp-btn-open" href="<?php echo esc_url($agendaUrl); ?>">Lihat Semua Jadwal →</a>
+                    <?php endif; ?>
                 </div>
             </div>
-            <div class="pa-sipp-frame-wrap">
-                <iframe
-                    class="pa-sipp-frame"
-                    src="<?php echo esc_url($embedUrl); ?>"
-                    title="<?php echo esc_attr($heading . ' — ' . $satker); ?>"
-                    loading="lazy"
-                    referrerpolicy="strict-origin-when-cross-origin"
-                    allow="fullscreen"
-                    allowfullscreen
-                    style="height:clamp(420px, 65vh, <?php echo (int) $height; ?>px)"></iframe>
+
+            <?php if ($hasSipp) : ?>
+            <div class="pa-sched-panel" role="tabpanel" id="<?php echo esc_attr($uid . '-panel-sipp'); ?>" aria-labelledby="<?php echo esc_attr($uid . '-tab-sipp'); ?>" data-sched-panel="sipp" <?php echo $activeTab !== 'sipp' ? 'hidden' : ''; ?>>
+                <div class="pa-sipp-frame-wrap">
+                    <iframe
+                        class="pa-sipp-frame"
+                        src="<?php echo esc_url($embedUrl); ?>"
+                        title="<?php echo esc_attr($heading . ' — ' . $satker); ?>"
+                        loading="lazy"
+                        referrerpolicy="strict-origin-when-cross-origin"
+                        allow="fullscreen"
+                        allowfullscreen
+                        style="height:clamp(420px, 64vh, <?php echo (int) $height; ?>px)"></iframe>
+                </div>
             </div>
+            <?php endif; ?>
+
+            <div class="pa-sched-panel pa-sched-agenda-panel" role="tabpanel" id="<?php echo esc_attr($uid . '-panel-agenda'); ?>" aria-labelledby="<?php echo esc_attr($hasSipp ? ($uid . '-tab-agenda') : $uid); ?>" data-sched-panel="agenda" <?php echo ($hasSipp && $activeTab !== 'agenda') ? 'hidden' : ''; ?>>
+                <div class="pa-sched-kpi-strip">
+                    <div class="pa-sched-kpi">
+                        <span>Perkara Terjadwal</span>
+                        <strong><?php echo (int) $totalH; ?> Perkara</strong>
+                    </div>
+                    <div class="pa-sched-kpi">
+                        <span>Jam Persidangan</span>
+                        <strong><?php echo esc_html($hearingHrs); ?></strong>
+                    </div>
+                    <div class="pa-sched-kpi">
+                        <span>Sumber Informasi</span>
+                        <strong><?php echo $isLiveDb ? 'Tersambung SIPP' : 'Data Operasional Portal'; ?></strong>
+                    </div>
+                </div>
+
+                <?php if (!empty($hearings)) : ?>
+                    <div class="pa-sched-cards">
+                        <?php foreach (array_slice($hearings, 0, 6) as $hr) :
+                            $meta    = isset($hr['meta_json']) ? json_decode((string) $hr['meta_json'], true) : array();
+                            $jam     = (string) ($hr['jam'] ?? (is_array($meta) ? ($meta['jam'] ?? '09.00 WIB') : '09.00 WIB'));
+                            $ruang   = (string) ($hr['category'] ?? 'Ruang Sidang');
+                            $nomor   = (string) ($hr['title'] ?? '-');
+                            $agendaT = (string) ($hr['subtitle'] ?? 'Persidangan');
+                        ?>
+                            <article class="pa-sched-item">
+                                <div class="pa-sched-item-top">
+                                    <span class="pa-sched-time"><?php echo esc_html($jam); ?></span>
+                                    <span class="pa-sched-room"><?php echo esc_html($ruang); ?></span>
+                                </div>
+                                <strong class="pa-sched-case"><?php echo esc_html($nomor); ?></strong>
+                                <span class="pa-sched-agenda"><?php echo esc_html($agendaT); ?></span>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else : ?>
+                    <p class="pa-sched-empty">Belum ada jadwal persidangan terjadwal pada hari ini. Cek agenda lengkap melalui halaman Jadwal Sidang atau portal SIPP.</p>
+                <?php endif; ?>
+            </div>
+
             <div class="pa-sipp-card-foot">
-                <span>Sumber data real-time: <strong>SIPP <?php echo esc_html($satker); ?></strong></span>
-                <a href="<?php echo esc_url($embedUrl); ?>" target="_blank" rel="noopener noreferrer">Tampilan tidak muncul? Buka langsung di tab baru →</a>
+                <span>Sumber resmi: <strong><?php echo esc_html($satker); ?></strong> · Persidangan terbuka untuk umum sesuai ketentuan peradilan.</span>
+                <div class="pa-sched-foot-links">
+                    <a href="<?php echo esc_url($agendaUrl); ?>">Halaman Jadwal Sidang</a>
+                    <span aria-hidden="true">·</span>
+                    <a href="<?php echo esc_url($ghaibUrl); ?>">Panggilan Ghaib</a>
+                    <?php if ($sippPortal !== '' && stripos($sippPortal, 'pa-contoh') === false) : ?>
+                        <span aria-hidden="true">·</span>
+                        <a href="<?php echo esc_url($sippPortal); ?>" target="_blank" rel="noopener noreferrer">Portal SIPP &#8599;</a>
+                    <?php elseif ($hasSipp) : ?>
+                        <span aria-hidden="true">·</span>
+                        <a href="<?php echo esc_url($embedUrl); ?>" target="_blank" rel="noopener noreferrer">Buka Tab Baru &#8599;</a>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </section>
     <?php
     return (string) ob_get_clean();
 }
+add_shortcode('pa_sinova_schedule_dashboard', 'pa_sinova_render_schedule_dashboard');
+
+function pa_sinova_render_sipp_slide_section(array $atts = array()): string {
+    return pa_sinova_render_schedule_dashboard($atts);
+}
 add_shortcode('pa_sinova_sipp_slide', 'pa_sinova_render_sipp_slide_section');
 
-// Sisipkan otomatis panel Slide Sidang SIPP di Beranda apabila URL diisi namun halaman Beranda lama belum memuat shortcode [pa_sinova_sipp_slide]
+// 3d. Shortcode [pa_sinova_beranda]: Beranda Dinamis Penuh (tanpa Elementor & tanpa edit HTML Gutenberg)
+function pa_sinova_render_beranda(): string {
+    $cfg       = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $schedPos  = (string) ($cfg['home_schedule_position'] ?? 'after_hero');
+    $showTick  = (string) ($cfg['home_show_ticker'] ?? '1') !== '0';
+    $showSvc   = (string) ($cfg['home_show_services'] ?? '1') !== '0';
+    $showWelc  = (string) ($cfg['home_show_welcome'] ?? '1') !== '0';
+    $showZi    = (string) ($cfg['home_show_zi'] ?? '1') !== '0';
+    $showNews  = (string) ($cfg['home_show_news'] ?? '1') !== '0';
+    $showAnn   = (string) ($cfg['home_show_announcements'] ?? '1') !== '0';
+    $showSurv  = (string) ($cfg['home_show_survey'] ?? '1') !== '0';
+
+    $tickerTxt = trim((string) ($cfg['home_ticker_text'] ?? 'Selamat datang di Portal Resmi Informasi Peradilan · Layanan PTSP buka Senin–Kamis 08.00–16.30 WIB & Jumat 08.00–17.00 WIB · Seluruh layanan bebas dari pungutan liar dan gratifikasi.'));
+    $kicker    = trim((string) ($cfg['home_hero_kicker'] ?? 'Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik'));
+    $heroTitle = trim((string) ($cfg['home_hero_title'] ?? 'Portal Keterbukaan Informasi & Layanan Peradilan'));
+    $heroLead  = trim((string) ($cfg['home_hero_lead'] ?? 'Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan yang akurat dan mudah diakses masyarakat pencari keadilan.'));
+
+    $survPer   = trim((string) ($cfg['home_survey_period'] ?? 'Triwulan III')) ?: 'Triwulan III';
+    $survGrade = trim((string) ($cfg['home_survey_grade'] ?? '★ Mutu A (Sangat Baik)')) ?: '★ Mutu A (Sangat Baik)';
+    $survSkm   = trim((string) ($cfg['home_survey_skm'] ?? '4.00 / 4.00')) ?: '4.00 / 4.00';
+    $survSpak  = trim((string) ($cfg['home_survey_spak'] ?? '4.00 / 4.00')) ?: '4.00 / 4.00';
+    $survSpkp  = trim((string) ($cfg['home_survey_spkp'] ?? '4.00 / 4.00')) ?: '4.00 / 4.00';
+
+    $u = static function (string $slug): string {
+        return function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url($slug) : home_url('/' . $slug . '/');
+    };
+
+    ob_start();
+    ?>
+    <div class="pa-starter-showcase">
+        <?php if ($showTick && $tickerTxt !== '') : ?>
+        <div class="pa-ticker-bar" role="region" aria-label="Informasi Terkini Layanan">
+            <span class="pa-ticker-tag">INFO LAYANAN</span>
+            <span class="pa-ticker-text"><?php echo esc_html($tickerTxt); ?></span>
+            <a class="pa-ticker-link" href="<?php echo esc_url($u('panggilan-ghaib')); ?>">Lihat Panggilan Ghaib →</a>
+        </div>
+        <?php endif; ?>
+
+        <section class="pa-hero-banner" aria-label="Portal Resmi Pengadilan Agama">
+            <div class="pa-hero-content">
+                <?php if ($kicker !== '') : ?><span class="pa-hero-kicker"><?php echo esc_html($kicker); ?></span><?php endif; ?>
+                <h1 class="pa-hero-title"><?php echo esc_html($heroTitle); ?></h1>
+                <?php if ($heroLead !== '') : ?><p class="pa-hero-lead"><?php echo esc_html($heroLead); ?></p><?php endif; ?>
+                <div class="pa-hero-actions">
+                    <a class="pa-btn-gold" href="<?php echo esc_url($u('agenda-jadwal-persidangan')); ?>" data-pa-tip="Pantau agenda persidangan harian &amp; riwayat perkara melalui SIPP.">Jadwal Sidang &amp; SIPP</a>
+                    <a class="pa-btn-outline" href="<?php echo esc_url($u('e-court')); ?>" data-pa-tip="Pendaftaran perkara, pembayaran panjar, dan persidangan secara elektronik.">Layanan e-Court</a>
+                    <a class="pa-btn-outline" href="<?php echo esc_url($u('direktori-putusan')); ?>" data-pa-tip="Cari salinan putusan dan penetapan resmi pada Direktori Putusan MA RI.">Direktori Putusan</a>
+                    <a class="pa-btn-outline" href="<?php echo esc_url($u('survei-pelayanan')); ?>" data-pa-tip="Lihat hasil &amp; ikuti survei kepuasan masyarakat (SKM, SPAK, SPKP).">Survei Pelayanan</a>
+                </div>
+            </div>
+        </section>
+
+        <?php if ($schedPos === 'after_hero') : ?>
+            <?php echo pa_sinova_render_schedule_dashboard(array('position' => 'after_hero')); ?>
+        <?php endif; ?>
+
+        <?php if ($showSvc) : ?>
+        <section class="pa-section-block" aria-label="Layanan Inti Peradilan">
+            <h2 class="pa-starter-heading">LAYANAN PERADILAN &amp; INFORMASI PERKARA <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+            <p class="pa-starter-sub">Akses Langsung Layanan Elektronik, Informasi Berperkara, dan Transparansi Pengadilan</p>
+            <div class="pa-services-grid pa-services-grid-8">
+                <a class="pa-service-card" href="<?php echo esc_url($u('agenda-jadwal-persidangan')); ?>">
+                    <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><span class="pa-svc-badge">Persidangan</span></div>
+                    <strong>Jadwal Sidang &amp; SIPP</strong>
+                    <span>Pemantauan status perkara dan agenda persidangan harian secara terbuka.</span>
+                </a>
+                <a class="pa-service-card" href="<?php echo esc_url($u('e-court')); ?>">
+                    <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="pa-svc-badge">Perkara Online</span></div>
+                    <strong>Pendaftaran e-Court</strong>
+                    <span>Pendaftaran perkara, pembayaran panjar, panggilan, dan sidang elektronik.</span>
+                </a>
+                <a class="pa-service-card" href="<?php echo esc_url($u('direktori-putusan')); ?>">
+                    <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="pa-svc-badge">Putusan Resmi</span></div>
+                    <strong>Direktori Putusan</strong>
+                    <span>Publikasi putusan dan penetapan resmi pada portal Mahkamah Agung RI.</span>
+                </a>
+                <a class="pa-service-card" href="<?php echo esc_url($u('prosedur-berperkara')); ?>">
+                    <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="pa-svc-badge">Panduan</span></div>
+                    <strong>Prosedur Berperkara</strong>
+                    <span>Syarat dan alur lengkap gugatan, permohonan, hingga upaya hukum.</span>
+                </a>
+                <a class="pa-service-card" href="<?php echo esc_url($u('biaya-proses-berperkara')); ?>">
+                    <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg></span><span class="pa-svc-badge">Biaya Perkara</span></div>
+                    <strong>Panjar &amp; Radius Biaya</strong>
+                    <span>SK Ketua tentang taksiran panjar biaya perkara dan radius panggilan.</span>
+                </a>
+                <a class="pa-service-card" href="<?php echo esc_url($u('panggilan-ghaib')); ?>">
+                    <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span><span class="pa-svc-badge">Pengumuman</span></div>
+                    <strong>Panggilan Ghaib</strong>
+                    <span>Pengumuman resmi panggilan pihak yang tidak diketahui tempat tinggalnya.</span>
+                </a>
+                <a class="pa-service-card" href="<?php echo esc_url($u('biaya-prodeo')); ?>">
+                    <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></span><span class="pa-svc-badge">Bantuan Hukum</span></div>
+                    <strong>Layanan Prodeo &amp; Posbakum</strong>
+                    <span>Informasi pembebasan biaya perkara bagi masyarakat kurang mampu.</span>
+                </a>
+                <a class="pa-service-card" href="<?php echo esc_url($u('akses-informasi')); ?>">
+                    <div class="pa-svc-top"><span class="pa-svc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="pa-svc-badge">Layanan Publik</span></div>
+                    <strong>PPID &amp; Pengaduan</strong>
+                    <span>Laporan akses informasi publik dan saluran pengaduan masyarakat.</span>
+                </a>
+            </div>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($schedPos === 'after_services') : ?>
+            <?php echo pa_sinova_render_schedule_dashboard(array('position' => 'after_services')); ?>
+        <?php endif; ?>
+
+        <?php if ($showWelc) : ?>
+            <?php echo do_shortcode('[pa_sinova_welcome_section]'); ?>
+        <?php endif; ?>
+
+        <?php if ($schedPos === 'after_welcome') : ?>
+            <?php echo pa_sinova_render_schedule_dashboard(array('position' => 'after_welcome')); ?>
+        <?php endif; ?>
+
+        <?php if ($showZi) : ?>
+            <?php echo do_shortcode('[pa_sinova_zi_grid]'); ?>
+        <?php endif; ?>
+
+        <?php if ($showNews) : ?>
+            <?php echo do_shortcode('[pa_sinova_latest_posts count="3"]'); ?>
+        <?php endif; ?>
+
+        <?php if ($showAnn) : ?>
+            <?php echo do_shortcode('[pa_official_announcements limit="4"]'); ?>
+        <?php endif; ?>
+
+        <?php if ($showSurv) : ?>
+        <section class="pa-split-section" aria-label="Survei Pelayanan &amp; Direktori Dokumen Publik">
+            <section class="survey-panel pa-starter-survey" aria-label="Indeks Pelayanan Publik">
+                <div class="survey-slider" aria-live="polite">
+                    <article class="survey-slide is-active" data-slide="0">
+                        <div class="survey-head">
+                            <span class="survey-pill"><?php echo esc_html($survGrade); ?></span>
+                            <span class="survey-period-badge"><?php echo esc_html($survPer); ?></span>
+                        </div>
+                        <h3>Indeks Pelayanan Publik</h3>
+                        <div class="survey-cards">
+                            <div class="survey-card"><strong>SKM</strong> <span>Indeks Kepuasan Masyarakat</span> <b><?php echo esc_html($survSkm); ?></b></div>
+                            <div class="survey-card"><strong>SPAK</strong> <span>Persepsi Anti Korupsi</span> <b><?php echo esc_html($survSpak); ?></b></div>
+                            <div class="survey-card"><strong>SPKP</strong> <span>Kualitas Pelayanan</span> <b><?php echo esc_html($survSpkp); ?></b></div>
+                        </div>
+                    </article>
+                </div>
+                <div style="margin-top:14px;">
+                    <a class="pa-mk-btn" href="<?php echo esc_url($u('survei-pelayanan')); ?>">Lihat Laporan Survei Lengkap →</a>
+                </div>
+            </section>
+
+            <div class="pa-hub-shortcuts">
+                <div class="pa-hub-shortcuts-head">
+                    <h3>Direktori Transparansi &amp; Dokumen Publik <span class="pa-hint-i" aria-hidden="true">i</span></h3>
+                    <p>Akses cepat laporan keuangan, perencanaan kinerja, biaya perkara, dan hasil survei kepuasan masyarakat.</p>
+                </div>
+                <div class="pa-shortcut-grid">
+                    <a class="pa-shortcut-item" href="<?php echo esc_url($u('lra')); ?>" data-pa-tip="Arsip realisasi anggaran bulanan DIPA 01 &amp; 04."><span>Keuangan</span><strong>Realisasi Anggaran (LRA)</strong></a>
+                    <a class="pa-shortcut-item" href="<?php echo esc_url($u('dipa')); ?>" data-pa-tip="Dokumen DIPA &amp; realisasi tahunan satker."><span>Anggaran</span><strong>Dokumen DIPA 01 &amp; 04</strong></a>
+                    <a class="pa-shortcut-item" href="<?php echo esc_url($u('biaya-perkara')); ?>" data-pa-tip="Laporan penggunaan biaya perkara LIPA 7A, 7B, &amp; 7C."><span>Kepaniteraan</span><strong>Biaya Perkara (LIPA 7)</strong></a>
+                    <a class="pa-shortcut-item" href="<?php echo esc_url($u('lkjip')); ?>" data-pa-tip="Laporan Akuntabilitas Kinerja Instansi Pemerintah."><span>Kinerja</span><strong>Laporan Kinerja (LKJiP)</strong></a>
+                    <a class="pa-shortcut-item" href="<?php echo esc_url($u('lhkpn')); ?>" data-pa-tip="Kepatuhan LHKPN pimpinan dan pejabat wajib lapor."><span>Kepatuhan</span><strong>Pelaporan LHKPN &amp; ASN</strong></a>
+                    <a class="pa-shortcut-item" href="<?php echo esc_url($u('survei-pelayanan')); ?>" data-pa-tip="Indeks SKM, SPAK, &amp; SPKP per triwulan."><span>Survei Pelayanan</span><strong>Hasil Survei SKM/SPAK/SPKP</strong></a>
+                </div>
+            </div>
+        </section>
+        <?php endif; ?>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}
+add_shortcode('pa_sinova_beranda', 'pa_sinova_render_beranda');
+
+// Kompatibilitas Beranda statis lama: sisipkan otomatis Dashboard Jadwal Sidang bila URL Slide SIPP diisi namun Beranda belum memakai [pa_sinova_beranda]
 add_filter('the_content', static function ($content) {
     if (is_admin() || !is_front_page() || !is_main_query() || !in_the_loop() || pa_sinova_is_adoption_mode()) {
         return $content;
     }
-    if (!is_string($content) || strpos($content, 'pa-sipp-slide-section') !== false) {
+    if (!is_string($content) || strpos($content, 'pa-sched-hub') !== false || strpos($content, 'pa-sipp-slide-section') !== false) {
         return $content;
     }
     $cfg = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
-    if (trim((string) ($cfg['sipp_slide_url'] ?? '')) === '') {
+    if ((string) ($cfg['home_schedule_position'] ?? 'after_hero') === 'hidden' || trim((string) ($cfg['sipp_slide_url'] ?? '')) === '') {
         return $content;
     }
-    $html = pa_sinova_render_sipp_slide_section();
+    $html = pa_sinova_render_schedule_dashboard(array('position' => 'after_services'));
     if ($html === '') {
         return $content;
     }
@@ -1344,11 +1610,13 @@ body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa
 .pa-welcome-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 32px; text-align: left; }
 @media (max-width: 860px) { .pa-welcome-grid { grid-template-columns: 1fr; } }
 
-/* Panel Live Slide Jadwal Sidang SIPP di Beranda */
+/* Dashboard Jadwal Sidang Modern + Live Slide SIPP di Beranda */
+.pa-sched-below-fold,
 .pa-sipp-slide-section {
     content-visibility: auto;
-    contain-intrinsic-size: auto none auto 620px;
+    contain-intrinsic-size: auto none auto 560px;
 }
+.pa-sched-hub,
 .pa-sipp-card {
     background: var(--pa-surface, #ffffff);
     border: 1.5px solid #d5e6dc;
@@ -1358,16 +1626,223 @@ body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa
     box-shadow: 0 14px 34px -14px rgba(2, 44, 34, 0.22);
     text-align: left;
 }
+.pa-sched-head,
 .pa-sipp-card-head {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 10px 14px;
-    padding: 13px 20px;
+    gap: 12px 16px;
+    padding: 15px 20px;
     background: linear-gradient(125deg, #033022 0%, #05583f 58%, #066c4e 100%);
     color: #ffffff;
     border-bottom: 1px solid rgba(229, 193, 88, 0.35);
+}
+.pa-sched-head-left {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.pa-sched-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.pa-sched-date-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: #e6f4ee;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+.pa-sched-title {
+    margin: 0 !important;
+    font-size: clamp(1.05rem, 1.8vw, 1.25rem) !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    line-height: 1.25 !important;
+}
+.pa-sched-head-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.pa-sched-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
+    background: rgba(2, 36, 27, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.pa-sched-tab {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #d1fae5;
+    padding: 6px 13px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.16s ease, color 0.16s ease;
+}
+.pa-sched-tab:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+.pa-sched-tab.is-active,
+.pa-sched-tab[aria-selected="true"] {
+    background: #ffffff;
+    color: #043927;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.pa-sched-agenda-panel {
+    padding: 18px 20px 20px;
+}
+.pa-sched-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+@media (max-width: 720px) {
+    .pa-sched-kpi-strip { grid-template-columns: 1fr; }
+}
+.pa-sched-kpi {
+    padding: 11px 14px;
+    border-radius: 12px;
+    background: #f4faf7;
+    border: 1px solid #d5e6dc;
+    border-left: 3.5px solid var(--pa-gold, #C9A227);
+}
+.pa-sched-kpi span {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #475569;
+}
+.pa-sched-kpi strong {
+    display: block;
+    margin-top: 3px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #043927;
+}
+.pa-sched-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+@media (max-width: 920px) {
+    .pa-sched-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 580px) {
+    .pa-sched-cards { grid-template-columns: 1fr; }
+}
+.pa-sched-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 13px 14px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid #d5e6dc;
+    box-shadow: 0 3px 10px rgba(4, 57, 39, 0.04);
+}
+.pa-sched-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.pa-sched-time {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #043927;
+    font-size: 11.5px;
+    font-weight: 800;
+}
+.pa-sched-room {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #6e5204;
+    background: #fef9c3;
+    border: 1px solid #fde047;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+.pa-sched-case {
+    font-size: 14px;
+    font-weight: 800;
+    color: #043927;
+    word-break: break-word;
+}
+.pa-sched-agenda {
+    font-size: 12.5px;
+    color: #475569;
+    line-height: 1.4;
+}
+.pa-sched-empty {
+    margin: 0;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #f8fbf9;
+    border: 1px dashed #cbd5e1;
+    color: #475569;
+    font-size: 13px;
+}
+.pa-sched-foot-links {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+html[data-pa-theme="dark"] .pa-sched-hub {
+    background: #14241c;
+    border-color: #355241;
+}
+html[data-pa-theme="dark"] .pa-sched-kpi,
+html[data-pa-theme="dark"] .pa-sched-item {
+    background: #182a20;
+    border-color: #355241;
+}
+html[data-pa-theme="dark"] .pa-sched-kpi span,
+html[data-pa-theme="dark"] .pa-sched-agenda,
+html[data-pa-theme="dark"] .pa-sched-empty {
+    color: #cbd5e1;
+}
+html[data-pa-theme="dark"] .pa-sched-kpi strong,
+html[data-pa-theme="dark"] .pa-sched-case {
+    color: #E5C158;
+}
+html[data-pa-theme="dark"] .pa-sched-time {
+    background: #0d2a1f;
+    border-color: #1f5c44;
+    color: #6ee7b7;
+}
+html[data-pa-theme="dark"] .pa-sched-room {
+    background: #2b2310;
+    border-color: #5c4818;
+    color: #fde68a;
+}
+html[data-pa-theme="dark"] .pa-sched-empty {
+    background: #101e17;
+    border-color: #355241;
 }
 .pa-sipp-head-left {
     display: flex;
@@ -2743,7 +3218,9 @@ add_action('wp_footer', static function () {
     if (!pa_sinova_is_adoption_mode() && $acoUrlRaw !== '' && $acoFloatOn) :
         $acoImgUrl = trim((string) ($cfg['aco_logo_url'] ?? ''));
         if ($acoImgUrl === '') {
-            if (defined('WPMU_PLUGIN_DIR') && defined('WPMU_PLUGIN_URL') && file_exists(WPMU_PLUGIN_DIR . '/assets/cctv-aco.gif')) {
+            if (defined('PA_SINOVA_ASSETS_DIR') && defined('PA_SINOVA_ASSETS_URL') && file_exists(PA_SINOVA_ASSETS_DIR . '/cctv-aco.gif')) {
+                $acoImgUrl = rtrim((string) PA_SINOVA_ASSETS_URL, '/') . '/cctv-aco.gif';
+            } elseif (defined('WPMU_PLUGIN_DIR') && defined('WPMU_PLUGIN_URL') && file_exists(WPMU_PLUGIN_DIR . '/assets/cctv-aco.gif')) {
                 $acoImgUrl = WPMU_PLUGIN_URL . '/assets/cctv-aco.gif';
             } else {
                 $acoImgUrl = content_url('/mu-plugins/assets/cctv-aco.gif');
@@ -3532,6 +4009,41 @@ add_action('wp_footer', static function () {
             cmdTimer = setTimeout(function(){ fetchCmd(cmdInput.value || ''); }, 180);
         });
     }
+    document.querySelectorAll('[data-pa-sched-hub]').forEach(function(hub){
+        var tabs = Array.prototype.slice.call(hub.querySelectorAll('[data-sched-tab]'));
+        var panels = Array.prototype.slice.call(hub.querySelectorAll('[data-sched-panel]'));
+        if(tabs.length < 2) return;
+        function activateSchedTab(targetKey, moveFocus){
+            tabs.forEach(function(t){
+                var on = (t.getAttribute('data-sched-tab') === targetKey);
+                t.classList.toggle('is-active', on);
+                t.setAttribute('aria-selected', on ? 'true' : 'false');
+                t.setAttribute('tabindex', on ? '0' : '-1');
+                if(on && moveFocus) t.focus();
+            });
+            panels.forEach(function(p){
+                var on = (p.getAttribute('data-sched-panel') === targetKey);
+                if(on) p.removeAttribute('hidden'); else p.setAttribute('hidden', '');
+            });
+        }
+        tabs.forEach(function(tab, idx){
+            tab.addEventListener('click', function(){
+                activateSchedTab(tab.getAttribute('data-sched-tab'), false);
+            });
+            tab.addEventListener('keydown', function(e){
+                var nextIdx = -1;
+                if(e.key === 'ArrowRight') nextIdx = (idx + 1) % tabs.length;
+                else if(e.key === 'ArrowLeft') nextIdx = (idx - 1 + tabs.length) % tabs.length;
+                else if(e.key === 'Home') nextIdx = 0;
+                else if(e.key === 'End') nextIdx = tabs.length - 1;
+                if(nextIdx >= 0){
+                    e.preventDefault();
+                    activateSchedTab(tabs[nextIdx].getAttribute('data-sched-tab'), true);
+                }
+            });
+        });
+    });
+
     document.addEventListener('keydown', function(e){
         if((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')){
             e.preventDefault();

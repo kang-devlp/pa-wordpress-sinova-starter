@@ -2,10 +2,14 @@
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
  * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen (Edit & Hapus Massal), & Audit Keamanan + MFA di WP Admin.
- * Version: 2.0.0-starter
+ * Version: 2.2.0-starter
  */
 
 defined('ABSPATH') || exit;
+
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.2.0');
+defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
+defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
 function pa_sinova_get_settings(): array {
     $defaults = array(
@@ -45,6 +49,25 @@ function pa_sinova_get_settings(): array {
         'zi_area_4_url'            => '',
         'zi_area_5_url'            => '',
         'zi_area_6_url'            => '',
+        // Pengaturan Visual Beranda Dinamis ([pa_sinova_beranda]) — tanpa edit HTML / tanpa Elementor
+        'home_show_ticker'          => '1',
+        'home_ticker_text'          => 'Selamat datang di Portal Resmi Informasi Peradilan · Layanan PTSP buka Senin–Kamis 08.00–16.30 WIB & Jumat 08.00–17.00 WIB · Seluruh layanan bebas dari pungutan liar dan gratifikasi.',
+        'home_hero_kicker'          => 'Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik',
+        'home_hero_title'           => 'Portal Keterbukaan Informasi & Layanan Peradilan',
+        'home_hero_lead'            => 'Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan yang akurat dan mudah diakses masyarakat pencari keadilan.',
+        'home_schedule_position'    => 'after_hero',
+        'home_schedule_default_tab' => 'auto',
+        'home_show_services'        => '1',
+        'home_show_welcome'         => '1',
+        'home_show_zi'              => '1',
+        'home_show_news'            => '1',
+        'home_show_announcements'   => '1',
+        'home_show_survey'          => '1',
+        'home_survey_period'        => 'Triwulan III',
+        'home_survey_grade'         => '★ Mutu A (Sangat Baik)',
+        'home_survey_skm'           => '4.00 / 4.00',
+        'home_survey_spak'          => '4.00 / 4.00',
+        'home_survey_spkp'          => '4.00 / 4.00',
     );
     $saved = get_option('pa_sinova_starter_settings', array());
     if (!is_array($saved)) {
@@ -292,7 +315,7 @@ add_action('init', 'pa_sinova_register_roles', 5);
 
 function pa_sinova_user_allowed_tabs(): array {
     if (current_user_can('manage_options')) {
-        return array('compliance', 'upload', 'data', 'migration', 'settings', 'security');
+        return array('compliance', 'upload', 'data', 'homepage', 'migration', 'settings', 'security');
     }
     if (current_user_can('pa_manage_kepaniteraan') || current_user_can('pa_manage_kesekretariatan')) {
         return array('compliance', 'upload', 'data', 'security');
@@ -1247,21 +1270,8 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
     if (!$preserve) {
 
         $frontSlug = 'beranda';
-        $tplPaths  = array(
-            ABSPATH . 'sinova-starter-kit/wordpress-templates/beranda-blocks-starter.html',
-            dirname(__DIR__) . '/wordpress-templates/beranda-blocks-starter.html',
-        );
-        $frontHtml = '';
-        foreach ($tplPaths as $tp) {
-            if (is_file($tp)) {
-                $frontHtml = (string) file_get_contents($tp);
-                break;
-            }
-        }
-        if ($frontHtml === '') {
-            $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h1 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h1><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_sipp_slide]\n  [pa_sinova_welcome_section]\n  [pa_sinova_zi_grid]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
-        }
-        $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
+        $frontHtml = "<!-- wp:shortcode -->\n[pa_sinova_beranda]\n<!-- /wp:shortcode -->";
+        $frontId   = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
         if ($frontId <= 0 || get_post_status($frontId) !== 'publish') {
             $existingFront = get_page_by_path($frontSlug);
             $wasKses = has_filter('content_save_pre', 'wp_filter_post_kses');
@@ -1344,6 +1354,246 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
         'total_mapped'  => count($seeded),
         'menu_items'    => $menuCreated,
         'preserve_mode' => $preserve ? 1 : 0,
+    );
+}
+
+/**
+ * Aktifkan atau migrasi 1-klik halaman Beranda ke mode Dinamis [pa_sinova_beranda] (tanpa kehilangan berita/dokumen).
+ */
+function pa_sinova_activate_dynamic_beranda(): array {
+    $seeded = get_option('pa_sinova_seeded_pages', array());
+    if (!is_array($seeded)) {
+        $seeded = array();
+    }
+    $content = "<!-- wp:shortcode -->\n[pa_sinova_beranda]\n<!-- /wp:shortcode -->";
+    $frontId = (int) get_option('page_on_front', 0);
+    if ($frontId <= 0 || get_post_status($frontId) !== 'publish') {
+        $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
+    }
+    if ($frontId <= 0 || get_post_status($frontId) !== 'publish') {
+        $byPath = get_page_by_path('beranda');
+        if ($byPath instanceof WP_Post && $byPath->post_status === 'publish') {
+            $frontId = (int) $byPath->ID;
+        }
+    }
+
+    if ($frontId > 0 && get_post_status($frontId) === 'publish') {
+        wp_update_post(array(
+            'ID'           => $frontId,
+            'post_content' => $content,
+        ));
+        $mode = 'updated';
+    } else {
+        $frontId = (int) wp_insert_post(array(
+            'post_type'    => 'page',
+            'post_status'  => 'publish',
+            'post_title'   => 'Beranda',
+            'post_name'    => 'beranda',
+            'post_content' => $content,
+        ));
+        $mode = 'created';
+    }
+
+    if ($frontId > 0) {
+        $seeded['static:beranda'] = $frontId;
+        update_option('pa_sinova_seeded_pages', $seeded, false);
+        update_option('show_on_front', 'page');
+        update_option('page_on_front', $frontId);
+        pa_sinova_apply_astra_defaults($frontId);
+        clean_post_cache($frontId);
+    }
+    pa_sinova_purge_html_cache_files();
+
+    return array('ok' => $frontId > 0, 'post_id' => $frontId, 'mode' => $mode);
+}
+
+/**
+ * Hapus bersih berkas cache HTML statis agar perubahan tampilan/update langsung terlihat.
+ */
+function pa_sinova_purge_html_cache_files(): void {
+    $home = WP_CONTENT_DIR . '/cache/pa-homepage.html';
+    if (is_file($home)) {
+        @unlink($home);
+    }
+    $pagesDir = WP_CONTENT_DIR . '/cache/pa-pages';
+    if (is_dir($pagesDir)) {
+        $files = @glob($pagesDir . '/page-*.html');
+        if (is_array($files)) {
+            foreach ($files as $f) {
+                if (is_file($f)) {
+                    @unlink($f);
+                }
+            }
+        }
+    }
+    if (function_exists('wp_cache_flush')) {
+        wp_cache_flush();
+    }
+}
+
+/**
+ * Cek versi terbaru PA SINOVA Starter Kit langsung dari GitHub resmi (cached 6 jam).
+ */
+function pa_sinova_github_check_update(bool $forceRefresh = false): array {
+    $repo    = defined('PA_SINOVA_GITHUB_REPO') ? (string) PA_SINOVA_GITHUB_REPO : 'kang-devlp/pa-wordpress-sinova-starter';
+    $current = defined('PA_SINOVA_STARTER_VERSION') ? (string) PA_SINOVA_STARTER_VERSION : '2.2.0';
+    $tKey    = 'pa_sinova_remote_manifest_v1';
+
+    if (!$forceRefresh) {
+        $cached = get_transient($tKey);
+        if (is_array($cached) && !empty($cached['latest'])) {
+            $cached['current']    = $current;
+            $cached['has_update'] = version_compare((string) $cached['latest'], $current, '>');
+            return $cached;
+        }
+    }
+
+    $manifestUrl = 'https://raw.githubusercontent.com/' . $repo . '/main/version.json';
+    $resp        = wp_remote_get($manifestUrl, array(
+        'timeout'    => 10,
+        'user-agent' => 'PA-SINOVA-Starter/' . $current . '; ' . home_url('/'),
+        'headers'    => array('Accept' => 'application/json'),
+    ));
+
+    if (is_wp_error($resp)) {
+        return array(
+            'ok'         => false,
+            'current'    => $current,
+            'latest'     => $current,
+            'has_update' => false,
+            'checked_at' => wp_date('d M Y H:i') . ' WIB',
+            'error'      => 'Gagal menghubungi GitHub: ' . $resp->get_error_message(),
+        );
+    }
+    $code = (int) wp_remote_retrieve_response_code($resp);
+    $body = json_decode((string) wp_remote_retrieve_body($resp), true);
+    if ($code !== 200 || !is_array($body) || empty($body['version'])) {
+        return array(
+            'ok'         => false,
+            'current'    => $current,
+            'latest'     => $current,
+            'has_update' => false,
+            'checked_at' => wp_date('d M Y H:i') . ' WIB',
+            'error'      => 'Manifest version.json tidak ditemukan di repositori GitHub (HTTP ' . $code . ').',
+        );
+    }
+
+    $latest = preg_replace('/[^0-9A-Za-z._-]/', '', (string) $body['version']);
+    $out    = array(
+        'ok'           => true,
+        'current'      => $current,
+        'latest'       => $latest,
+        'has_update'   => version_compare($latest, $current, '>'),
+        'released_at'  => sanitize_text_field((string) ($body['released_at'] ?? '')),
+        'requires_php' => sanitize_text_field((string) ($body['requires_php'] ?? '8.1')),
+        'changelog'    => sanitize_text_field((string) ($body['changelog'] ?? '')),
+        'download_url' => esc_url_raw((string) ($body['download_url'] ?? '')),
+        'checked_at'   => wp_date('d M Y H:i') . ' WIB',
+        'error'        => '',
+    );
+    set_transient($tKey, $out, 6 * HOUR_IN_SECONDS);
+    return $out;
+}
+
+/**
+ * Terapkan pembaruan 1-Klik langsung dari GitHub resmi ke direktori aktif (mu-plugins atau plugin).
+ * Aman & atomik: seluruh berkas diunduh dan divalidasi dulu sebelum mengganti file aktif.
+ */
+function pa_sinova_github_apply_update(): array {
+    if (!current_user_can('manage_options')) {
+        return array('ok' => false, 'message' => 'Gagal: Hanya Administrator yang berwenang melakukan pembaruan.');
+    }
+    if (version_compare(PHP_VERSION, '8.1.0', '<')) {
+        return array('ok' => false, 'message' => 'Gagal: Versi PHP server minimal 8.1 (saat ini ' . PHP_VERSION . ').');
+    }
+
+    $targetDir = __DIR__;
+    if (!is_dir($targetDir) || !is_writable($targetDir)) {
+        return array('ok' => false, 'message' => 'Gagal: Direktori ' . $targetDir . ' tidak dapat ditulis oleh server PHP.');
+    }
+
+    $repo    = defined('PA_SINOVA_GITHUB_REPO') ? (string) PA_SINOVA_GITHUB_REPO : 'kang-devlp/pa-wordpress-sinova-starter';
+    $rawBase = 'https://raw.githubusercontent.com/' . $repo . '/main/';
+    $check   = pa_sinova_github_check_update(true);
+    if (empty($check['ok'])) {
+        return array('ok' => false, 'message' => 'Gagal: ' . (string) ($check['error'] ?? 'Tidak dapat membaca manifest pembaruan.'));
+    }
+
+    $allowMap = array(
+        'wordpress-mu-plugins/00-pa-sinova-config.php'        => $targetDir . '/00-pa-sinova-config.php',
+        'wordpress-mu-plugins/pa-sinova-hub.php'              => $targetDir . '/pa-sinova-hub.php',
+        'wordpress-mu-plugins/pa-official-feeds-and-data.php' => $targetDir . '/pa-official-feeds-and-data.php',
+        'wordpress-mu-plugins/pa-home-page-cache.php'         => $targetDir . '/pa-home-page-cache.php',
+        'wordpress-mu-plugins/pa-ui-performance-a11y.php'     => $targetDir . '/pa-ui-performance-a11y.php',
+        'wordpress-mu-plugins/pa-security-hardening.php'      => $targetDir . '/pa-security-hardening.php',
+        'wordpress-mu-plugins/assets/cctv-aco.gif'            => $targetDir . '/assets/cctv-aco.gif',
+    );
+    if (defined('PA_SINOVA_RUNTIME_MODE') && PA_SINOVA_RUNTIME_MODE === 'plugin' && defined('PA_SINOVA_PLUGIN_FILE') && is_writable((string) PA_SINOVA_PLUGIN_FILE)) {
+        $allowMap['wordpress-plugin-wrapper/pa-sinova-starter.php'] = (string) PA_SINOVA_PLUGIN_FILE;
+    }
+
+    $staged = array();
+    foreach ($allowMap as $remoteRel => $destPath) {
+        $resp = wp_remote_get($rawBase . $remoteRel, array(
+            'timeout'    => 20,
+            'user-agent' => 'PA-SINOVA-Updater/' . PA_SINOVA_STARTER_VERSION,
+        ));
+        if (is_wp_error($resp) || (int) wp_remote_retrieve_response_code($resp) !== 200) {
+            $errMsg = is_wp_error($resp) ? $resp->get_error_message() : ('HTTP ' . (int) wp_remote_retrieve_response_code($resp));
+            return array('ok' => false, 'message' => 'Gagal mengunduh ' . basename($remoteRel) . ' (' . $errMsg . '). Tidak ada berkas yang diubah.');
+        }
+        $body = (string) wp_remote_retrieve_body($resp);
+        $ext  = strtolower((string) pathinfo($remoteRel, PATHINFO_EXTENSION));
+        if ($ext === 'php') {
+            if (strlen($body) < 500 || strpos(ltrim($body), '<?php') !== 0) {
+                return array('ok' => false, 'message' => 'Gagal validasi integritas berkas PHP ' . basename($remoteRel) . '. Pembaruan dibatalkan.');
+            }
+        } elseif ($ext === 'gif') {
+            if (strlen($body) < 100 || strpos($body, 'GIF8') !== 0) {
+                return array('ok' => false, 'message' => 'Gagal validasi aset GIF ' . basename($remoteRel) . '. Pembaruan dibatalkan.');
+            }
+        }
+        $staged[$destPath] = $body;
+    }
+
+    $assetsDir = $targetDir . '/assets';
+    if (!is_dir($assetsDir)) {
+        wp_mkdir_p($assetsDir);
+    }
+
+    $written = 0;
+    foreach ($staged as $destPath => $bytes) {
+        $tmpPath = $destPath . '.pa-upd-' . wp_generate_password(6, false, false) . '.tmp';
+        if (@file_put_contents($tmpPath, $bytes, LOCK_EX) === false) {
+            @unlink($tmpPath);
+            return array('ok' => false, 'message' => 'Gagal menulis berkas sementara untuk ' . basename($destPath) . '.');
+        }
+        if (!@rename($tmpPath, $destPath)) {
+            @unlink($tmpPath);
+            if (@file_put_contents($destPath, $bytes, LOCK_EX) === false) {
+                return array('ok' => false, 'message' => 'Gagal menimpa berkas ' . basename($destPath) . '.');
+            }
+        }
+        $written++;
+    }
+
+    pa_sinova_purge_html_cache_files();
+    delete_transient('pa_sinova_remote_manifest_v1');
+    if (function_exists('opcache_reset')) {
+        @opcache_reset();
+    }
+    update_option('pa_starter_fim_baseline', array(
+        'recorded_at' => gmdate('Y-m-d H:i:s') . ' UTC',
+        'hashes'      => pa_starter_fim_current_hashes(),
+    ), false);
+
+    return array(
+        'ok'      => true,
+        'message' => sprintf(
+            'Pembaruan berhasil ke v%s (%d berkas diperbarui, cache HTML dibersihkan, & baseline FIM SHA-256 diperbarui otomatis). Muat ulang halaman untuk memakai versi terbaru.',
+            $check['latest'],
+            $written
+        ),
     );
 }
 
@@ -1968,7 +2218,7 @@ function pa_sinova_render_admin_page(): void {
             $sippSlideWarn = !$sippSlideChk['valid'];
             $sippSlideSave = $sippSlideChk['valid'] ? $sippSlideChk['url'] : (string) ($cur['sipp_slide_url'] ?? '');
 
-            $new = array(
+            $new = array_merge($cur, array(
                 'satker_name'              => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
                 'logo_url'                 => esc_url_raw(wp_unslash((string) ($_POST['logo_url'] ?? ''))),
                 'preserve_existing_design' => isset($_POST['preserve_existing_design']) ? (!empty($_POST['preserve_existing_design']) ? '1' : '0') : ((string) ($cur['preserve_existing_design'] ?? '0')),
@@ -2005,7 +2255,7 @@ function pa_sinova_render_admin_page(): void {
                 'zi_area_4_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_4_url'] ?? ''))),
                 'zi_area_5_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_5_url'] ?? ''))),
                 'zi_area_6_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_6_url'] ?? ''))),
-            );
+            ));
             if (!empty($_POST['generate_hmac'])) {
                 $new['hmac_secret'] = bin2hex(random_bytes(32));
             }
@@ -2020,6 +2270,68 @@ function pa_sinova_render_admin_page(): void {
             if ($sippSlideWarn) {
                 $notice .= ' Catatan: URL Slide Jadwal Sidang SIPP wajib memakai protokol HTTPS dengan domain valid.';
             }
+        } elseif ($action === 'save_home_layout' && $requireAdmin()) {
+            $activeTab = 'homepage';
+            $cur       = pa_sinova_get_settings();
+            $pos       = sanitize_key((string) ($_POST['home_schedule_position'] ?? 'after_hero'));
+            if (!in_array($pos, array('after_hero', 'after_services', 'after_welcome', 'hidden'), true)) {
+                $pos = 'after_hero';
+            }
+            $defTab = sanitize_key((string) ($_POST['home_schedule_default_tab'] ?? 'auto'));
+            if (!in_array($defTab, array('auto', 'agenda', 'sipp'), true)) {
+                $defTab = 'auto';
+            }
+            $sippSlideChk  = pa_sinova_sanitize_https_embed_url(wp_unslash((string) ($_POST['sipp_slide_url'] ?? '')));
+            $sippSlideWarn = !$sippSlideChk['valid'];
+            $sippSlideSave = $sippSlideChk['valid'] ? $sippSlideChk['url'] : (string) ($cur['sipp_slide_url'] ?? '');
+
+            $updated = array_merge($cur, array(
+                'sipp_slide_url'            => $sippSlideSave,
+                'home_schedule_position'    => $pos,
+                'home_schedule_default_tab' => $defTab,
+                'home_show_ticker'          => !empty($_POST['home_show_ticker']) ? '1' : '0',
+                'home_ticker_text'          => sanitize_text_field(wp_unslash((string) ($_POST['home_ticker_text'] ?? $cur['home_ticker_text']))),
+                'home_hero_kicker'          => sanitize_text_field(wp_unslash((string) ($_POST['home_hero_kicker'] ?? $cur['home_hero_kicker']))),
+                'home_hero_title'           => sanitize_text_field(wp_unslash((string) ($_POST['home_hero_title'] ?? $cur['home_hero_title']))),
+                'home_hero_lead'            => sanitize_textarea_field(wp_unslash((string) ($_POST['home_hero_lead'] ?? $cur['home_hero_lead']))),
+                'home_show_services'        => !empty($_POST['home_show_services']) ? '1' : '0',
+                'home_show_welcome'         => !empty($_POST['home_show_welcome']) ? '1' : '0',
+                'home_show_zi'              => !empty($_POST['home_show_zi']) ? '1' : '0',
+                'home_show_news'            => !empty($_POST['home_show_news']) ? '1' : '0',
+                'home_show_announcements'   => !empty($_POST['home_show_announcements']) ? '1' : '0',
+                'home_show_survey'          => !empty($_POST['home_show_survey']) ? '1' : '0',
+                'home_survey_period'        => sanitize_text_field(wp_unslash((string) ($_POST['home_survey_period'] ?? $cur['home_survey_period']))),
+                'home_survey_grade'         => sanitize_text_field(wp_unslash((string) ($_POST['home_survey_grade'] ?? $cur['home_survey_grade']))),
+                'home_survey_skm'           => sanitize_text_field(wp_unslash((string) ($_POST['home_survey_skm'] ?? $cur['home_survey_skm']))),
+                'home_survey_spak'          => sanitize_text_field(wp_unslash((string) ($_POST['home_survey_spak'] ?? $cur['home_survey_spak']))),
+                'home_survey_spkp'          => sanitize_text_field(wp_unslash((string) ($_POST['home_survey_spkp'] ?? $cur['home_survey_spkp']))),
+            ));
+            update_option('pa_sinova_starter_settings', $updated, false);
+            pa_sinova_purge_html_cache_files();
+            $notice = 'Desain & tata letak Beranda berhasil disimpan (cache HTML otomatis disegarkan).';
+            if ($sippSlideWarn) {
+                $notice .= ' Catatan: URL Slide Jadwal Sidang SIPP wajib HTTPS dengan domain valid.';
+            }
+        } elseif ($action === 'activate_dynamic_home' && $requireAdmin()) {
+            $activeTab = 'homepage';
+            $res       = pa_sinova_activate_dynamic_beranda();
+            $notice    = !empty($res['ok'])
+                ? 'Beranda Dinamis [pa_sinova_beranda] berhasil diaktifkan! Seluruh tampilan Beranda kini dapat diatur langsung dari formulir di bawah tanpa edit HTML.'
+                : 'Gagal: Tidak dapat memperbarui halaman Beranda.';
+        } elseif ($action === 'check_github_update' && $requireAdmin()) {
+            $activeTab = 'security';
+            $upd       = pa_sinova_github_check_update(true);
+            if (empty($upd['ok'])) {
+                $notice = 'Gagal: ' . (string) ($upd['error'] ?? 'Tidak dapat memeriksa pembaruan GitHub.');
+            } elseif (!empty($upd['has_update'])) {
+                $notice = sprintf('Tersedia pembaruan baru v%s (terpasang: v%s). Klik "Update 1-Klik dari GitHub" di bawah untuk memasang.', $upd['latest'], $upd['current']);
+            } else {
+                $notice = sprintf('Starter Kit Anda sudah versi terbaru (v%s).', $upd['current']);
+            }
+        } elseif ($action === 'apply_github_update' && $requireAdmin()) {
+            $activeTab = 'security';
+            $updRes    = pa_sinova_github_apply_update();
+            $notice    = (string) ($updRes['message'] ?? 'Pembaruan selesai.');
         } elseif ($action === 'fim_reset_baseline' && $requireAdmin()) {
             $activeTab = 'security';
             update_option('pa_starter_fim_baseline', array(
@@ -2564,14 +2876,27 @@ function pa_sinova_render_admin_page(): void {
         'compliance' => 'Dashboard 3 Pilar &amp; 35 Kriteria (' . $audit['weighted_total'] . ')',
         'upload'     => 'Upload &amp; Kelola Dokumen',
         'data'       => 'Data Operasional &amp; RSS',
+        'homepage'   => 'Desain &amp; Tata Letak Beranda',
         'migration'  => 'Migrasi &amp; Adopsi',
         'settings'   => 'Identitas Satker &amp; Seeder',
-        'security'   => 'Keamanan, MFA &amp; Audit',
+        'security'   => 'Keamanan, Update &amp; Audit',
     );
+    $updInfo = current_user_can('manage_options') ? pa_sinova_github_check_update(false) : array('has_update' => false);
     ?>
     <div class="wrap">
-        <h1 style="color:#056e4f;font-weight:800;">SINOVA Hub — Panel Backend &amp; Kepatuhan (SK Dirjen Badilag 2722/2026)</h1>
-        <p style="color:#475569;margin-top:2px;">Halaman backend khusus operator untuk memantau kesiapan 3 Pilar SINOVA &amp; Standar Chrome Modern Web, mengunggah arsip PDF/Drive, serta mengelola data operasional &amp; keamanan. Istilah <em>SINOVA</em> tidak ditampilkan di halaman publik masyarakat.</p>
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;">
+            <h1 style="color:#056e4f;font-weight:800;margin:0;">SINOVA Hub — Panel Backend &amp; Kepatuhan (SK Dirjen Badilag 2722/2026)</h1>
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;background:#ecfdf5;border:1px solid #056e4f;color:#043927;font-size:12px;font-weight:700;">
+                Versi <?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?> · Mode <?php echo esc_html(PA_SINOVA_RUNTIME_MODE === 'plugin' ? 'Plugin WP' : 'MU-Plugins'); ?>
+            </span>
+        </div>
+        <p style="color:#475569;margin-top:4px;">Halaman backend khusus operator untuk memantau kesiapan 3 Pilar SINOVA &amp; Standar Chrome Modern Web, mengatur Beranda secara visual tanpa kode, mengunggah arsip PDF/Drive, serta mengelola data operasional &amp; pembaruan. Istilah <em>SINOVA</em> tidak ditampilkan di halaman publik masyarakat.</p>
+        <?php if (!empty($updInfo['has_update']) && current_user_can('manage_options')) : ?>
+            <div class="notice notice-warning inline" style="margin:8px 0 12px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                <span><strong>Pembaruan Tersedia (v<?php echo esc_html($updInfo['latest']); ?>):</strong> <?php echo esc_html((string) ($updInfo['changelog'] ?? 'Versi baru tersedia di GitHub resmi.')); ?></span>
+                <a class="button button-primary" href="<?php echo esc_url($tabBaseUrl . 'security'); ?>">Buka Panel Update 1-Klik →</a>
+            </div>
+        <?php endif; ?>
 
         <?php if ($notice !== '') :
             $noticeClass = (stripos($notice, 'Gagal:') === 0) ? 'notice-error' : 'notice-success';
@@ -3399,6 +3724,121 @@ function pa_sinova_render_admin_page(): void {
                 </div>
             </div>
 
+        <?php elseif ($activeTab === 'homepage') :
+            $frontIdNow    = (int) get_option('page_on_front', 0);
+            $frontPostNow  = ($frontIdNow > 0 && get_post_status($frontIdNow) === 'publish') ? get_post($frontIdNow) : null;
+            $isDynamicHome = ($frontPostNow instanceof WP_Post && strpos((string) $frontPostNow->post_content, '[pa_sinova_beranda') !== false);
+        ?>
+            <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid <?php echo $isDynamicHome ? '#15803d' : '#d97706'; ?>;border-radius:10px;padding:16px 18px;margin-bottom:18px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px;">
+                <div style="flex:1;min-width:260px;">
+                    <?php if ($isDynamicHome) : ?>
+                        <strong style="color:#15803d;font-size:14.5px;">● Beranda Dinamis Aktif (<code>[pa_sinova_beranda]</code>)</strong>
+                        <p style="margin:4px 0 0;color:#475569;font-size:13px;">Tampilan Beranda dikendalikan penuh lewat formulir visual di bawah ini — tidak perlu Elementor, tidak perlu edit kode HTML, dan otomatis ikut terbarui setiap kali Anda memperbarui versi Starter Kit.</p>
+                    <?php else : ?>
+                        <strong style="color:#b45309;font-size:14.5px;">⚠ Beranda Masih Menggunakan HTML Statis Lama</strong>
+                        <p style="margin:4px 0 0;color:#475569;font-size:13px;">Klik tombol di samping agar Beranda langsung beralih ke <strong>Beranda Dinamis</strong> (desain penuh terbaru + Dashboard Jadwal Sidang + bisa diatur visual tanpa menyentuh kode). <em>Berita, dokumen, dan halaman lain tidak dihapus.</em></p>
+                    <?php endif; ?>
+                </div>
+                <form method="post" <?php echo $isDynamicHome ? '' : 'onsubmit="return confirm(\'Beralih ke Beranda Dinamis [pa_sinova_beranda]? Konten HTML statis lama pada halaman Beranda akan diganti shortcode dinamis (berita, dokumen, &amp; halaman lain tetap aman).\');"'; ?>>
+                    <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                    <input type="hidden" name="pa_sinova_action" value="activate_dynamic_home">
+                    <button type="submit" class="button <?php echo $isDynamicHome ? 'button-secondary' : 'button-primary'; ?>">
+                        <?php echo $isDynamicHome ? 'Segarkan Beranda Dinamis' : 'Aktifkan Beranda Dinamis (1-Klik)'; ?>
+                    </button>
+                </form>
+            </div>
+
+            <form method="post">
+                <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                <input type="hidden" name="pa_sinova_action" value="save_home_layout">
+                <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:20px;align-items:start;">
+                    <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
+                        <h2 style="margin-top:0;color:#056e4f;">1. Dashboard Jadwal Sidang &amp; Live SIPP</h2>
+                        <table class="form-table" style="margin-top:0;">
+                            <tr>
+                                <th>Letak di Beranda</th>
+                                <td>
+                                    <select name="home_schedule_position" class="regular-text">
+                                        <option value="after_hero" <?php selected($cfg['home_schedule_position'] ?? 'after_hero', 'after_hero'); ?>>Tepat di bawah Hero Banner (Direkomendasikan — paling terlihat)</option>
+                                        <option value="after_services" <?php selected($cfg['home_schedule_position'] ?? 'after_hero', 'after_services'); ?>>Di bawah 8 Kartu Layanan Peradilan</option>
+                                        <option value="after_welcome" <?php selected($cfg['home_schedule_position'] ?? 'after_hero', 'after_welcome'); ?>>Di bawah Sambutan Pimpinan &amp; Maklumat</option>
+                                        <option value="hidden" <?php selected($cfg['home_schedule_position'] ?? 'after_hero', 'hidden'); ?>>Sembunyikan dari Beranda</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Tab Awal Yang Ditampilkan</th>
+                                <td>
+                                    <select name="home_schedule_default_tab" class="regular-text">
+                                        <option value="auto" <?php selected($cfg['home_schedule_default_tab'] ?? 'auto', 'auto'); ?>>Otomatis (Layar Live SIPP bila URL diisi, selain itu Agenda Hari Ini)</option>
+                                        <option value="agenda" <?php selected($cfg['home_schedule_default_tab'] ?? 'auto', 'agenda'); ?>>Agenda Sidang Hari Ini (Data Terstruktur)</option>
+                                        <option value="sipp" <?php selected($cfg['home_schedule_default_tab'] ?? 'auto', 'sipp'); ?>>Layar Live Slide SIPP</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>URL Slide Jadwal Sidang SIPP</th>
+                                <td>
+                                    <input type="url" name="sipp_slide_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_slide_url'] ?? ''); ?>" placeholder="https://sipp.pa-satker.go.id/Slide_sidang">
+                                    <br><small style="color:#64748b;">Cukup tempel tautan HTTPS <code>Slide_sidang</code> SIPP satker Anda. Otomatis diizinkan pada header CSP <code>frame-src</code> tanpa edit kode.</small>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <hr style="margin:16px 0;">
+                        <h2 style="margin-top:0;color:#056e4f;">2. Teks Hero Banner &amp; Pita Informasi</h2>
+                        <table class="form-table" style="margin-top:0;">
+                            <tr>
+                                <th>Pita Info Layanan (Ticker)</th>
+                                <td>
+                                    <label style="display:block;margin-bottom:6px;"><input type="checkbox" name="home_show_ticker" value="1" <?php checked(($cfg['home_show_ticker'] ?? '1') !== '0'); ?>> Tampilkan pita informasi di atas Hero</label>
+                                    <textarea name="home_ticker_text" rows="2" class="large-text"><?php echo esc_textarea($cfg['home_ticker_text'] ?? ''); ?></textarea>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Label Atas Hero (Kicker)</th>
+                                <td><input type="text" name="home_hero_kicker" class="large-text" value="<?php echo esc_attr($cfg['home_hero_kicker'] ?? ''); ?>"></td>
+                            </tr>
+                            <tr>
+                                <th>Judul Utama Hero (H1)</th>
+                                <td><input type="text" name="home_hero_title" class="large-text" value="<?php echo esc_attr($cfg['home_hero_title'] ?? ''); ?>"></td>
+                            </tr>
+                            <tr>
+                                <th>Deskripsi Singkat Hero</th>
+                                <td><textarea name="home_hero_lead" rows="3" class="large-text"><?php echo esc_textarea($cfg['home_hero_lead'] ?? ''); ?></textarea></td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div style="display:flex;flex-direction:column;gap:18px;">
+                        <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
+                            <h2 style="margin-top:0;color:#056e4f;">3. Tampilkan / Sembunyikan Bagian Beranda</h2>
+                            <p style="margin-top:0;font-size:12.5px;color:#475569;">Centang bagian yang ingin muncul di halaman depan tanpa menyentuh editor Gutenberg.</p>
+                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_services" value="1" <?php checked(($cfg['home_show_services'] ?? '1') !== '0'); ?>> <strong>8 Kartu Layanan Inti</strong> (SIPP, e-Court, Putusan, Prodeo, PPID)</label></p>
+                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_welcome" value="1" <?php checked(($cfg['home_show_welcome'] ?? '1') !== '0'); ?>> <strong>Sambutan Pimpinan &amp; Maklumat PTSP</strong></label></p>
+                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_zi" value="1" <?php checked(($cfg['home_show_zi'] ?? '1') !== '0'); ?>> <strong>6 Area Pembangunan Zona Integritas</strong></label></p>
+                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_news" value="1" <?php checked(($cfg['home_show_news'] ?? '1') !== '0'); ?>> <strong>Berita Terkini Satker</strong> (3 berita terbaru)</label></p>
+                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_announcements" value="1" <?php checked(($cfg['home_show_announcements'] ?? '1') !== '0'); ?>> <strong>Pengumuman 3 Kolom</strong> (Satker, MA RI, Badilag RSS)</label></p>
+                            <p style="margin:6px 0;"><label><input type="checkbox" name="home_show_survey" value="1" <?php checked(($cfg['home_show_survey'] ?? '1') !== '0'); ?>> <strong>Indeks Survei Pelayanan &amp; Direktori Transparansi</strong></label></p>
+                        </div>
+
+                        <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
+                            <h2 style="margin-top:0;color:#056e4f;">4. Nilai Indeks Pelayanan Publik (Beranda)</h2>
+                            <table class="form-table" style="margin-top:0;">
+                                <tr><th style="width:130px;">Periode Aktif</th><td><input type="text" name="home_survey_period" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_period'] ?? 'Triwulan III'); ?>" style="width:100%;"></td></tr>
+                                <tr><th>Predikat Mutu</th><td><input type="text" name="home_survey_grade" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_grade'] ?? '★ Mutu A (Sangat Baik)'); ?>" style="width:100%;"></td></tr>
+                                <tr><th>Nilai SKM</th><td><input type="text" name="home_survey_skm" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_skm'] ?? '4.00 / 4.00'); ?>" style="width:100%;"></td></tr>
+                                <tr><th>Nilai SPAK</th><td><input type="text" name="home_survey_spak" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_spak'] ?? '4.00 / 4.00'); ?>" style="width:100%;"></td></tr>
+                                <tr><th>Nilai SPKP</th><td><input type="text" name="home_survey_spkp" class="regular-text" value="<?php echo esc_attr($cfg['home_survey_spkp'] ?? '4.00 / 4.00'); ?>" style="width:100%;"></td></tr>
+                            </table>
+                            <p style="margin:12px 0 0;">
+                                <button type="submit" class="button button-primary button-large" style="width:100%;">Simpan Desain &amp; Tata Letak Beranda</button>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
         <?php elseif ($activeTab === 'settings') :
             $isAdoption = (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1');
         ?>
@@ -3503,7 +3943,45 @@ function pa_sinova_render_admin_page(): void {
             $recRemaining  = is_array($recHashes) ? count($recHashes) : 0;
             $fim           = pa_starter_fim_status();
             $cspModeNow    = pa_starter_effective_csp_mode();
+            $ghUpd         = current_user_can('manage_options') ? pa_sinova_github_check_update(false) : array();
         ?>
+            <?php if (current_user_can('manage_options')) : ?>
+            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                    <div>
+                        <h2 style="margin:0 0 4px;color:#056e4f;">Pembaruan Starter Kit 1-Klik dari GitHub</h2>
+                        <p style="margin:0;color:#475569;font-size:13px;">
+                            Versi terpasang: <strong>v<?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?></strong>
+                            · Sumber resmi: <code><?php echo esc_html(PA_SINOVA_GITHUB_REPO); ?></code>
+                            <?php if (!empty($ghUpd['ok'])) : ?>
+                                · Terbaru di GitHub: <strong>v<?php echo esc_html($ghUpd['latest']); ?></strong>
+                                (dicek <?php echo esc_html($ghUpd['checked_at']); ?>)
+                            <?php endif; ?>
+                        </p>
+                        <?php if (!empty($ghUpd['changelog'])) : ?>
+                            <p style="margin:6px 0 0;font-size:12.5px;color:#334155;"><strong>Catatan Rilis:</strong> <?php echo esc_html($ghUpd['changelog']); ?></p>
+                        <?php endif; ?>
+                        <?php if (!empty($ghUpd['error'])) : ?>
+                            <p style="margin:6px 0 0;font-size:12.5px;color:#b45309;"><?php echo esc_html($ghUpd['error']); ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <form method="post">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="check_github_update">
+                            <button type="submit" class="button button-secondary">Cek Pembaruan Sekarang</button>
+                        </form>
+                        <form method="post" onsubmit="return confirm('Unduh dan pasang berkas PA SINOVA terbaru dari GitHub sekarang? Berita, dokumen, halaman, dan pengaturan satker tetap aman tidak terhapus.');">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="apply_github_update">
+                            <button type="submit" class="button button-primary"><?php echo !empty($ghUpd['has_update']) ? ('Update ke v' . esc_html($ghUpd['latest']) . ' (1-Klik)') : 'Sinkronkan Ulang dari GitHub (1-Klik)'; ?></button>
+                        </form>
+                    </div>
+                </div>
+                <p style="margin:10px 0 0;font-size:12px;color:#64748b;"><em>Aman &amp; non-destruktif: pembaruan hanya mengganti berkas kode inti secara atomik, otomatis membersihkan cache HTML, dan memperbarui baseline SHA-256 FIM.</em></p>
+            </div>
+            <?php endif; ?>
+
             <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
                 <h2 style="margin-top:0;color:#056e4f;">Autentikasi Dua Faktor (MFA TOTP RFC 6238 Bawaan)</h2>
                 <p style="color:#475569;margin-top:0;">Tambahkan lapisan verifikasi OTP 6-digit menggunakan Google Authenticator, FreeOTP, atau Aegis — tanpa plugin pihak ketiga dan tanpa mengirim kunci ke server eksternal.</p>
