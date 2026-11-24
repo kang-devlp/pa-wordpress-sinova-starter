@@ -23,78 +23,104 @@ function pa_portal_is_public_ip(string $ip): bool {
     return true;
 }
 
-function pa_portal_ssrf_safe_get(string $url, array $allowedSuffixes = array('mahkamahagung.go.id'), int $timeout = 5): array {
-    $url    = trim($url);
-    $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
-    $host   = strtolower((string) parse_url($url, PHP_URL_HOST));
+function pa_portal_ssrf_safe_get(string $url, array $allowedSuffixes = array('mahkamahagung.go.id', 'badilag.net', 'go.id'), int $timeout = 5): array {
+    $validateTarget = static function (string $targetUrl) use ($allowedSuffixes): array {
+        $targetUrl = trim($targetUrl);
+        $scheme    = strtolower((string) parse_url($targetUrl, PHP_URL_SCHEME));
+        $host      = strtolower((string) parse_url($targetUrl, PHP_URL_HOST));
 
-    if (!in_array($scheme, array('http', 'https'), true) || $host === '') {
-        return array('ok' => false, 'body' => '', 'error' => 'Skema atau host URL tidak valid.');
-    }
+        if (!in_array($scheme, array('http', 'https'), true) || $host === '') {
+            return array('ok' => false, 'error' => 'Skema atau host URL tidak valid.');
+        }
 
-    if (!empty($allowedSuffixes)) {
-        $hostOk = false;
-        foreach ($allowedSuffixes as $sfx) {
-            $sfx = ltrim(strtolower((string) $sfx), '.');
-            if ($sfx === '') {
-                continue;
+        if (!empty($allowedSuffixes)) {
+            $hostOk = false;
+            foreach ($allowedSuffixes as $sfx) {
+                $sfx = ltrim(strtolower((string) $sfx), '.');
+                if ($sfx === '') {
+                    continue;
+                }
+                if ($host === $sfx || (strlen($host) > strlen($sfx) && substr($host, -strlen($sfx) - 1) === '.' . $sfx)) {
+                    $hostOk = true;
+                    break;
+                }
             }
-            if ($host === $sfx || (strlen($host) > strlen($sfx) && substr($host, -strlen($sfx) - 1) === '.' . $sfx)) {
-                $hostOk = true;
-                break;
+            if (!$hostOk) {
+                return array('ok' => false, 'error' => 'Host berada di luar daftar domain resmi yang diizinkan.');
             }
         }
-        if (!$hostOk) {
-            return array('ok' => false, 'body' => '', 'error' => 'Host berada di luar daftar domain resmi yang diizinkan.');
-        }
-    }
 
-    $ips = array();
-    if (filter_var($host, FILTER_VALIDATE_IP)) {
-        $ips[] = $host;
-    } else {
-        $v4 = @gethostbynamel($host);
-        if (is_array($v4)) {
-            $ips = array_merge($ips, $v4);
-        }
-        if (function_exists('dns_get_record')) {
-            $v6 = @dns_get_record($host, DNS_AAAA);
-            if (is_array($v6)) {
-                foreach ($v6 as $rec) {
-                    if (!empty($rec['ipv6'])) {
-                        $ips[] = (string) $rec['ipv6'];
+        $ips = array();
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            $ips[] = $host;
+        } else {
+            $v4 = @gethostbynamel($host);
+            if (is_array($v4)) {
+                $ips = array_merge($ips, $v4);
+            }
+            if (function_exists('dns_get_record')) {
+                $v6 = @dns_get_record($host, DNS_AAAA);
+                if (is_array($v6)) {
+                    foreach ($v6 as $rec) {
+                        if (!empty($rec['ipv6'])) {
+                            $ips[] = (string) $rec['ipv6'];
+                        }
                     }
                 }
             }
         }
-    }
 
-    $ips = array_values(array_unique($ips));
-    if (empty($ips)) {
-        return array('ok' => false, 'body' => '', 'error' => 'Host tidak dapat diresolusi.');
-    }
-    foreach ($ips as $ip) {
-        if (!pa_portal_is_public_ip((string) $ip)) {
-            return array('ok' => false, 'body' => '', 'error' => 'Alamat IP privat/lokal ditolak oleh pelindung SSRF.');
+        $ips = array_values(array_unique($ips));
+        if (empty($ips)) {
+            return array('ok' => false, 'error' => 'Host tidak dapat diresolusi.');
         }
+        foreach ($ips as $ip) {
+            if (!pa_portal_is_public_ip((string) $ip)) {
+                return array('ok' => false, 'error' => 'Alamat IP privat/lokal ditolak oleh pelindung SSRF.');
+            }
+        }
+        return array('ok' => true, 'error' => '');
+    };
+
+    $currentUrl = trim($url);
+    for ($hop = 0; $hop <= 2; $hop++) {
+        $chk = $validateTarget($currentUrl);
+        if (empty($chk['ok'])) {
+            return array('ok' => false, 'body' => '', 'error' => (string) $chk['error']);
+        }
+
+        $resp = wp_remote_get($currentUrl, array(
+            'timeout'             => $timeout,
+            'redirection'         => 0,
+            'limit_response_size' => 1572864,
+            'user-agent'          => 'PA-Portal-RSS/1.0',
+        ));
+        if (is_wp_error($resp)) {
+            return array('ok' => false, 'body' => '', 'error' => $resp->get_error_message());
+        }
+        $code = (int) wp_remote_retrieve_response_code($resp);
+        if (in_array($code, array(301, 302, 303, 307, 308), true)) {
+            $loc = (string) wp_remote_retrieve_header($resp, 'location');
+            if ($loc === '' || $hop === 2) {
+                return array('ok' => false, 'body' => '', 'error' => 'Redirect tidak valid atau terlalu banyak.');
+            }
+            if (strpos($loc, '//') === 0) {
+                $loc = (parse_url($currentUrl, PHP_URL_SCHEME) ?: 'https') . ':' . $loc;
+            } elseif (strpos($loc, '/') === 0) {
+                $p   = parse_url($currentUrl);
+                $loc = ($p['scheme'] ?? 'https') . '://' . ($p['host'] ?? '') . (!empty($p['port']) ? ':' . $p['port'] : '') . $loc;
+            }
+            $currentUrl = $loc;
+            continue;
+        }
+        $body = (string) wp_remote_retrieve_body($resp);
+        if ($code !== 200 || $body === '') {
+            return array('ok' => false, 'body' => '', 'error' => 'HTTP ' . $code);
+        }
+        return array('ok' => true, 'body' => $body, 'error' => '');
     }
 
-    $resp = wp_remote_get($url, array(
-        'timeout'             => $timeout,
-        'redirection'         => 2,
-        'limit_response_size' => 1572864,
-        'user-agent'          => 'PA-Portal-RSS/1.0',
-    ));
-    if (is_wp_error($resp)) {
-        return array('ok' => false, 'body' => '', 'error' => $resp->get_error_message());
-    }
-    $code = (int) wp_remote_retrieve_response_code($resp);
-    $body = (string) wp_remote_retrieve_body($resp);
-    if ($code !== 200 || $body === '') {
-        return array('ok' => false, 'body' => '', 'error' => 'HTTP ' . $code);
-    }
-
-    return array('ok' => true, 'body' => $body, 'error' => '');
+    return array('ok' => false, 'body' => '', 'error' => 'Terlalu banyak pengalihan.');
 }
 
 function pa_portal_trim_text(string $text, int $max = 140): string {
@@ -197,13 +223,7 @@ function pa_portal_refresh_official_feeds(): array {
         $prev = array('ma' => array(), 'badilag' => array(), 'updated_at' => 0);
     }
 
-    $allowedSuffixes = array('mahkamahagung.go.id');
-    foreach (array($maUrl, $badilagUrl) as $u) {
-        $h = strtolower((string) parse_url($u, PHP_URL_HOST));
-        if ($h !== '' && !in_array($h, $allowedSuffixes, true)) {
-            $allowedSuffixes[] = $h;
-        }
-    }
+    $allowedSuffixes = array('mahkamahagung.go.id', 'badilag.net', 'go.id');
 
     $maItems      = is_array($prev['ma'] ?? null) ? $prev['ma'] : array();
     $badilagItems = is_array($prev['badilag'] ?? null) ? $prev['badilag'] : array();
@@ -313,7 +333,7 @@ add_shortcode('pa_official_announcements', static function ($atts) {
     ob_start();
     ?>
     <section class="pa-section-block pa-feeds-section" aria-label="Pengumuman Resmi Mahkamah Agung RI dan Ditjen Badilag" data-pa-feeds-hydrate="<?php echo $needsHydrate ? '1' : '0'; ?>" data-pa-feeds-limit="<?php echo esc_attr((string) $limit); ?>">
-        <h2 class="pa-starter-heading" tabindex="0">PENGUMUMAN RESMI MA RI &amp; DITJEN BADILAG <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+        <h2 class="pa-starter-heading">PENGUMUMAN RESMI MA RI &amp; DITJEN BADILAG <span class="pa-hint-i" aria-hidden="true">i</span></h2>
         <p class="pa-starter-sub">Sindikasi Langsung Informasi Resmi Mahkamah Agung RI dan Direktorat Jenderal Badan Peradilan Agama</p>
         <div class="pa-feeds-grid">
             <article class="pa-feed-card">
@@ -466,11 +486,14 @@ add_shortcode('pa_pegawai_grid', static function () {
     ?>
     <div class="pa-ops-wrap" id="pa-pegawai-board">
         <div class="pa-ops-filter-tabs" role="tablist" aria-label="Filter Kelompok Pegawai">
-            <?php foreach ($groups as $idx => $g) : ?>
-                <button type="button" role="tab" class="pa-ops-tab<?php echo $idx === 0 ? ' is-active' : ''; ?>" data-pegawai-filter="<?php echo esc_attr($g); ?>"><?php echo esc_html($g); ?></button>
+            <?php foreach ($groups as $idx => $g) :
+                $tid = 'pa-peg-tab-' . sanitize_key($g);
+            ?>
+                <button type="button" role="tab" id="<?php echo esc_attr($tid); ?>" aria-selected="<?php echo $idx === 0 ? 'true' : 'false'; ?>" tabindex="<?php echo $idx === 0 ? '0' : '-1'; ?>" class="pa-ops-tab<?php echo $idx === 0 ? ' is-active' : ''; ?>" data-pegawai-filter="<?php echo esc_attr($g); ?>"><?php echo esc_html($g); ?></button>
             <?php endforeach; ?>
         </div>
-        <div class="pa-pegawai-grid">
+        <p id="pa-pegawai-status" class="screen-reader-text" aria-live="polite"></p>
+        <div class="pa-pegawai-grid" role="tabpanel">
             <?php foreach ($rows as $r) :
                 $meta     = json_decode((string) ($r['meta_json'] ?? ''), true);
                 if (!is_array($meta)) $meta = array();
@@ -479,10 +502,10 @@ add_shortcode('pa_pegawai_grid', static function () {
                 $initials = strtoupper(substr((string) ($words[0] ?? 'P'), 0, 1) . substr((string) ($words[1] ?? ''), 0, 1));
                 $photo    = esc_url_raw((string) ($meta['photo'] ?? ''), array('http', 'https'));
             ?>
-                <article class="pa-pegawai-card" data-group="<?php echo esc_attr((string) $r['category']); ?>" tabindex="0">
+                <article class="pa-pegawai-card" data-group="<?php echo esc_attr((string) $r['category']); ?>">
                     <div class="pa-pegawai-avatar">
                         <?php if ($photo !== '') : ?>
-                            <img src="<?php echo esc_url($photo); ?>" alt="<?php echo esc_attr($name); ?>" width="56" height="56" loading="lazy">
+                            <img src="<?php echo esc_url($photo); ?>" alt="<?php echo esc_attr($name); ?>" width="56" height="56" loading="lazy" decoding="async">
                         <?php else : ?>
                             <span><?php echo esc_html($initials ?: 'PA'); ?></span>
                         <?php endif; ?>
@@ -584,7 +607,7 @@ add_shortcode('pa_jadwal_sidang', static function () {
     ?>
     <div class="pa-ops-wrap">
         <div class="pa-ops-toolbar">
-            <input type="search" class="pa-ops-search" data-ops-table="pa-table-jadwal" placeholder="Cari nomor perkara, agenda, atau ruang sidang...">
+            <input type="search" class="pa-ops-search" data-ops-table="pa-table-jadwal" aria-label="Saring jadwal sidang berdasarkan nomor perkara, agenda, atau ruang" placeholder="Cari nomor perkara, agenda, atau ruang sidang...">
             <div class="pa-ops-meta">
                 <span class="pa-ops-badge"><?php echo esc_html($source); ?></span>
                 <?php if ($sippUrl !== '') : ?>
@@ -594,8 +617,9 @@ add_shortcode('pa_jadwal_sidang', static function () {
         </div>
         <div class="pa-table-scroll">
             <table class="pa-ops-table" id="pa-table-jadwal">
+                <caption class="screen-reader-text">Jadwal Persidangan Harian Pengadilan Agama</caption>
                 <thead>
-                    <tr><th>Tanggal</th><th>Jam</th><th>Nomor Perkara</th><th>Agenda Sidang</th><th>Ruang</th></tr>
+                    <tr><th scope="col">Tanggal</th><th scope="col">Jam</th><th scope="col">Nomor Perkara</th><th scope="col">Agenda Sidang</th><th scope="col">Ruang</th></tr>
                 </thead>
                 <tbody>
                     <?php if (empty($sippRows)) : ?>
@@ -623,13 +647,14 @@ add_shortcode('pa_panggilan_ghaib', static function () {
     ?>
     <div class="pa-ops-wrap">
         <div class="pa-ops-toolbar">
-            <input type="search" class="pa-ops-search" data-ops-table="pa-table-ghaib" placeholder="Cari nomor perkara atau nama pihak...">
+            <input type="search" class="pa-ops-search" data-ops-table="pa-table-ghaib" aria-label="Saring panggilan ghaib berdasarkan nomor perkara atau nama pihak" placeholder="Cari nomor perkara atau nama pihak...">
             <span class="pa-ops-badge">Pasal 27 PP No. 9 Tahun 1975</span>
         </div>
         <div class="pa-table-scroll">
             <table class="pa-ops-table" id="pa-table-ghaib">
+                <caption class="screen-reader-text">Daftar Pengumuman Panggilan Ghaib</caption>
                 <thead>
-                    <tr><th>Nomor Perkara</th><th>Nama Pihak Dipanggil</th><th>Tanggal Sidang</th><th>Keterangan</th></tr>
+                    <tr><th scope="col">Nomor Perkara</th><th scope="col">Nama Pihak Dipanggil</th><th scope="col">Tanggal Sidang</th><th scope="col">Keterangan</th></tr>
                 </thead>
                 <tbody>
                     <?php if (empty($rows)) : ?>
@@ -683,8 +708,9 @@ add_shortcode('pa_statistik_perkara', static function () {
         </div>
         <div class="pa-table-scroll">
             <table class="pa-ops-table">
+                <caption class="screen-reader-text">Rekapitulasi Statistik Perkara Bulanan</caption>
                 <thead>
-                    <tr><th>Periode</th><th>Diterima</th><th>Diputus</th><th>Sisa</th><th>Kinerja Penyelesaian</th></tr>
+                    <tr><th scope="col">Periode</th><th scope="col">Diterima</th><th scope="col">Diputus</th><th scope="col">Sisa</th><th scope="col">Kinerja Penyelesaian</th></tr>
                 </thead>
                 <tbody>
                     <?php if (empty($rows)) : ?>
@@ -703,7 +729,7 @@ add_shortcode('pa_statistik_perkara', static function () {
                             <td><?php echo esc_html((string) $rem); ?></td>
                             <td>
                                 <div class="pa-prog-wrap">
-                                    <div class="pa-prog-bar"><span style="width:<?php echo esc_attr((string) $pct); ?>%;"></span></div>
+                                    <div class="pa-prog-bar" role="progressbar" aria-valuenow="<?php echo esc_attr((string) $pct); ?>" aria-valuemin="0" aria-valuemax="100" aria-label="<?php echo esc_attr('Kinerja penyelesaian ' . (string) $r['title']); ?>"><span style="width:<?php echo esc_attr((string) $pct); ?>%;"></span></div>
                                     <small><?php echo esc_html((string) $pct); ?>%</small>
                                 </div>
                             </td>
@@ -726,6 +752,9 @@ add_action('rest_api_init', static function () {
         'methods'             => 'GET',
         'permission_callback' => '__return_true',
         'callback'            => static function (WP_REST_Request $req) {
+            if (function_exists('pa_starter_rate_limit') && !pa_starter_rate_limit('qsearch', 45, 60)) {
+                return new WP_Error('rate_limited', 'Terlalu banyak permintaan pencarian.', array('status' => 429));
+            }
             $q     = trim(sanitize_text_field((string) $req->get_param('q')));
             $q     = function_exists('mb_substr') ? mb_substr($q, 0, 60, 'UTF-8') : substr($q, 0, 60);
             $ql    = strtolower($q);
@@ -738,6 +767,8 @@ add_action('rest_api_init', static function () {
                 array('Panjar & Radius Biaya', 'biaya-proses-berperkara', 'Layanan', 'SK Ketua tentang taksiran panjar & radius panggilan'),
                 array('Panggilan Ghaib', 'panggilan-ghaib', 'Pengumuman', 'Panggilan pihak tidak diketahui alamatnya'),
                 array('Layanan Kelompok Rentan & Disabilitas', 'disabilitas', 'Inklusif', 'Fasilitas layanan prioritas & aksesibilitas disabilitas'),
+                array('Informasi Serta-Merta', 'informasi-serta-merta', 'KMA 2-144', 'Pemberitahuan segera kondisi layanan & utilitas'),
+                array('Layanan Pengaduan & SIWAS', 'layanan-pengaduan', 'Pengaduan', 'Saluran pengaduan masyarakat & Whistleblowing'),
                 array('Pengumuman MA RI & Badilag', 'pengumuman-resmi', 'Resmi', 'Sindikasi informasi Mahkamah Agung & Ditjen Badilag'),
                 array('Survei Pelayanan (SKM/SPAK/SPKP)', 'survei-pelayanan', 'Survei', 'Hasil indeks pelayanan publik per triwulan'),
             );
@@ -812,7 +843,7 @@ add_action('rest_api_init', static function () {
 });
 
 // ============================================================================
-// 4. ENTERPRISE SEO: OPEN GRAPH STATIS + SCHEMA.ORG JSON-LD
+// 4. ENTERPRISE SEO: META DESCRIPTION, MANIFEST, FAVICON, OPEN GRAPH + JSON-LD
 // ============================================================================
 
 add_action('wp_head', static function () {
@@ -824,8 +855,38 @@ add_action('wp_head', static function () {
     $homeUrl = trailingslashit(home_url('/'));
     $pageUrl = is_singular() ? (string) get_permalink() : $homeUrl;
     $title   = is_front_page() ? $satker : wp_get_document_title();
-    $desc    = trim((string) ($cfg['leader_welcome'] ?? 'Portal resmi keterbukaan informasi dan layanan peradilan agama.'));
-    $desc    = pa_portal_trim_text($desc, 155);
+
+    $rawDesc = '';
+    if (is_singular() && !is_front_page()) {
+        $postObj = get_queried_object();
+        if ($postObj instanceof WP_Post) {
+            if (has_excerpt($postObj)) {
+                $rawDesc = (string) $postObj->post_excerpt;
+            } elseif (
+                preg_match('/\[pa_sinova_docs\b[^\]]*slug=["\']([a-z0-9_-]+)["\']/i', (string) $postObj->post_content, $dm)
+                && function_exists('pa_sinova_module_config')
+            ) {
+                $modCfg  = pa_sinova_module_config(sanitize_key($dm[1]));
+                $rawDesc = trim((string) ($modCfg['title'] ?? '') . ' — ' . (string) ($modCfg['subtitle'] ?? ''));
+            } else {
+                $rawDesc = trim(wp_strip_all_tags(strip_shortcodes((string) $postObj->post_content)));
+            }
+            if ($rawDesc === '') {
+                $rawDesc = get_the_title($postObj) . ' — Portal resmi informasi layanan dan transparansi ' . $satker . '.';
+            }
+        }
+    }
+    if ($rawDesc === '') {
+        $rawDesc = trim((string) ($cfg['leader_welcome'] ?? 'Portal resmi keterbukaan informasi dan layanan peradilan agama.'));
+    }
+    $desc = pa_portal_trim_text($rawDesc, 155);
+
+    echo '<meta name="theme-color" content="#043927" media="(prefers-color-scheme: light)">' . "\n";
+    echo '<meta name="theme-color" content="#0b141a" media="(prefers-color-scheme: dark)">' . "\n";
+    echo '<link rel="manifest" href="' . esc_url(home_url('/manifest.webmanifest')) . '">' . "\n";
+    if (!function_exists('has_site_icon') || !has_site_icon()) {
+        echo '<link rel="icon" href="' . esc_url(home_url('/favicon.svg')) . '" type="image/svg+xml">' . "\n";
+    }
 
     $seoPluginActive = defined('WPSEO_VERSION') || defined('RANK_MATH_VERSION');
     if (!$seoPluginActive) {
@@ -839,6 +900,8 @@ add_action('wp_head', static function () {
         if ($ogImg === '' && !empty($cfg['logo_url']) && !preg_match('/\.gif(?:$|\?)/i', (string) $cfg['logo_url'])) {
             $ogImg = (string) $cfg['logo_url'];
         }
+        echo '<meta name="description" content="' . esc_attr($desc) . '">' . "\n";
+        echo '<meta property="og:locale" content="id_ID">' . "\n";
         echo '<meta property="og:site_name" content="' . esc_attr($satker) . '">' . "\n";
         echo '<meta property="og:title" content="' . esc_attr($title) . '">' . "\n";
         echo '<meta property="og:description" content="' . esc_attr($desc) . '">' . "\n";
@@ -847,41 +910,53 @@ add_action('wp_head', static function () {
         if ($ogImg !== '') {
             echo '<meta property="og:image" content="' . esc_url($ogImg) . '">' . "\n";
         }
+        echo '<meta name="twitter:card" content="summary_large_image">' . "\n";
+        echo '<meta name="twitter:title" content="' . esc_attr($title) . '">' . "\n";
+        echo '<meta name="twitter:description" content="' . esc_attr($desc) . '">' . "\n";
+        if ($ogImg !== '') {
+            echo '<meta name="twitter:image" content="' . esc_url($ogImg) . '">' . "\n";
+        }
+    }
+
+    $orgNode = array(
+        '@type'       => 'GovernmentOrganization',
+        '@id'         => $homeUrl . '#organization',
+        'name'        => $satker,
+        'url'         => $homeUrl,
+        'telephone'   => (string) ($cfg['phone'] ?? ''),
+        'email'       => (string) ($cfg['email'] ?? ''),
+        'address'     => array(
+            '@type'         => 'PostalAddress',
+            'streetAddress' => (string) ($cfg['address'] ?? ''),
+            'addressCountry'=> 'ID',
+        ),
+        'openingHoursSpecification' => array(
+            array(
+                '@type'     => 'OpeningHoursSpecification',
+                'dayOfWeek' => array('Monday', 'Tuesday', 'Wednesday', 'Thursday'),
+                'opens'     => '08:00',
+                'closes'    => '16:30',
+            ),
+            array(
+                '@type'     => 'OpeningHoursSpecification',
+                'dayOfWeek' => array('Friday'),
+                'opens'     => '08:00',
+                'closes'    => '17:00',
+            ),
+        ),
+    );
+    if (!empty($cfg['logo_url'])) {
+        $orgNode['logo'] = (string) $cfg['logo_url'];
     }
 
     $graph = array(
-        array(
-            '@type'       => 'GovernmentOrganization',
-            '@id'         => $homeUrl . '#organization',
-            'name'        => $satker,
-            'url'         => $homeUrl,
-            'telephone'   => (string) ($cfg['phone'] ?? ''),
-            'email'       => (string) ($cfg['email'] ?? ''),
-            'address'     => array(
-                '@type'         => 'PostalAddress',
-                'streetAddress' => (string) ($cfg['address'] ?? ''),
-                'addressCountry'=> 'ID',
-            ),
-            'openingHoursSpecification' => array(
-                array(
-                    '@type'     => 'OpeningHoursSpecification',
-                    'dayOfWeek' => array('Monday', 'Tuesday', 'Wednesday', 'Thursday'),
-                    'opens'     => '08:00',
-                    'closes'    => '16:30',
-                ),
-                array(
-                    '@type'     => 'OpeningHoursSpecification',
-                    'dayOfWeek' => array('Friday'),
-                    'opens'     => '08:00',
-                    'closes'    => '17:00',
-                ),
-            ),
-        ),
+        $orgNode,
         array(
             '@type'           => 'WebSite',
             '@id'             => $homeUrl . '#website',
             'url'             => $homeUrl,
             'name'            => $satker,
+            'inLanguage'      => 'id-ID',
             'publisher'       => array('@id' => $homeUrl . '#organization'),
             'potentialAction' => array(
                 '@type'       => 'SearchAction',
@@ -899,6 +974,21 @@ add_action('wp_head', static function () {
                 array('@type' => 'ListItem', 'position' => 2, 'name' => wp_strip_all_tags((string) get_the_title()), 'item' => $pageUrl),
             ),
         );
+        if (is_single()) {
+            $postObj = get_queried_object();
+            if ($postObj instanceof WP_Post) {
+                $graph[] = array(
+                    '@type'            => 'NewsArticle',
+                    'headline'         => wp_strip_all_tags((string) get_the_title($postObj)),
+                    'description'      => $desc,
+                    'datePublished'    => get_the_date('c', $postObj),
+                    'dateModified'     => get_the_modified_date('c', $postObj),
+                    'mainEntityOfPage' => $pageUrl,
+                    'author'           => array('@id' => $homeUrl . '#organization'),
+                    'publisher'        => array('@id' => $homeUrl . '#organization'),
+                );
+            }
+        }
     }
 
     echo '<script type="application/ld+json">' . wp_json_encode(array('@context' => 'https://schema.org', '@graph' => $graph), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' . "\n";

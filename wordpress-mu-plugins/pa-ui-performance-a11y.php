@@ -7,9 +7,59 @@
 
 defined('ABSPATH') || exit;
 
-// 1. Satukan Webfont menjadi 'Inter' tunggal + Preconnect
+// 1. Satukan Webfont menjadi 'Inter' tunggal + Hapus Bloat Emoji/Dashicons/Resource Hints + Optimasi CWV
 add_filter('astra_google_fonts', '__return_empty_array', 999);
 add_filter('elementor/frontend/print_google_fonts', '__return_false', 999);
+
+add_action('init', static function () {
+    if (is_admin()) {
+        return;
+    }
+    remove_action('wp_head', 'print_emoji_detection_script', 7);
+    remove_action('wp_print_styles', 'print_emoji_styles');
+    remove_filter('the_content_feed', 'wp_staticize_emoji');
+    remove_filter('comment_text_rss', 'wp_staticize_emoji');
+    add_filter('emoji_svg_url', '__return_false');
+}, 15);
+
+add_filter('wp_resource_hints', static function ($urls, $relationType) {
+    if (!is_array($urls)) {
+        return $urls;
+    }
+    return array_values(array_filter($urls, static function ($url) {
+        $s = is_array($url) ? (string) ($url['href'] ?? '') : (string) $url;
+        return stripos($s, 's.w.org') === false;
+    }));
+}, 10, 2);
+
+add_action('wp_enqueue_scripts', static function () {
+    if (!is_admin() && !is_user_logged_in()) {
+        wp_deregister_style('dashicons');
+    }
+}, 100);
+
+add_filter('script_loader_tag', static function ($tag, $handle) {
+    if (is_admin() || (function_exists('is_customize_preview') && is_customize_preview()) || (defined('PA_SERVING_CUSTOM_LOGIN') && PA_SERVING_CUSTOM_LOGIN)) {
+        return $tag;
+    }
+    if (in_array((string) $handle, array('astra-theme-js'), true) && strpos($tag, ' defer') === false && strpos($tag, ' async') === false) {
+        return str_replace(' src=', ' defer src=', $tag);
+    }
+    return $tag;
+}, 10, 2);
+
+add_filter('wp_get_attachment_image_attributes', static function ($attr) {
+    if (!is_array($attr)) {
+        return $attr;
+    }
+    if (empty($attr['decoding'])) {
+        $attr['decoding'] = 'async';
+    }
+    if (empty($attr['loading']) && (($attr['fetchpriority'] ?? '') !== 'high')) {
+        $attr['loading'] = 'lazy';
+    }
+    return $attr;
+}, 10, 1);
 
 function pa_sinova_is_adoption_mode(): bool {
     if (!function_exists('pa_sinova_get_settings')) {
@@ -107,6 +157,9 @@ add_action('rest_api_init', static function () {
         'methods'             => 'POST',
         'permission_callback' => '__return_true',
         'callback'            => static function () {
+            if (function_exists('pa_starter_rate_limit') && !pa_starter_rate_limit('visit', 30, 60)) {
+                return new WP_REST_Response(pa_starter_get_visitor_stats(), 200);
+            }
             return new WP_REST_Response(pa_starter_record_visitor_hit(), 200);
         },
     ));
@@ -121,7 +174,7 @@ add_shortcode('pa_visitor_stats', static function () {
         <div class="pa-vstat-box"><span>Pengunjung Bulan Ini</span><strong id="pa-page-vis-month"><?php echo esc_html(number_format($st['month'], 0, ',', '.')); ?></strong></div>
         <div class="pa-vstat-box"><span>Total Kunjungan</span><strong id="pa-page-vis-total"><?php echo esc_html(number_format($st['total'], 0, ',', '.')); ?></strong></div>
     </div>
-    <p style="font-size:12.5px;color:#64748b;margin-top:10px;">Penghitung kunjungan menyimpan sidik harian anonim (hash satu arah tanpa menyimpan alamat IP mentah pengunjung).</p>
+    <p style="font-size:12.5px;color:#475569;margin-top:10px;">Penghitung kunjungan menyimpan sidik harian anonim (hash satu arah tanpa menyimpan alamat IP mentah pengunjung).</p>
     <?php
     return (string) ob_get_clean();
 });
@@ -131,7 +184,7 @@ add_action('wp_head', static function () {
         return;
     }
     echo '<meta name="color-scheme" content="light dark">' . "\n";
-    echo '<script id="pa-a11y-boot">try{var t=localStorage.getItem("pa_starter_theme"),c=localStorage.getItem("pa_starter_contrast"),z=localStorage.getItem("pa_starter_zoom");if(!t&&/[?&]theme=dark(?:&|$)/.test(location.search))t="dark";if(t==="dark")document.documentElement.setAttribute("data-pa-theme","dark");if(c==="high")document.documentElement.setAttribute("data-pa-contrast","high");if(z)document.documentElement.style.fontSize=z;}catch(e){}</script>' . "\n";
+    echo '<script id="pa-a11y-boot">try{var r=document.documentElement,t=localStorage.getItem("pa_starter_theme"),c=localStorage.getItem("pa_starter_contrast"),z=localStorage.getItem("pa_starter_zoom"),rd=localStorage.getItem("pa_starter_readable"),lk=localStorage.getItem("pa_starter_links"),gs=localStorage.getItem("pa_starter_grayscale"),nm=localStorage.getItem("pa_starter_nomotion");if(!t&&/[?&]theme=dark(?:&|$)/.test(location.search))t="dark";if(t==="dark")r.setAttribute("data-pa-theme","dark");if(c==="high")r.setAttribute("data-pa-contrast","high");if(z)r.style.fontSize=z;if(rd==="1")r.setAttribute("data-pa-readable","1");if(lk==="1")r.setAttribute("data-pa-links","1");if(gs==="1")r.setAttribute("data-pa-grayscale","1");if(nm==="1")r.setAttribute("data-pa-nomotion","1");}catch(e){}</script>' . "\n";
 }, 2);
 
 // 3. Shortcode [pa_sinova_welcome_section]: Sambutan Pimpinan + Standar Maklumat Pelayanan PTSP
@@ -230,7 +283,7 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     <section class="pa-section-block pa-news-section" aria-label="Berita dan Pengumuman Terbaru">
         <div class="pa-news-head">
             <div>
-                <h2 class="pa-starter-heading" style="text-align:left;" tabindex="0">BERITA &amp; PENGUMUMAN TERKINI <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+                <h2 class="pa-starter-heading" style="text-align:left;">BERITA &amp; PENGUMUMAN TERKINI <span class="pa-hint-i" aria-hidden="true">i</span></h2>
                 <p class="pa-starter-sub" style="text-align:left;margin-bottom:0;">Informasi Kegiatan, Publikasi, dan Pemberitahuan Resmi Satuan Kerja</p>
             </div>
             <a class="pa-news-all" href="<?php echo esc_url(home_url('/?post_type=post')); ?>" data-pa-tip="Lihat seluruh arsip berita dan pengumuman resmi.">Semua Berita →</a>
@@ -263,12 +316,12 @@ add_action('astra_render_header_column', static function ($row, $section) {
     $logoUrl = trim((string) ($cfg['logo_url'] ?? ''));
     ?>
     <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>" aria-label="Pencarian Informasi Website">
-        <input type="search" name="s" class="pa-header-search-input" placeholder="Cari dokumen, berita, layanan..." value="<?php echo esc_attr(get_search_query()); ?>">
+        <input type="search" name="s" class="pa-header-search-input" aria-label="Cari dokumen, berita, dan layanan" placeholder="Cari dokumen, berita, layanan..." value="<?php echo esc_attr(get_search_query()); ?>">
         <button type="submit" class="pa-header-search-btn" aria-label="Cari">Cari</button>
         <button type="button" id="pa-cmdk-open" class="pa-cmdk-trigger" aria-haspopup="dialog" data-pa-tip="Pencarian Instan Lintas Dokumen &amp; Jadwal (Ctrl+K)">⌘ <kbd>Ctrl K</kbd></button>
     </form>
     <?php if ($logoUrl !== '') : ?>
-        <img src="<?php echo esc_url($logoUrl); ?>" alt="Logo Pengadilan" class="pa-header-custom-logo" width="44" height="44">
+        <img src="<?php echo esc_url($logoUrl); ?>" alt="Logo Pengadilan" class="pa-header-custom-logo" width="44" height="44" fetchpriority="high" decoding="async">
     <?php endif;
 }, 20, 2);
 
@@ -341,20 +394,61 @@ add_action('wp_head', static function () {
     if (is_admin()) {
         return;
     }
+    $cfg       = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $isOrange  = (($cfg['accent_palette'] ?? 'gold') === 'badilag_orange');
+    $goldHex   = $isOrange ? '#ff9900' : '#C9A227';
+    $goldLight = $isOrange ? '#ffb84d' : '#E5C158';
     ?>
 <style id="pa-sinova-starter-ui-css">
 :root {
     --pa-green: #056e4f;
     --pa-green-dark: #043927;
     --pa-green-deep: #022c22;
-    --pa-gold: #C9A227;
-    --pa-gold-light: #E5C158;
+    --pa-gold: <?php echo esc_html($goldHex); ?>;
+    --pa-gold-light: <?php echo esc_html($goldLight); ?>;
     --e-global-typography-primary-font-family: 'Inter', system-ui, -apple-system, sans-serif;
     --e-global-typography-secondary-font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 body, button, input, select, textarea {
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
+.screen-reader-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+    outline: 3px solid #056e4f !important;
+    outline-offset: 2px !important;
+}
+.pa-shell-topbar :focus-visible,
+.pa-shell-footer :focus-visible,
+.pa-hero-banner :focus-visible,
+.main-header-bar :focus-visible,
+html[data-pa-theme="dark"] :focus-visible {
+    outline-color: #E5C158 !important;
+}
+.pa-emergency-bar {
+    background: #991b1b;
+    color: #ffffff;
+    border-bottom: 2px solid #fca5a5;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 700;
+}
+.pa-emergency-bar a { color: #fef08a; text-decoration: underline; margin-left: 8px; }
 .pa-scroll-reveal, .elementor-invisible {
     opacity: 1 !important;
     visibility: visible !important;
@@ -793,7 +887,7 @@ body.pa-sinova-classic-shell .ast-mobile-popup-drawer .menu-link { color: #fffff
 .pa-hint-i {
     display: inline-flex; align-items: center; justify-content: center;
     width: 18px; height: 18px; border-radius: 50%;
-    border: 1px solid #C9A227; color: #8A6808;
+    border: 1px solid #C9A227; color: #6e5204;
     font-size: 11px; font-weight: 800; font-style: italic; font-family: Georgia, serif;
     opacity: 0.78; transition: background-color 0.16s ease, color 0.16s ease;
 }
@@ -893,7 +987,7 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
 .pa-news-card { position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #d5e6dc; box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05); transition: transform 0.18s ease, border-color 0.18s ease; }
 .pa-news-card:hover,
 .pa-news-card:focus-within { transform: translateY(-3px); border-color: #C9A227; z-index: 35; }
-.pa-news-date { font-size: 11.5px; font-weight: 700; color: #8A6808; }
+.pa-news-date { font-size: 11.5px; font-weight: 700; color: #6e5204; }
 .pa-news-card h3 { margin: 0; font-size: 15px; line-height: 1.4; }
 .pa-news-card h3 a { color: #043927 !important; text-decoration: none !important; }
 .pa-news-card h3 a:hover { color: #056e4f !important; }
@@ -922,7 +1016,7 @@ html[data-pa-theme="dark"] .pa-aco-std { color: #cbd5e1; }
 @media (max-width: 520px) { .pa-shortcut-grid { grid-template-columns: 1fr; } }
 .pa-shortcut-item { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #d5e6dc; text-decoration: none !important; transition: border-color 0.15s ease, transform 0.15s ease; }
 .pa-shortcut-item:hover { border-color: #C9A227; transform: translateY(-2px); z-index: 30; }
-.pa-shortcut-item span { font-size: 11px; font-weight: 800; color: #8A6808; text-transform: uppercase; }
+.pa-shortcut-item span { font-size: 11px; font-weight: 800; color: #6e5204; text-transform: uppercase; }
 .pa-shortcut-item strong { font-size: 13.5px; color: #043927; }
 
 /* Hover-First Clean UX: Keterangan Muncul Elegan Hanya Saat Hover/Fokus (CLS = 0) */
@@ -1202,7 +1296,7 @@ html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 
     * { scroll-behavior: auto !important; }
 }
 @media print {
-    #pa-a11y-dock, #pa-btn-top, #pa-scroll-progress, .pa-shell-topbar, .pa-shell-navwrap, #ast-desktop-header, .pa-inner-sidebar { display: none !important; }
+    #pa-a11y-dock, #pa-btn-top, #pa-scroll-progress, .pa-emergency-bar, .pa-shell-topbar, .pa-shell-navwrap, #ast-desktop-header, .pa-inner-sidebar { display: none !important; }
 }
 
 /* Footer 4 Kolom Resmi + Statistik Pengunjung */
@@ -1288,34 +1382,110 @@ html[data-pa-contrast="high"] body,
 html[data-pa-contrast="high"] .site,
 html[data-pa-contrast="high"] .wp-site-blocks { background: #ffffff !important; color: #000000 !important; }
 html[data-pa-contrast="high"] a { color: #003d29 !important; text-decoration: underline !important; }
+html[data-pa-readable="1"] body,
+html[data-pa-readable="1"] p,
+html[data-pa-readable="1"] li,
+html[data-pa-readable="1"] td {
+    letter-spacing: 0.04em !important;
+    word-spacing: 0.12em !important;
+    line-height: 1.75 !important;
+}
+html[data-pa-links="1"] a {
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+}
+html[data-pa-grayscale="1"] { filter: grayscale(100%) !important; }
+html[data-pa-nomotion="1"] *,
+html[data-pa-nomotion="1"] *::before,
+html[data-pa-nomotion="1"] *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+}
+.pa-feeds-section, .pa-news-section, .pa-split-section, .pa-shell-footer {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 360px;
+}
 
-/* Dock Sarana Aksesibilitas & Pembaca Suara WCAG 2.2 AA */
+/* Drawer Sarana Aksesibilitas & Pembaca Suara WCAG 2.2 AA */
 #pa-a11y-dock {
     position: fixed;
     left: 14px;
     bottom: 14px;
     z-index: 99990;
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 6px;
-    border-radius: 14px;
-    background: rgba(4, 57, 39, 0.94);
-    border: 1.5px solid #C9A227;
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.25);
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: 8px;
 }
-#pa-a11y-dock button {
-    min-height: 36px;
-    padding: 5px 10px;
+#pa-a11y-toggle {
+    min-height: 44px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--pa-gold, #C9A227);
+    background: rgba(4, 57, 39, 0.96);
+    color: #ffffff;
+    font: 800 12.5px/1.2 'Inter', system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+#pa-a11y-toggle:hover,
+#pa-a11y-toggle[aria-expanded="true"] {
+    background: var(--pa-gold, #C9A227);
+    color: #022c22;
+}
+#pa-a11y-panel {
+    width: min(320px, calc(100vw - 28px));
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(4, 57, 39, 0.97);
+    border: 1.5px solid var(--pa-gold, #C9A227);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.36);
+    color: #ffffff;
+}
+#pa-a11y-panel[hidden] { display: none !important; }
+.pa-a11y-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid rgba(229, 193, 88, 0.35);
+    font-size: 12px;
+    font-weight: 800;
+    color: #E5C158;
+}
+.pa-a11y-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+#pa-a11y-panel button {
+    min-height: 38px;
+    padding: 6px 9px;
     border: 1px solid rgba(229, 193, 88, 0.35);
     border-radius: 9px;
     background: rgba(255, 255, 255, 0.08);
     color: #ffffff;
-    font: 700 12px/1.2 'Inter', system-ui, sans-serif;
+    font: 700 11.5px/1.25 'Inter', system-ui, sans-serif;
     cursor: pointer;
+    text-align: left;
 }
-#pa-a11y-dock button:hover,
-#pa-a11y-dock button[aria-pressed="true"] { background: #C9A227; color: #043927; }
+#pa-a11y-panel button:hover,
+#pa-a11y-panel button[aria-pressed="true"] {
+    background: var(--pa-gold, #C9A227);
+    color: #022c22;
+    border-color: #E5C158;
+}
+#pa-a11y-close-btn {
+    min-height: 28px !important;
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    text-align: center !important;
+}
 
 /* Command Palette Ctrl+K */
 .pa-cmdk-trigger {
@@ -1642,8 +1812,21 @@ add_action('wp_body_open', static function () {
         . $wibNow->format('j') . ' '
         . ($monsId[(int) $wibNow->format('n')] ?? $wibNow->format('F')) . ' '
         . $wibNow->format('Y') . ' · ' . $wibNow->format('H:i:s') . ' WIB';
+    $emg    = trim((string) ($cfg['emergency_notice'] ?? ''));
+    $emgUrl = trim((string) ($cfg['emergency_notice_url'] ?? ''));
     ?>
 <div id="pa-scroll-progress" aria-hidden="true"></div>
+<?php if ($emg !== '') : ?>
+<div class="pa-emergency-bar" role="alert">
+    <div class="pa-shell-inner">
+        <span>⚠ <strong>INFORMASI SERTA-MERTA:</strong> <?php echo esc_html($emg); ?>
+        <?php if ($emgUrl !== '') : ?>
+            <a href="<?php echo esc_url($emgUrl); ?>">Lihat Detail →</a>
+        <?php endif; ?>
+        </span>
+    </div>
+</div>
+<?php endif; ?>
 <div class="pa-shell-topbar">
     <div class="pa-shell-inner">
         <span id="pa-live-clock" class="pa-live-clock" title="Waktu Indonesia Barat"><?php echo esc_html($clockInit); ?></span>
@@ -1692,9 +1875,9 @@ add_action('wp_body_open', static function () {
                 <p class="pa-shell-brand-sub"><?php echo esc_html($tagline); ?></p>
             </div>
         </a>
-        <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>">
-            <input type="search" name="s" class="pa-header-search-input" placeholder="Cari informasi, berita..." value="<?php echo esc_attr(get_search_query()); ?>">
-            <button type="submit" class="pa-header-search-btn">Cari</button>
+        <form role="search" method="get" class="pa-header-search-form" action="<?php echo esc_url(home_url('/')); ?>" aria-label="Pencarian Informasi Website">
+            <input type="search" name="s" class="pa-header-search-input" aria-label="Cari informasi dan berita" placeholder="Cari informasi, berita..." value="<?php echo esc_attr(get_search_query()); ?>">
+            <button type="submit" class="pa-header-search-btn" aria-label="Cari">Cari</button>
             <button type="button" id="pa-cmdk-open" class="pa-cmdk-trigger" aria-haspopup="dialog" data-pa-tip="Pencarian Instan Lintas Dokumen &amp; Jadwal (Ctrl+K)">⌘ <kbd>Ctrl K</kbd></button>
         </form>
     </div>
@@ -1702,7 +1885,7 @@ add_action('wp_body_open', static function () {
 <?php if (!empty($topItems)) : ?>
 <nav class="pa-shell-navwrap" aria-label="Navigasi Utama Website">
     <div class="pa-shell-nav-row">
-        <button type="button" class="pa-shell-menu-btn" id="pa-shell-menu-toggle" aria-expanded="false">☰ Menu Navigasi</button>
+        <button type="button" class="pa-shell-menu-btn" id="pa-shell-menu-toggle" aria-expanded="false" aria-controls="pa-shell-menu-list">☰ Menu Navigasi</button>
         <ul class="pa-shell-menu" id="pa-shell-menu-list">
             <?php foreach ($topItems as $top) :
                 $kids = $children[(int) $top->ID] ?? array();
@@ -1725,7 +1908,7 @@ add_action('wp_body_open', static function () {
 <?php endif;
 }, 5);
 
-// 9. Footer 4 Kolom Resmi + Statistik Pengunjung + Toolbar Aksesibilitas & Pembaca Suara Web Speech
+// 9. Footer 4 Kolom Resmi + Statistik Pengunjung + Drawer Aksesibilitas WCAG 2.2 & Pembaca Suara Web Speech
 add_action('wp_footer', static function () {
     if (is_admin()) {
         return;
@@ -1773,7 +1956,7 @@ add_action('wp_footer', static function () {
                 <li><a href="https://www.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Mahkamah Agung RI</a></li>
                 <li><a href="https://badilag.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">Ditjen Badilag MA RI</a></li>
                 <li><a href="<?php echo esc_url($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer">Access CCTV Online (ACO)</a></li>
-                <li><a href="https://siwas.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">SIWAS Mahkamah Agung</a></li>
+                <li><a href="<?php echo esc_url($cfg['siwas_url'] ?? 'https://siwas.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer">SIWAS Mahkamah Agung</a></li>
             </ul>
             <div class="pa-footer-vis-box">
                 <div class="pa-footer-vis-row"><span>Hari Ini:</span><strong id="pa-vis-today"><?php echo esc_html(number_format($vStats['today'], 0, ',', '.')); ?></strong></div>
@@ -1783,38 +1966,77 @@ add_action('wp_footer', static function () {
         </div>
     </div>
     <div class="pa-shell-footer-bottom">
-        <span>&copy; <?php echo esc_html((string) date('Y')); ?> <?php echo esc_html($satker); ?> · Portal Resmi Keterbukaan Informasi Publik</span>
+        <span>&copy; <?php echo esc_html((string) wp_date('Y')); ?> <?php echo esc_html($satker); ?> · Portal Resmi Keterbukaan Informasi Publik</span>
         <span class="pa-shell-render-pill">Rendering : <?php echo esc_html(timer_stop(0, 3)); ?> detik.</span>
     </div>
 </footer>
     <?php endif; ?>
 <button type="button" id="pa-btn-top" aria-label="Kembali ke atas" data-pa-tip="Kembali ke bagian atas halaman">↑</button>
 <div id="pa-a11y-dock" role="region" aria-label="Sarana Aksesibilitas Website">
-    <button type="button" id="pa-btn-dark" aria-pressed="false" data-pa-tip="Ubah tampilan antara Mode Terang dan Mode Gelap">Mode Gelap</button>
-    <button type="button" id="pa-btn-contrast" aria-pressed="false" data-pa-tip="Aktifkan mode kontras tinggi WCAG AA">Kontras</button>
-    <button type="button" id="pa-btn-font-up" data-pa-tip="Perbesar ukuran teks halaman">A+</button>
-    <button type="button" id="pa-btn-font-down" data-pa-tip="Perkecil ukuran teks halaman">A-</button>
-    <button type="button" id="pa-btn-speak" aria-pressed="false" data-pa-tip="Bacakan isi halaman dalam Bahasa Indonesia">🔊 Bacakan</button>
-    <button type="button" id="pa-btn-font-reset" data-pa-tip="Kembalikan pengaturan tampilan standar">Reset</button>
+    <button type="button" id="pa-a11y-toggle" aria-expanded="false" aria-controls="pa-a11y-panel" data-pa-tip="Buka panel pengaturan aksesibilitas WCAG 2.2">♿ Aksesibilitas</button>
+    <div id="pa-a11y-panel" hidden>
+        <div class="pa-a11y-panel-head">
+            <span>Aksesibilitas WCAG 2.2</span>
+            <button type="button" id="pa-a11y-close-btn" aria-label="Tutup panel aksesibilitas">✕</button>
+        </div>
+        <div class="pa-a11y-grid">
+            <button type="button" id="pa-btn-dark" aria-pressed="false">🌙 Mode Gelap</button>
+            <button type="button" id="pa-btn-contrast" aria-pressed="false">◐ Kontras Tinggi</button>
+            <button type="button" id="pa-btn-font-up">A+ Perbesar</button>
+            <button type="button" id="pa-btn-font-down">A- Perkecil</button>
+            <button type="button" id="pa-btn-readable" aria-pressed="false">📖 Spasi Disleksia</button>
+            <button type="button" id="pa-btn-links" aria-pressed="false">🔗 Garis Tautan</button>
+            <button type="button" id="pa-btn-grayscale" aria-pressed="false">◑ Monokrom</button>
+            <button type="button" id="pa-btn-nomotion" aria-pressed="false">⏸ Stop Animasi</button>
+            <button type="button" id="pa-btn-speak" aria-pressed="false">🔊 Bacakan</button>
+            <button type="button" id="pa-btn-font-reset">↺ Reset</button>
+        </div>
+    </div>
 </div>
 <dialog id="pa-cmdk-dialog" aria-labelledby="pa-cmdk-label">
     <div class="pa-cmdk-head">
         <span id="pa-cmdk-label" style="font-weight:800;color:#E5C158;font-size:13px;">PENCARIAN INSTAN</span>
-        <input type="search" id="pa-cmdk-input" placeholder="Ketik kata kunci: LRA, jadwal sidang, DIPA, disabilitas..." autocomplete="off">
+        <input type="search" id="pa-cmdk-input" aria-label="Ketik kata kunci pencarian instan" placeholder="Ketik kata kunci: LRA, jadwal sidang, DIPA, disabilitas..." autocomplete="off">
         <button type="button" id="pa-cmdk-close" aria-label="Tutup pencarian">ESC</button>
     </div>
     <div class="pa-cmdk-results" id="pa-cmdk-results" role="region" aria-live="polite">
         <div class="pa-cmdk-empty">Ketik minimal 2 karakter atau jelajahi pintasan: DIPA, LRA, Jadwal Sidang, e-Court, Disabilitas.</div>
     </div>
 </dialog>
+<?php if (!function_exists('wp_print_speculation_rules') && !pa_sinova_is_adoption_mode()) : ?>
+<script type="speculationrules">
+<?php echo wp_json_encode(array(
+    'prefetch' => array(
+        array(
+            'where' => array(
+                'and' => array(
+                    array('href_matches' => '/*'),
+                    array('not' => array('href_matches' => '/wp-admin/*')),
+                    array('not' => array('href_matches' => '/wp-login.php*')),
+                    array('not' => array('selector_matches' => '[download], [target="_blank"]')),
+                ),
+            ),
+            'eagerness' => 'moderate',
+        ),
+    ),
+), JSON_UNESCAPED_SLASHES); ?>
+</script>
+<?php endif; ?>
 <script id="pa-a11y-js">
 (function(){
     var root = document.documentElement;
+    var a11yToggle = document.getElementById('pa-a11y-toggle');
+    var a11yPanel = document.getElementById('pa-a11y-panel');
+    var a11yClose = document.getElementById('pa-a11y-close-btn');
     var btnDark = document.getElementById('pa-btn-dark');
     var btnTopTheme = document.getElementById('pa-topbar-theme-btn');
     var btnContrast = document.getElementById('pa-btn-contrast');
     var btnUp = document.getElementById('pa-btn-font-up');
     var btnDown = document.getElementById('pa-btn-font-down');
+    var btnReadable = document.getElementById('pa-btn-readable');
+    var btnLinks = document.getElementById('pa-btn-links');
+    var btnGray = document.getElementById('pa-btn-grayscale');
+    var btnNoMotion = document.getElementById('pa-btn-nomotion');
     var btnSpeak = document.getElementById('pa-btn-speak');
     var btnReset = document.getElementById('pa-btn-font-reset');
     var btnTop = document.getElementById('pa-btn-top');
@@ -1825,23 +2047,47 @@ add_action('wp_footer', static function () {
     var menuList = document.getElementById('pa-shell-menu-list');
     var clockEl = document.getElementById('pa-live-clock');
 
+    function setA11yOpen(open){
+        if(!a11yPanel || !a11yToggle) return;
+        a11yToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if(open) a11yPanel.removeAttribute('hidden');
+        else a11yPanel.setAttribute('hidden', 'hidden');
+    }
+    if(a11yToggle && a11yPanel){
+        a11yToggle.addEventListener('click', function(){
+            setA11yOpen(a11yPanel.hasAttribute('hidden'));
+        });
+    }
+    if(a11yClose){
+        a11yClose.addEventListener('click', function(){
+            setA11yOpen(false);
+            if(a11yToggle) a11yToggle.focus();
+        });
+    }
+
     if(clockEl){
         var hari = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
         var bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
         var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
+        var lastPtspOpen = null;
         var tickClock = function(){
+            if(document.hidden) return;
             var d = new Date(Date.now() + 7 * 3600000);
             clockEl.textContent = hari[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + bulan[d.getUTCMonth()] + ' ' + d.getUTCFullYear() + ' · ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + ' WIB';
             if(ptspPill){
                 var dow = d.getUTCDay(), mins = d.getUTCHours() * 60 + d.getUTCMinutes();
                 var open = (dow >= 1 && dow <= 4 && mins >= 480 && mins <= 990) || (dow === 5 && mins >= 480 && mins <= 1020);
-                ptspPill.classList.toggle('is-open', open);
-                ptspPill.classList.toggle('is-closed', !open);
-                ptspPill.textContent = open ? '● PTSP Buka' : '● PTSP Tutup';
+                if(open !== lastPtspOpen){
+                    lastPtspOpen = open;
+                    ptspPill.classList.toggle('is-open', open);
+                    ptspPill.classList.toggle('is-closed', !open);
+                    ptspPill.textContent = open ? '● PTSP Buka' : '● PTSP Tutup';
+                }
             }
         };
         tickClock();
         setInterval(tickClock, 1000);
+        document.addEventListener('visibilitychange', function(){ if(!document.hidden) tickClock(); });
     }
 
     var menuTips = {
@@ -1862,14 +2108,24 @@ add_action('wp_footer', static function () {
     var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var rafLock = false;
     var heroHeight = heroEl ? Math.max(360, heroEl.offsetHeight + 180) : 0;
+    var docH = 1;
+    function updateDocHeight(){
+        docH = Math.max(1, root.scrollHeight - window.innerHeight);
+    }
+    updateDocHeight();
+    window.addEventListener('resize', updateDocHeight, { passive: true });
+    window.addEventListener('load', updateDocHeight, { passive: true });
+    if('ResizeObserver' in window && document.body){
+        try{ new ResizeObserver(updateDocHeight).observe(document.body); }catch(e){}
+    }
+
     function applyScrollEffects(){
         rafLock = false;
         var y = window.scrollY || window.pageYOffset || 0;
-        var docH = Math.max(1, root.scrollHeight - window.innerHeight);
         if(scrollBar) scrollBar.style.transform = 'scaleX(' + Math.min(1, Math.max(0, y / docH)).toFixed(4) + ')';
         root.classList.toggle('pa-is-scrolled', y > 50);
         if(btnTop) btnTop.classList.toggle('is-visible', y > 360);
-        if(heroEl && !reduceMotion && y <= heroHeight){
+        if(heroEl && !reduceMotion && root.getAttribute('data-pa-nomotion') !== '1' && y <= heroHeight){
             heroEl.style.setProperty('--pa-py', (y * 0.22).toFixed(1) + 'px');
             heroEl.style.setProperty('--pa-py-rev', (-y * 0.14).toFixed(1) + 'px');
             heroEl.style.setProperty('--pa-py-fg', (y * 0.06).toFixed(1) + 'px');
@@ -1884,12 +2140,13 @@ add_action('wp_footer', static function () {
     applyScrollEffects();
     if(btnTop){
         btnTop.addEventListener('click', function(){
-            window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+            window.scrollTo({ top: 0, behavior: (reduceMotion || root.getAttribute('data-pa-nomotion') === '1') ? 'auto' : 'smooth' });
         });
     }
 
-    if(window.fetch){
-        fetch('<?php echo esc_url(rest_url('pa-portal/v1/visit')); ?>', { method: 'POST', credentials: 'same-origin' })
+    function pingVisit(){
+        if(!window.fetch) return;
+        fetch(<?php echo wp_json_encode(rest_url('pa-portal/v1/visit')); ?>, { method: 'POST', credentials: 'same-origin' })
             .then(function(r){ return r.ok ? r.json() : null; })
             .then(function(d){
                 if(!d || typeof d.total === 'undefined') return;
@@ -1901,6 +2158,11 @@ add_action('wp_footer', static function () {
                     if(p) p.textContent = fmt(d[k]);
                 });
             }).catch(function(){});
+    }
+    if('requestIdleCallback' in window){
+        window.requestIdleCallback(pingVisit, { timeout: 2500 });
+    } else {
+        setTimeout(pingVisit, 1200);
     }
 
     if(menuToggle && menuList){
@@ -1914,8 +2176,14 @@ add_action('wp_footer', static function () {
         panel.querySelectorAll('.survey-dot').forEach(function(btn){
             btn.addEventListener('click', function(){
                 var idx = btn.getAttribute('data-target');
-                panel.querySelectorAll('.survey-dot').forEach(function(b){ b.classList.toggle('is-active', b === btn); });
-                panel.querySelectorAll('.survey-slide').forEach(function(s){ s.classList.toggle('is-active', s.getAttribute('data-slide') === idx); });
+                panel.querySelectorAll('.survey-dot').forEach(function(b){
+                    var on = b === btn;
+                    b.classList.toggle('is-active', on);
+                    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                panel.querySelectorAll('.survey-slide').forEach(function(s){
+                    s.classList.toggle('is-active', s.getAttribute('data-slide') === idx);
+                });
             });
         });
     });
@@ -1923,15 +2191,28 @@ add_action('wp_footer', static function () {
     function syncState(){
         var dark = root.getAttribute('data-pa-theme') === 'dark';
         var hi = root.getAttribute('data-pa-contrast') === 'high';
-        if(btnDark){ btnDark.setAttribute('aria-pressed', dark ? 'true' : 'false'); btnDark.textContent = dark ? 'Mode Terang' : 'Mode Gelap'; }
+        if(btnDark){ btnDark.setAttribute('aria-pressed', dark ? 'true' : 'false'); btnDark.textContent = dark ? '☀️ Mode Terang' : '🌙 Mode Gelap'; }
         if(btnTopTheme){ btnTopTheme.setAttribute('aria-pressed', dark ? 'true' : 'false'); btnTopTheme.textContent = dark ? '☀️ Mode Terang' : '🌙 Mode Gelap'; }
         if(btnContrast){ btnContrast.setAttribute('aria-pressed', hi ? 'true' : 'false'); }
+        if(btnReadable){ btnReadable.setAttribute('aria-pressed', root.getAttribute('data-pa-readable') === '1' ? 'true' : 'false'); }
+        if(btnLinks){ btnLinks.setAttribute('aria-pressed', root.getAttribute('data-pa-links') === '1' ? 'true' : 'false'); }
+        if(btnGray){ btnGray.setAttribute('aria-pressed', root.getAttribute('data-pa-grayscale') === '1' ? 'true' : 'false'); }
+        if(btnNoMotion){ btnNoMotion.setAttribute('aria-pressed', root.getAttribute('data-pa-nomotion') === '1' ? 'true' : 'false'); }
     }
     function toggleDarkMode(){
         var next = root.getAttribute('data-pa-theme') === 'dark' ? '' : 'dark';
         if(next) root.setAttribute('data-pa-theme', next); else root.removeAttribute('data-pa-theme');
         try{ localStorage.setItem('pa_starter_theme', next); }catch(e){}
         syncState();
+    }
+    function bindFlagToggle(btn, attr, storeKey){
+        if(!btn) return;
+        btn.addEventListener('click', function(){
+            var next = root.getAttribute(attr) === '1' ? '' : '1';
+            if(next) root.setAttribute(attr, '1'); else root.removeAttribute(attr);
+            try{ localStorage.setItem(storeKey, next); }catch(e){}
+            syncState();
+        });
     }
     if(btnDark){ btnDark.addEventListener('click', toggleDarkMode); }
     if(btnTopTheme){ btnTopTheme.addEventListener('click', toggleDarkMode); }
@@ -1943,12 +2224,18 @@ add_action('wp_footer', static function () {
             syncState();
         });
     }
+    bindFlagToggle(btnReadable, 'data-pa-readable', 'pa_starter_readable');
+    bindFlagToggle(btnLinks, 'data-pa-links', 'pa_starter_links');
+    bindFlagToggle(btnGray, 'data-pa-grayscale', 'pa_starter_grayscale');
+    bindFlagToggle(btnNoMotion, 'data-pa-nomotion', 'pa_starter_nomotion');
+
     if(btnUp){
         btnUp.addEventListener('click', function(){
             var cur = parseFloat(getComputedStyle(root).fontSize) || 16;
             var nxt = Math.min(22, cur + 2) + 'px';
             root.style.fontSize = nxt;
             try{ localStorage.setItem('pa_starter_zoom', nxt); }catch(e){}
+            updateDocHeight();
         });
     }
     if(btnDown){
@@ -1957,6 +2244,7 @@ add_action('wp_footer', static function () {
             var nxt = Math.max(12, cur - 2) + 'px';
             root.style.fontSize = nxt;
             try{ localStorage.setItem('pa_starter_zoom', nxt); }catch(e){}
+            updateDocHeight();
         });
     }
     if(btnSpeak && 'speechSynthesis' in window){
@@ -1967,8 +2255,10 @@ add_action('wp_footer', static function () {
                 btnSpeak.textContent = '🔊 Bacakan';
                 return;
             }
+            var selText = window.getSelection ? String(window.getSelection()).trim() : '';
             var mainEl = document.querySelector('main, .entry-content, .pa-starter-showcase');
-            var txt = mainEl ? (mainEl.innerText || mainEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 1800) : document.title;
+            var raw = selText || (mainEl ? (mainEl.innerText || mainEl.textContent || '') : document.title);
+            var txt = raw.replace(/\s+/g, ' ').trim().slice(0, 1800);
             if(!txt) return;
             var utter = new SpeechSynthesisUtterance(txt);
             utter.lang = 'id-ID';
@@ -1982,27 +2272,53 @@ add_action('wp_footer', static function () {
     if(btnReset){
         btnReset.addEventListener('click', function(){
             root.style.fontSize = '';
-            root.removeAttribute('data-pa-theme');
-            root.removeAttribute('data-pa-contrast');
+            ['data-pa-theme','data-pa-contrast','data-pa-readable','data-pa-links','data-pa-grayscale','data-pa-nomotion'].forEach(function(a){ root.removeAttribute(a); });
             if('speechSynthesis' in window) window.speechSynthesis.cancel();
             if(btnSpeak){ btnSpeak.setAttribute('aria-pressed', 'false'); btnSpeak.textContent = '🔊 Bacakan'; }
-            try{ localStorage.removeItem('pa_starter_zoom'); localStorage.removeItem('pa_starter_theme'); localStorage.removeItem('pa_starter_contrast'); }catch(e){}
+            try{
+                ['pa_starter_zoom','pa_starter_theme','pa_starter_contrast','pa_starter_readable','pa_starter_links','pa_starter_grayscale','pa_starter_nomotion'].forEach(function(k){ localStorage.removeItem(k); });
+            }catch(e){}
             syncState();
+            updateDocHeight();
         });
     }
     syncState();
 
-    // Filter Tab Pegawai & Tabel Data Operasional
+    // Filter Tab Pegawai (ARIA + Keyboard) & Tabel Data Operasional
     var pegBoard = document.getElementById('pa-pegawai-board');
     if(pegBoard){
-        pegBoard.querySelectorAll('.pa-ops-tab').forEach(function(tab){
-            tab.addEventListener('click', function(){
-                var f = (tab.getAttribute('data-pegawai-filter') || 'Semua').toLowerCase();
-                pegBoard.querySelectorAll('.pa-ops-tab').forEach(function(t){ t.classList.toggle('is-active', t === tab); });
-                pegBoard.querySelectorAll('.pa-pegawai-card').forEach(function(c){
-                    var g = (c.getAttribute('data-group') || '').toLowerCase();
-                    c.classList.toggle('is-hidden', f !== 'semua' && g.indexOf(f) === -1);
-                });
+        var pegTabs = Array.prototype.slice.call(pegBoard.querySelectorAll('.pa-ops-tab'));
+        var pegStatus = document.getElementById('pa-pegawai-status');
+        function activatePegTab(tab){
+            var f = (tab.getAttribute('data-pegawai-filter') || 'Semua').toLowerCase();
+            pegTabs.forEach(function(t){
+                var on = t === tab;
+                t.classList.toggle('is-active', on);
+                t.setAttribute('aria-selected', on ? 'true' : 'false');
+                t.setAttribute('tabindex', on ? '0' : '-1');
+            });
+            var shown = 0;
+            pegBoard.querySelectorAll('.pa-pegawai-card').forEach(function(c){
+                var g = (c.getAttribute('data-group') || '').toLowerCase();
+                var hide = f !== 'semua' && g.indexOf(f) === -1;
+                c.classList.toggle('is-hidden', hide);
+                if(!hide) shown++;
+            });
+            if(pegStatus){ pegStatus.textContent = 'Menampilkan ' + shown + ' data kelompok ' + (tab.textContent || ''); }
+        }
+        pegTabs.forEach(function(tab, idx){
+            tab.addEventListener('click', function(){ activatePegTab(tab); });
+            tab.addEventListener('keydown', function(e){
+                var next = -1;
+                if(e.key === 'ArrowRight') next = (idx + 1) % pegTabs.length;
+                else if(e.key === 'ArrowLeft') next = (idx - 1 + pegTabs.length) % pegTabs.length;
+                else if(e.key === 'Home') next = 0;
+                else if(e.key === 'End') next = pegTabs.length - 1;
+                if(next !== -1){
+                    e.preventDefault();
+                    activatePegTab(pegTabs[next]);
+                    pegTabs[next].focus();
+                }
             });
         });
     }
@@ -2017,7 +2333,12 @@ add_action('wp_footer', static function () {
         });
     });
 
-    // Hydrate Official RSS Feeds jika cache awal masih kosong
+    function safeHref(u){
+        var s = String(u || '').trim();
+        return /^(\/(?!\/)|https?:\/\/)/i.test(s) ? s : '#';
+    }
+
+    // Hydrate Official RSS Feeds via DOM API (Trusted Types Safe)
     var feedSec = document.querySelector('.pa-feeds-section[data-pa-feeds-hydrate="1"]');
     if(feedSec && window.fetch){
         var fLimit = parseInt(feedSec.getAttribute('data-pa-feeds-limit') || '5', 10) || 5;
@@ -2028,18 +2349,46 @@ add_action('wp_footer', static function () {
                 function paintList(elId, arr){
                     var ul = document.getElementById(elId);
                     if(!ul || !Array.isArray(arr) || !arr.length) return;
-                    ul.innerHTML = arr.slice(0, fLimit).map(function(it){
-                        var dt = it.date_label ? '<span class="pa-feed-date">' + escHtml(it.date_label) + '</span>' : '';
-                        var ex = it.excerpt ? '<span class="pa-feed-excerpt">' + escHtml(it.excerpt) + '</span>' : '';
-                        return '<li class="pa-feed-item"><a href="' + escHtml(it.link) + '" target="_blank" rel="noopener noreferrer">' + dt + '<strong class="pa-feed-title">' + escHtml(it.title) + '</strong><span class="pa-feed-ext" aria-hidden="true">↗</span></a>' + ex + '</li>';
-                    }).join('');
+                    var frag = document.createDocumentFragment();
+                    arr.slice(0, fLimit).forEach(function(it){
+                        var li = document.createElement('li');
+                        li.className = 'pa-feed-item';
+                        var a = document.createElement('a');
+                        a.setAttribute('href', safeHref(it.link));
+                        a.setAttribute('target', '_blank');
+                        a.setAttribute('rel', 'noopener noreferrer');
+                        if(it.date_label){
+                            var dt = document.createElement('span');
+                            dt.className = 'pa-feed-date';
+                            dt.textContent = it.date_label;
+                            a.appendChild(dt);
+                        }
+                        var ttl = document.createElement('strong');
+                        ttl.className = 'pa-feed-title';
+                        ttl.textContent = it.title || '';
+                        a.appendChild(ttl);
+                        var ext = document.createElement('span');
+                        ext.className = 'pa-feed-ext';
+                        ext.setAttribute('aria-hidden', 'true');
+                        ext.textContent = '↗';
+                        a.appendChild(ext);
+                        li.appendChild(a);
+                        if(it.excerpt){
+                            var ex = document.createElement('span');
+                            ex.className = 'pa-feed-excerpt';
+                            ex.textContent = it.excerpt;
+                            li.appendChild(ex);
+                        }
+                        frag.appendChild(li);
+                    });
+                    ul.replaceChildren(frag);
                 }
                 paintList('pa-feed-list-ma', d.ma);
                 paintList('pa-feed-list-badilag', d.badilag);
             }).catch(function(){});
     }
 
-    // Command Palette Ctrl+K
+    // Command Palette Ctrl+K (Trusted Types Safe)
     var cmdDlg = document.getElementById('pa-cmdk-dialog');
     var cmdInput = document.getElementById('pa-cmdk-input');
     var cmdRes = document.getElementById('pa-cmdk-results');
@@ -2047,19 +2396,40 @@ add_action('wp_footer', static function () {
     var cmdTimer = null;
     var quickUrl = <?php echo wp_json_encode(rest_url('pa-portal/v1/quick-search')); ?>;
 
-    function escHtml(s){
-        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
     function renderCmdItems(list){
         if(!cmdRes) return;
         if(!list || !list.length){
-            cmdRes.innerHTML = '<div class="pa-cmdk-empty">Tidak ditemukan hasil yang cocok. Coba kata kunci lain atau tekan Enter pada pencarian utama.</div>';
+            var empty = document.createElement('div');
+            empty.className = 'pa-cmdk-empty';
+            empty.textContent = 'Tidak ditemukan hasil yang cocok. Coba kata kunci lain atau tekan Enter pada pencarian utama.';
+            cmdRes.replaceChildren(empty);
             return;
         }
-        cmdRes.innerHTML = list.map(function(it){
-            var extAttr = (it.type === 'doc' && /^https?:\/\//i.test(it.url || '')) ? ' target="_blank" rel="noopener noreferrer"' : '';
-            return '<a class="pa-cmdk-item" href="' + escHtml(it.url) + '"' + extAttr + '><div><strong>' + escHtml(it.title) + '</strong><small>' + escHtml(it.desc || '') + '</small></div><span class="pa-cmdk-badge">' + escHtml(it.badge || it.type || 'Halaman') + '</span></a>';
-        }).join('');
+        var frag = document.createDocumentFragment();
+        list.forEach(function(it){
+            var a = document.createElement('a');
+            a.className = 'pa-cmdk-item';
+            var href = safeHref(it.url);
+            a.setAttribute('href', href);
+            if(it.type === 'doc' && /^https?:\/\//i.test(href)){
+                a.setAttribute('target', '_blank');
+                a.setAttribute('rel', 'noopener noreferrer');
+            }
+            var box = document.createElement('div');
+            var strong = document.createElement('strong');
+            strong.textContent = it.title || '';
+            var small = document.createElement('small');
+            small.textContent = it.desc || '';
+            box.appendChild(strong);
+            box.appendChild(small);
+            var badge = document.createElement('span');
+            badge.className = 'pa-cmdk-badge';
+            badge.textContent = it.badge || it.type || 'Halaman';
+            a.appendChild(box);
+            a.appendChild(badge);
+            frag.appendChild(a);
+        });
+        cmdRes.replaceChildren(frag);
     }
     function fetchCmd(q){
         if(!window.fetch) return;
@@ -2091,6 +2461,9 @@ add_action('wp_footer', static function () {
         if((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')){
             e.preventDefault();
             if(cmdDlg && cmdDlg.open) cmdDlg.close(); else openCmd();
+        } else if(e.key === 'Escape' && a11yPanel && !a11yPanel.hasAttribute('hidden')){
+            setA11yOpen(false);
+            if(a11yToggle) a11yToggle.focus();
         }
     });
 })();

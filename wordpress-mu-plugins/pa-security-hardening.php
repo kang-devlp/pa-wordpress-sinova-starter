@@ -67,21 +67,146 @@ add_filter('wp_headers', static function ($headers) {
         $headers = array();
     }
     unset($headers['X-Pingback'], $headers['x-pingback'], $headers['X-Powered-By']);
-    $headers['X-Content-Type-Options'] = 'nosniff';
-    $headers['X-Frame-Options']        = 'SAMEORIGIN';
-    $headers['Referrer-Policy']        = 'strict-origin-when-cross-origin';
-    $headers['Permissions-Policy']     = 'camera=(), microphone=(), geolocation=(), payment=()';
-    if (function_exists('is_ssl') && is_ssl()) {
-        $headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
+    $scriptBase = strtolower(basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
+    $isAdminOrLogin = (function_exists('is_admin') && is_admin())
+        || (defined('PA_SERVING_CUSTOM_LOGIN') && PA_SERVING_CUSTOM_LOGIN)
+        || $scriptBase === 'wp-login.php'
+        || (function_exists('is_customize_preview') && is_customize_preview());
+    if (function_exists('pa_starter_security_headers_map')) {
+        $nonce = (!$isAdminOrLogin && function_exists('pa_starter_csp_nonce')) ? pa_starter_csp_nonce() : null;
+        foreach (pa_starter_security_headers_map(!$isAdminOrLogin, $nonce) as $k => $v) {
+            $headers[$k] = $v;
+        }
     }
     return $headers;
 });
 
+function pa_starter_rate_limit(string $bucket, int $maxHits, int $windowSec): bool {
+    if (PHP_SAPI === 'cli' || !function_exists('get_transient')) {
+        return true;
+    }
+    $key  = 'pa_rl_' . sanitize_key($bucket) . '_' . pa_starter_client_ip_hash();
+    $now  = time();
+    $data = get_transient($key);
+    if (!is_array($data) || empty($data['e']) || (int) $data['e'] <= $now) {
+        $data = array('c' => 1, 'e' => $now + max(10, $windowSec));
+        set_transient($key, $data, max(10, $windowSec));
+        return true;
+    }
+    if ((int) ($data['c'] ?? 0) >= $maxHits) {
+        return false;
+    }
+    $data['c'] = (int) $data['c'] + 1;
+    set_transient($key, $data, max(1, (int) $data['e'] - $now));
+    return true;
+}
+
+add_filter('comments_open', '__return_false', 20, 2);
+add_filter('pings_open', '__return_false', 20, 2);
+add_filter('feed_links_show_comments_feed', '__return_false');
+
+add_filter('robots_txt', static function ($output, $public) {
+    if ((string) $public === '0') {
+        return $output;
+    }
+    $out = (string) $output;
+    if (stripos($out, 'Disallow: /?s=') === false) {
+        $out .= "\nDisallow: /?s=\nDisallow: /search/\n";
+    }
+    if (stripos($out, 'Sitemap:') === false) {
+        $out .= "\nSitemap: " . esc_url_raw(home_url('/wp-sitemap.xml')) . "\n";
+    }
+    return $out;
+}, 20, 2);
+
+add_action('wp_loaded', static function () {
+    if (PHP_SAPI === 'cli' || (defined('DOING_CRON') && DOING_CRON)) {
+        return;
+    }
+    $reqUri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+    $path   = strtolower(trim((string) parse_url($reqUri, PHP_URL_PATH), '/'));
+    $base   = trim((string) parse_url((string) get_option('home', '/'), PHP_URL_PATH), '/');
+    if ($base !== '' && stripos($path, $base) === 0) {
+        $path = trim(substr($path, strlen($base)), '/');
+    }
+
+    if ($path === '.well-known/security.txt' || $path === 'security.txt') {
+        if (!headers_sent()) {
+            status_header(200);
+            if (function_exists('pa_starter_emit_security_headers')) {
+                pa_starter_emit_security_headers(false);
+            }
+            header('Content-Type: text/plain; charset=UTF-8');
+            header('Cache-Control: public, max-age=86400');
+        }
+        $cfg   = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+        $email = sanitize_email((string) ($cfg['email'] ?? '')) ?: 'admin@pengadilan.go.id';
+        echo "# Kebijakan Pengungkapan Kerentanan Keamanan (RFC 9116)\n";
+        echo "Contact: mailto:{$email}\n";
+        echo 'Expires: ' . gmdate('Y-m-d\TH:i:s\Z', time() + 180 * 86400) . "\n";
+        echo "Preferred-Languages: id, en\n";
+        echo 'Canonical: ' . esc_url_raw(home_url('/.well-known/security.txt')) . "\n";
+        echo 'Policy: ' . esc_url_raw(home_url('/informasi-serta-merta/')) . "\n";
+        exit;
+    }
+
+    if ($path === 'manifest.webmanifest') {
+        if (!headers_sent()) {
+            status_header(200);
+            if (function_exists('pa_starter_emit_security_headers')) {
+                pa_starter_emit_security_headers(false);
+            }
+            header('Content-Type: application/manifest+json; charset=UTF-8');
+            header('Cache-Control: public, max-age=86400');
+        }
+        $satker = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'Pengadilan Agama');
+        echo wp_json_encode(array(
+            'name'             => $satker,
+            'short_name'       => mb_substr($satker, 0, 28, 'UTF-8'),
+            'description'      => 'Portal Resmi Keterbukaan Informasi & Layanan Peradilan',
+            'lang'             => 'id-ID',
+            'start_url'        => trailingslashit(home_url('/')),
+            'scope'            => trailingslashit(home_url('/')),
+            'display'          => 'browser',
+            'theme_color'      => '#043927',
+            'background_color' => '#f4faf7',
+            'icons'            => array(
+                array(
+                    'src'     => home_url('/favicon.svg'),
+                    'sizes'   => 'any',
+                    'type'    => 'image/svg+xml',
+                    'purpose' => 'any maskable',
+                ),
+            ),
+        ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    if ($path === 'favicon.svg') {
+        if (!headers_sent()) {
+            status_header(200);
+            if (function_exists('pa_starter_emit_security_headers')) {
+                pa_starter_emit_security_headers(false);
+            }
+            header('Content-Type: image/svg+xml; charset=UTF-8');
+            header('Cache-Control: public, max-age=604800');
+        }
+        echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#043927"/><path d="M32 8L52 15V31C52 44 43.2 53.2 32 57C20.8 53.2 12 44 12 31V15L32 8Z" fill="#056e4f" stroke="#E5C158" stroke-width="3"/><path d="M32 18V43M21 25H43M21 25L17 34H25L21 25ZM43 25L39 34H47L43 25ZM26 43H38" stroke="#E5C158" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>';
+        exit;
+    }
+}, 0);
+
 add_filter('rest_pre_dispatch', static function ($result, $server, $request) {
     if (!is_user_logged_in() && $request instanceof WP_REST_Request) {
         $route = (string) $request->get_route();
-        if ($route === '/wp/v2/users' || strpos($route, '/wp/v2/users/') === 0) {
-            return new WP_Error('rest_cannot_list_users', 'Akses daftar pengguna dibatasi.', array('status' => 403));
+        if (
+            $route === '/wp/v2/users'
+            || strpos($route, '/wp/v2/users/') === 0
+            || $route === '/wp/v2/comments'
+            || strpos($route, '/wp/v2/comments/') === 0
+            || strpos($route, '/oembed/1.0/proxy') === 0
+        ) {
+            return new WP_Error('rest_cannot_list_users', 'Akses endpoint dibatasi kebijakan keamanan.', array('status' => 403));
         }
     }
     return $result;
@@ -353,11 +478,15 @@ function pa_starter_send_stealth_404(): void {
         if (function_exists('nocache_headers')) {
             nocache_headers();
         }
+        if (function_exists('pa_starter_emit_security_headers')) {
+            pa_starter_emit_security_headers(false);
+        }
         if (function_exists('status_header')) {
             status_header(404);
         } else {
             header('HTTP/1.1 404 Not Found', true, 404);
         }
+        header('X-Robots-Tag: noindex, nofollow');
         header('Content-Type: text/html; charset=UTF-8');
     }
     echo '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>404 Tidak Ditemukan</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e293b;display:flex;align-items:center;justify-content:center;min-height:90vh;margin:0}main{max-width:460px;padding:28px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;text-align:center}h1{margin:0 0 8px;font-size:22px;color:#043927}p{margin:0;color:#475569;font-size:14px}</style></head><body><main><h1>404 Halaman Tidak Ditemukan</h1><p>Tautan yang Anda tuju tidak tersedia pada portal ini.</p></main></body></html>';
@@ -509,7 +638,11 @@ function pa_starter_clear_mfa_cookie(): void {
 function pa_starter_render_mfa_screen(string $errorMsg = '', string $loginBackUrl = ''): void {
     if (!headers_sent()) {
         nocache_headers();
+        if (function_exists('pa_starter_emit_security_headers')) {
+            pa_starter_emit_security_headers(false);
+        }
         status_header(200);
+        header('X-Robots-Tag: noindex, nofollow');
         header('Content-Type: text/html; charset=UTF-8');
     }
     $back = $loginBackUrl ?: wp_login_url();
@@ -651,8 +784,8 @@ function pa_starter_check_password_policy(string $pass): ?string {
     if (strlen($pass) < 10) {
         return 'Password operator wajib minimal 10 karakter.';
     }
-    if (!preg_match('/[a-z]/', $pass) || !preg_match('/[A-Z]/', $pass) || !preg_match('/\d/', $pass)) {
-        return 'Password operator harus memuat kombinasi huruf kecil, huruf besar, dan angka.';
+    if (!preg_match('/[a-z]/', $pass) || !preg_match('/[A-Z]/', $pass) || !preg_match('/\d/', $pass) || !preg_match('/[^a-zA-Z0-9]/', $pass)) {
+        return 'Password operator harus memuat kombinasi huruf kecil, huruf besar, angka, dan simbol.';
     }
     return null;
 }

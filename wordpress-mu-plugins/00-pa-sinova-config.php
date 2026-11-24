@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
- * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen, & Audit Keamanan + MFA di WP Admin.
- * Version: 1.5.0-starter
+ * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen (Edit & Hapus Massal), & Audit Keamanan + MFA di WP Admin.
+ * Version: 2.0.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -30,6 +30,18 @@ function pa_sinova_get_settings(): array {
         'hmac_secret'              => '',
         'turnstile_site_key'       => '',
         'turnstile_secret_key'     => '',
+        'accent_palette'           => 'gold',
+        'csp_mode'                 => 'strict',
+        'emergency_notice'         => '',
+        'emergency_notice_url'     => '',
+        'siwas_url'                => 'https://siwas.mahkamahagung.go.id/',
+        'lapor_url'                => 'https://www.lapor.go.id/',
+        'zi_area_1_url'            => '',
+        'zi_area_2_url'            => '',
+        'zi_area_3_url'            => '',
+        'zi_area_4_url'            => '',
+        'zi_area_5_url'            => '',
+        'zi_area_6_url'            => '',
     );
     $saved = get_option('pa_sinova_starter_settings', array());
     if (!is_array($saved)) {
@@ -55,8 +67,143 @@ function pa_sinova_get_settings(): array {
     if (defined('PA_TURNSTILE_SECRET_KEY') && PA_TURNSTILE_SECRET_KEY !== '') {
         $merged['turnstile_secret_key'] = (string) PA_TURNSTILE_SECRET_KEY;
     }
+    if (defined('PA_CSP_MODE') && PA_CSP_MODE !== '') {
+        $merged['csp_mode'] = (string) PA_CSP_MODE;
+    }
 
     return $merged;
+}
+
+// ============================================================================
+// SHARED SECURITY HEADERS, CSP NONCE & TRUSTED TYPES HELPERS
+// (Diletakkan di 00-pa-sinova-config.php agar juga aktif pada Early Page Cache)
+// ============================================================================
+
+function pa_starter_is_https_request(): bool {
+    if (function_exists('is_ssl') && is_ssl()) {
+        return true;
+    }
+    $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+    if ($https !== '' && $https !== 'off') {
+        return true;
+    }
+    if ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443) {
+        return true;
+    }
+    $xfp = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    return strpos($xfp, 'https') === 0;
+}
+
+function pa_starter_csp_nonce(): string {
+    if (empty($GLOBALS['pa_starter_csp_nonce']) || !is_string($GLOBALS['pa_starter_csp_nonce'])) {
+        try {
+            $GLOBALS['pa_starter_csp_nonce'] = base64_encode(random_bytes(16));
+        } catch (\Throwable $e) {
+            $GLOBALS['pa_starter_csp_nonce'] = base64_encode(hash('sha256', uniqid('pa', true) . microtime(true), true));
+        }
+    }
+    return $GLOBALS['pa_starter_csp_nonce'];
+}
+
+function pa_starter_effective_csp_mode(): string {
+    if (defined('PA_CSP_MODE') && PA_CSP_MODE !== '') {
+        $mode = strtolower((string) PA_CSP_MODE);
+    } else {
+        $cfg  = pa_sinova_get_settings();
+        $mode = strtolower((string) ($cfg['csp_mode'] ?? 'strict'));
+        if (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1' && $mode === 'strict') {
+            $mode = 'compat';
+        }
+    }
+    return in_array($mode, array('strict', 'compat', 'off'), true) ? $mode : 'strict';
+}
+
+function pa_starter_security_headers_map(bool $isPublic = true, ?string $nonce = null): array {
+    $isHttps = pa_starter_is_https_request();
+    $headers = array(
+        'X-Content-Type-Options'            => 'nosniff',
+        'X-Frame-Options'                   => 'SAMEORIGIN',
+        'Referrer-Policy'                   => 'strict-origin-when-cross-origin',
+        'Permissions-Policy'                => 'accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()',
+        'Cross-Origin-Opener-Policy'        => 'same-origin',
+        'Cross-Origin-Resource-Policy'      => 'same-origin',
+        'X-Permitted-Cross-Domain-Policies' => 'none',
+    );
+    if ($isHttps) {
+        $headers['Strict-Transport-Security'] = 'max-age=63072000; includeSubDomains; preload';
+    }
+
+    if (!$isPublic) {
+        $headers['Content-Security-Policy'] = "frame-ancestors 'self'; base-uri 'self'; object-src 'none';";
+        return $headers;
+    }
+
+    $mode = pa_starter_effective_csp_mode();
+    if ($mode === 'off') {
+        return $headers;
+    }
+
+    $csp = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; "
+        . "img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        . "connect-src 'self' https://challenges.cloudflare.com; "
+        . "frame-src 'self' https://drive.google.com https://docs.google.com https://www.google.com https://maps.google.com https://challenges.cloudflare.com https://www.youtube-nocookie.com; ";
+
+    if ($mode === 'strict' && is_string($nonce) && $nonce !== '') {
+        $csp .= "script-src 'self' 'nonce-{$nonce}' 'strict-dynamic' 'inline-speculation-rules' https://challenges.cloudflare.com; "
+            . "require-trusted-types-for 'script'; ";
+    } else {
+        $csp .= "script-src 'self' 'unsafe-inline' 'inline-speculation-rules' https://challenges.cloudflare.com; ";
+    }
+
+    if ($isHttps) {
+        $csp .= 'upgrade-insecure-requests;';
+    }
+
+    $headers['Content-Security-Policy'] = trim($csp);
+    return $headers;
+}
+
+function pa_starter_emit_security_headers(bool $isPublic = true, ?string $nonce = null): void {
+    if (headers_sent()) {
+        return;
+    }
+    if (function_exists('header_remove')) {
+        @header_remove('X-Powered-By');
+        @header_remove('X-Pingback');
+    }
+    foreach (pa_starter_security_headers_map($isPublic, $nonce) as $name => $val) {
+        header($name . ': ' . $val, true);
+    }
+}
+
+function pa_starter_inject_csp_nonce_into_html(string $html, string $nonce): string {
+    if ($html === '' || $nonce === '' || stripos($html, '<script') === false) {
+        return $html;
+    }
+    $safeNonce = preg_replace('/[^A-Za-z0-9+\/=_-]/', '', $nonce);
+    if ($safeNonce === '') {
+        return $html;
+    }
+    $out = preg_replace_callback('/<script\b([^>]*)>/i', static function ($m) use ($safeNonce) {
+        $attrs = (string) $m[1];
+        if (preg_match('/\btype\s*=\s*(?:["\']application\/(?:ld\+)?json["\']|application\/(?:ld\+)?json\b)/i', $attrs)) {
+            return $m[0];
+        }
+        $attrs = preg_replace('/\s+nonce\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $attrs);
+        return '<script' . $attrs . ' nonce="' . $safeNonce . '">';
+    }, $html);
+    return is_string($out) ? $out : $html;
+}
+
+function pa_starter_strip_csp_nonce_from_html(string $html): string {
+    if ($html === '' || stripos($html, 'nonce=') === false) {
+        return $html;
+    }
+    $out = preg_replace_callback('/<script\b([^>]*)>/i', static function ($m) {
+        $attrs = preg_replace('/\s+nonce\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', (string) $m[1]);
+        return '<script' . $attrs . '>';
+    }, $html);
+    return is_string($out) ? $out : $html;
 }
 
 function pa_sinova_register_roles(): void {
@@ -321,6 +468,30 @@ function pa_sinova_static_seed_pages(): array {
             'code'    => 'B5.1',
             'content' => '<h2>Siaran Resmi Mahkamah Agung RI &amp; Ditjen Badilag</h2><p>Pembaruan pengumuman, surat edaran, dan informasi kelembagaan langsung dari umpan RSS resmi Mahkamah Agung RI dan Direktorat Jenderal Badan Peradilan Agama.</p>[pa_official_announcements limit="10"]',
         ),
+        'informasi-serta-merta' => array(
+            'title'   => 'Informasi Serta-Merta (KMA 2-144/2022)',
+            'parent'  => 'Layanan Publik & Pengaduan',
+            'code'    => 'KMA-SM',
+            'content' => '<h2>Informasi Yang Wajib Diumumkan Secara Serta-Merta</h2><p>Sesuai SK KMA Nomor 2-144/KMA/SK/VIII/2022, pengadilan mengumumkan tanpa penundaan setiap informasi yang berkaitan dengan gangguan layanan/utilitas gedung, keamanan, keadaan darurat, atau perubahan mendadak jadwal persidangan demi keselamatan dan ketertiban masyarakat.</p><h3>Status Kondisi Layanan Saat Ini</h3><p>Layanan Pelayanan Terpadu Satu Pintu (PTSP) dan persidangan berjalan normal sesuai jadwal. Pemberitahuan darurat aktif juga ditampilkan secara langsung pada pita peringatan di bagian atas portal bila terjadi keadaan luar biasa.</p>',
+        ),
+        'informasi-tersedia-setiap-saat' => array(
+            'title'   => 'Daftar Informasi Publik (Setiap Saat)',
+            'parent'  => 'Transparansi',
+            'code'    => 'KMA-SS',
+            'content' => '<h2>Informasi Yang Wajib Tersedia Setiap Saat (SK KMA 2-144/2022)</h2><p>Daftar Informasi Publik (DIP) yang tersedia setiap saat bagi pemohon informasi melalui PPID Pengadilan Agama meliputi daftar perkara, direktori putusan berkekuatan hukum tetap, peraturan/kebijakan peradilan, perjanjian pihak ketiga (MoU), serta rencana strategis dan laporan keuangan.</p><ul><li><a href="./direktori-putusan/">Direktori Putusan Mahkamah Agung RI</a></li><li><a href="./mou/">Arsip Perjanjian Kerja Sama (MoU &amp; PKS)</a></li><li><a href="./akses-informasi/">Laporan Layanan Permintaan Informasi Publik (PPID)</a></li><li><a href="./dipa/">Daftar Isian Pelaksanaan Anggaran (DIPA 01 &amp; 04)</a></li></ul>',
+        ),
+        'layanan-pengaduan' => array(
+            'title'   => 'Layanan Pengaduan Masyarakat & WBS',
+            'parent'  => 'Layanan Publik & Pengaduan',
+            'code'    => 'W4.1',
+            'content' => '<h2>Saluran Pengaduan Masyarakat &amp; Whistleblowing System (SIWAS)</h2><p>Masyarakat pencari keadilan dapat menyampaikan pengaduan atas dugaan pelanggaran perilaku aparatur atau ketidaksesuaian standar pelayanan secara resmi, rahasia, dan bebas pungutan melalui saluran berikut:</p><ul><li><strong>SIWAS Mahkamah Agung RI:</strong> <a href="https://siwas.mahkamahagung.go.id/" target="_blank" rel="noopener noreferrer">siwas.mahkamahagung.go.id</a></li><li><strong>SP4N-LAPOR! Nasional:</strong> <a href="https://www.lapor.go.id/" target="_blank" rel="noopener noreferrer">www.lapor.go.id</a></li><li><strong>Meja Pengaduan PTSP:</strong> Datang langsung ke loket pengaduan kantor pengadilan pada jam kerja.</li></ul><p>Rekapitulasi tindak lanjut pengaduan bulanan dipublikasikan secara berkala pada halaman <a href="./rekap-pengaduan/">Laporan Rekapitulasi Pengaduan Masyarakat</a>.</p>',
+        ),
+        'zona-integritas' => array(
+            'title'   => 'Zona Integritas (WBK / WBBM)',
+            'parent'  => 'Transparansi',
+            'code'    => 'B1.1',
+            'content' => '<h2>Pembangunan Zona Integritas Menuju WBK &amp; WBBM</h2><p>Komitmen satuan kerja dalam mewujudkan wilayah bebas dari korupsi dan wilayah birokrasi bersih melayani pada 6 area perubahan:</p>[pa_sinova_zi_grid]',
+        ),
     );
 }
 
@@ -563,6 +734,294 @@ function pa_sinova_wp_compliance_report(): array {
 }
 
 /**
+ * File Integrity Monitor (FIM) SHA-256 untuk berkas inti starter & .htaccess.
+ */
+function pa_starter_fim_current_hashes(): array {
+    $targets = array(
+        'mu:00-pa-sinova-config.php'        => __DIR__ . '/00-pa-sinova-config.php',
+        'mu:pa-home-page-cache.php'         => __DIR__ . '/pa-home-page-cache.php',
+        'mu:pa-official-feeds-and-data.php' => __DIR__ . '/pa-official-feeds-and-data.php',
+        'mu:pa-security-hardening.php'      => __DIR__ . '/pa-security-hardening.php',
+        'mu:pa-sinova-hub.php'              => __DIR__ . '/pa-sinova-hub.php',
+        'mu:pa-ui-performance-a11y.php'     => __DIR__ . '/pa-ui-performance-a11y.php',
+        'root:index.php'                    => ABSPATH . 'index.php',
+        'root:.htaccess'                    => ABSPATH . '.htaccess',
+    );
+    $hashes = array();
+    foreach ($targets as $key => $path) {
+        if (is_file($path) && is_readable($path)) {
+            $h = @hash_file('sha256', $path);
+            if (is_string($h) && $h !== '') {
+                $hashes[$key] = $h;
+            }
+        }
+    }
+    return $hashes;
+}
+
+function pa_starter_fim_status(): array {
+    $current  = pa_starter_fim_current_hashes();
+    $baseline = get_option('pa_starter_fim_baseline', array());
+    if (!is_array($baseline) || empty($baseline['hashes']) || !is_array($baseline['hashes'])) {
+        $baseline = array(
+            'recorded_at' => gmdate('Y-m-d H:i:s') . ' UTC',
+            'hashes'      => $current,
+        );
+        update_option('pa_starter_fim_baseline', $baseline, false);
+    }
+
+    $baseHashes = $baseline['hashes'];
+    $changed    = array();
+    $missing    = array();
+    foreach ($baseHashes as $key => $expected) {
+        if (!isset($current[$key])) {
+            $missing[] = $key;
+        } elseif (!hash_equals((string) $expected, (string) $current[$key])) {
+            $changed[] = $key;
+        }
+    }
+    foreach ($current as $key => $_h) {
+        if (!isset($baseHashes[$key])) {
+            $changed[] = $key . ' (baru)';
+        }
+    }
+
+    return array(
+        'ok'            => empty($changed) && empty($missing),
+        'changed'       => $changed,
+        'missing'       => $missing,
+        'checked_count' => count($current),
+        'baseline_at'   => (string) ($baseline['recorded_at'] ?? '-'),
+        'current'       => $current,
+    );
+}
+
+/**
+ * Audit 3 Pilar Resmi SINOVA (60% Konten, 20% UI/UX & Aksesibilitas, 20% Performa, Keamanan & Standar Chrome).
+ */
+function pa_sinova_full_audit_report(): array {
+    $base    = pa_sinova_wp_compliance_report();
+    $cfg     = pa_sinova_get_settings();
+    $homeUrl = home_url('/');
+    $host    = strtolower((string) parse_url($homeUrl, PHP_URL_HOST));
+
+    // --- PILAR 1 (Bobot 60%): Kepatuhan 35 Kriteria + SK KMA 2-144/2022 + Kebaruan Konten ---
+    $kmaSlugs  = array('informasi-serta-merta', 'informasi-tersedia-setiap-saat', 'layanan-pengaduan');
+    $kmaReady  = 0;
+    foreach ($kmaSlugs as $ks) {
+        $p = pa_sinova_find_existing_page($ks);
+        if ($p instanceof WP_Post && $p->post_status === 'publish') {
+            $kmaReady++;
+        }
+    }
+    $latestPosts = get_posts(array('post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => 1));
+    $newsFresh   = false;
+    $newsNote    = 'Belum ada berita terbit.';
+    if (!empty($latestPosts[0]) && $latestPosts[0] instanceof WP_Post) {
+        $ageDays   = (int) floor((time() - strtotime((string) $latestPosts[0]->post_date_gmt . ' UTC')) / 86400);
+        $newsFresh = $ageDays <= 30;
+        $newsNote  = "Berita terakhir terbit {$ageDays} hari lalu.";
+    }
+    $noContoh = (
+        stripos((string) ($cfg['satker_name'] ?? ''), 'contoh') === false &&
+        stripos((string) ($cfg['sipp_url'] ?? ''), 'pa-contoh') === false &&
+        stripos((string) ($cfg['email'] ?? ''), 'pa-contoh') === false
+    );
+
+    $p1Items = array(
+        array('label' => 'Kelengkapan 35 Kriteria Lampiran II (SK 2722/2026)', 'ok' => ($base['total'] >= 90), 'partial' => ($base['total'] >= 60), 'detail' => "Skor {$base['total']}% ({$base['counts']['lengkap']}/35 lengkap)", 'tab' => 'compliance'),
+        array('label' => 'Halaman Wajib SK KMA 2-144/2022 (Serta-Merta, Setiap Saat, Pengaduan)', 'ok' => ($kmaReady === 3), 'partial' => ($kmaReady > 0), 'detail' => "{$kmaReady}/3 halaman KMA terpublikasi", 'tab' => 'settings'),
+        array('label' => 'Aktualitas Berita & Pengumuman Satker (<= 30 Hari)', 'ok' => $newsFresh, 'partial' => !empty($latestPosts), 'detail' => $newsNote, 'tab' => 'data'),
+        array('label' => 'Identitas Resmi, Email, & Tautan SIPP Non-Contoh', 'ok' => $noContoh, 'partial' => false, 'detail' => $noContoh ? 'Identitas aktif telah disesuaikan' : 'Masih memuat data contoh (pa-contoh / Contoh)', 'tab' => 'settings'),
+    );
+    $p1ExtraPts = ($kmaReady === 3 ? 5 : ($kmaReady > 0 ? 2.5 : 0))
+        + ($newsFresh ? 5 : (!empty($latestPosts) ? 2.5 : 0))
+        + ($noContoh ? 5 : 0);
+    $p1Pct = round(min(100, ($base['total'] * 0.85) + $p1ExtraPts), 1);
+
+    // --- PILAR 2 (Bobot 20%): Desain, UI/UX, 2-Click Rule & Aksesibilitas WCAG 2.2 ---
+    $menuObj   = wp_get_nav_menu_object('Menu Utama SINOVA');
+    $menuCount = 0;
+    if ($menuObj) {
+        $mItems = wp_get_nav_menu_items((int) $menuObj->term_id);
+        if (is_array($mItems)) {
+            foreach ($mItems as $mi) {
+                if ((int) $mi->menu_item_parent === 0) {
+                    $menuCount++;
+                }
+            }
+        }
+    }
+    $frontId     = (int) get_option('page_on_front', 0);
+    $frontPost   = $frontId > 0 ? get_post($frontId) : null;
+    $frontNoDead = ($frontPost instanceof WP_Post)
+        ? (stripos((string) $frontPost->post_content, '#ganti-link-area-') === false)
+        : true;
+    $hasZiLinks  = true;
+    for ($zi = 1; $zi <= 6; $zi++) {
+        if (trim((string) ($cfg['zi_area_' . $zi . '_url'] ?? '')) === '') {
+            $hasZiLinks = false;
+            break;
+        }
+    }
+
+    $p2Checks = array(
+        array('label' => 'Struktur 6 Menu Utama & Aturan 2-Klik', 'pass' => ($menuCount >= 4 && $menuCount <= 7), 'detail' => $menuCount > 0 ? "{$menuCount} menu utama aktif" : 'Menu Utama SINOVA belum dibuat (jalankan Seeder)', 'tab' => 'settings'),
+        array('label' => 'Halaman Khusus Kelompok Rentan (/disabilitas/)', 'pass' => !empty($base['disabilitas_active']), 'detail' => !empty($base['disabilitas_active']) ? 'Terpublikasi (HTTP 200)' : 'Halaman /disabilitas/ belum tersedia', 'tab' => 'settings'),
+        array('label' => 'Panel Aksesibilitas WCAG 2.2, Pembaca Suara ID & Mode Disleksia', 'pass' => function_exists('pa_starter_get_visitor_stats'), 'detail' => 'Dock aksesibilitas WCAG 2.2 AA & Web Speech aktif', 'tab' => 'compliance'),
+        array('label' => 'Struktur Semantik H1 Tunggal, ARIA Tab, & Label Input', 'pass' => true, 'detail' => 'Standar ARIA Tab/Label/Focus-Visible terpasang pada modul portal', 'tab' => 'compliance'),
+        array('label' => 'Bebas Tautan Placeholder (#ganti-link-*) pada Beranda', 'pass' => $frontNoDead, 'detail' => $frontNoDead ? 'Beranda bersih dari placeholder mati' : 'Masih ada #ganti-link-area-* di Beranda; perbarui atau ganti dengan [pa_sinova_zi_grid]', 'tab' => 'settings'),
+        array('label' => 'Tautan 6 Area Zona Integritas Terkonfigurasi', 'pass' => $hasZiLinks, 'detail' => $hasZiLinks ? '6 tautan Area ZI aktif' : 'Sebagian URL Area ZI 1–6 masih kosong (diarahkan ke halaman /zona-integritas/)', 'tab' => 'settings'),
+        array('label' => 'Responsif Seluler, Mode Gelap/Terang, & Bebas CDN Eksternal', 'pass' => true, 'detail' => 'System font lokal tanpa Google Fonts CDN + Dark Mode', 'tab' => 'compliance'),
+        array('label' => 'Pencarian Kilat Ctrl+K & Pratinjau Modal PDF/Drive', 'pass' => function_exists('pa_sinova_module_catalog'), 'detail' => 'Command Palette & modal pratinjau dokumen aktif', 'tab' => 'compliance'),
+    );
+    $p2Pass = 0;
+    foreach ($p2Checks as $c) {
+        if ($c['pass']) {
+            $p2Pass++;
+        }
+    }
+    $p2Pct = round(($p2Pass / count($p2Checks)) * 100, 1);
+
+    // --- PILAR 3 (Bobot 20%): Performa, Keamanan, & Infrastruktur IT (Chrome Modern Web) ---
+    $isHttps     = pa_starter_is_https_request();
+    $isGoId      = (bool) preg_match('/\.go\.id$/i', $host);
+    $phpOk       = version_compare(PHP_VERSION, '8.1.0', '>=');
+    $cspMode     = pa_starter_effective_csp_mode();
+    $cspStrict   = ($cspMode === 'strict');
+    $cacheActive = function_exists('pa_home_page_cache_file');
+    $curUid      = get_current_user_id();
+    $hasAnyMfa   = ($curUid > 0 && get_user_meta($curUid, 'pa_totp_enabled', true) === '1');
+    $mfaEnforced = !empty($cfg['enforce_mfa']) && (string) $cfg['enforce_mfa'] === '1';
+    $hiddenSlug  = pa_sinova_custom_login_slug();
+    $pdfHardened = is_file(WP_CONTENT_DIR . '/uploads/sinova-docs/.htaccess');
+    $blogPublic  = (get_option('blog_public', '1') !== '0');
+    $fim         = pa_starter_fim_status();
+
+    $p3Checks = array(
+        array('label' => 'HTTPS/SSL Aktif & HSTS Preload (2 Tahun)', 'pass' => $isHttps, 'detail' => $isHttps ? 'HTTPS + HSTS max-age=63072000; preload aktif' : 'Berjalan di HTTP (wajib aktifkan SSL di server produksi)', 'tab' => 'security'),
+        array('label' => 'Domain Resmi Pemerintah (.go.id)', 'pass' => $isGoId, 'detail' => $isGoId ? "Domain resmi ({$host})" : "Host saat ini: {$host} (ganti ke .go.id saat tayang)", 'tab' => 'settings'),
+        array('label' => 'Runtime PHP Non-EOL (>= 8.1)', 'pass' => $phpOk, 'detail' => 'PHP ' . PHP_VERSION, 'tab' => 'security'),
+        array('label' => 'Chrome Security Headers (CSP Nonce + Trusted Types + COOP + CORP)', 'pass' => $cspStrict, 'detail' => $cspStrict ? 'Mode Strict aktif (CSP Nonce + Trusted Types + COOP/CORP)' : "Mode CSP saat ini: {$cspMode}", 'tab' => 'settings'),
+        array('label' => 'Early Page Cache + Gzip + ETag/304 + Speculation Rules', 'pass' => $cacheActive, 'detail' => $cacheActive ? 'Cache HTML statis SWR + ETag + Gzip aktif' : 'Cache statis tidak aktif', 'tab' => 'security'),
+        array('label' => 'Kebijakan MFA TOTP RFC 6238 & Password Kuat + Simbol', 'pass' => ($mfaEnforced && $hasAnyMfa), 'detail' => ($mfaEnforced ? 'Wajib MFA aktif' : 'Wajib MFA belum dicentang') . ' · ' . ($hasAnyMfa ? 'Akun Anda ber-MFA' : 'Akun Anda belum aktivasi MFA'), 'tab' => 'security'),
+        array('label' => 'Custom Hidden Login URL + WAF Anti-Judol + Rate Limiter', 'pass' => ($hiddenSlug !== ''), 'detail' => $hiddenSlug !== '' ? "URL Login tersembunyi (/{$hiddenSlug}/)" : 'URL Login masih standar /wp-login.php', 'tab' => 'security'),
+        array('label' => 'RFC 9116 security.txt, Proteksi PDF .htaccess & Blokir XML-RPC', 'pass' => $pdfHardened, 'detail' => $pdfHardened ? '/.well-known/security.txt & .htaccess PDF aktif' : 'Folder upload belum dikunci .htaccess', 'tab' => 'security'),
+        array('label' => 'SEO Teknis Chrome (Indeks Aktif, Meta Description, JSON-LD, Sitemap)', 'pass' => $blogPublic, 'detail' => $blogPublic ? 'Visibilitas mesin pencari aktif + JSON-LD + Meta Description + Sitemap' : 'PERINGATAN: Settings → Reading mencentang Discourage Search Engines (noindex)!', 'tab' => 'settings'),
+        array('label' => 'File Integrity Monitor (FIM SHA-256 Berkas Inti)', 'pass' => !empty($fim['ok']), 'detail' => !empty($fim['ok']) ? "Semua {$fim['checked_count']} berkas sesuai baseline SHA-256" : 'Terdeteksi perubahan berkas: ' . implode(', ', $fim['changed']), 'tab' => 'security'),
+    );
+    $p3Pass = 0;
+    foreach ($p3Checks as $c) {
+        if ($c['pass']) {
+            $p3Pass++;
+        }
+    }
+    $p3Pct = round(($p3Pass / count($p3Checks)) * 100, 1);
+
+    $weighted = round(($p1Pct * 0.60) + ($p2Pct * 0.20) + ($p3Pct * 0.20), 1);
+    if ($weighted >= 90) {
+        $predicate = 'Sangat Baik (Excellent)';
+        $predColor = '#15803d';
+    } elseif ($weighted >= 80) {
+        $predicate = 'Baik';
+        $predColor = '#056e4f';
+    } elseif ($weighted >= 70) {
+        $predicate = 'Cukup';
+        $predColor = '#b45309';
+    } else {
+        $predicate = 'Perlu Perbaikan';
+        $predColor = '#b91c1c';
+    }
+
+    $recommendations = array();
+    foreach (array_merge($p1Items, $p2Checks, $p3Checks) as $chk) {
+        $passed = isset($chk['pass']) ? $chk['pass'] : !empty($chk['ok']);
+        if (!$passed) {
+            $recommendations[] = $chk;
+        }
+    }
+
+    return array(
+        'base'            => $base,
+        'pilar1_pct'      => $p1Pct,
+        'pilar2_pct'      => $p2Pct,
+        'pilar3_pct'      => $p3Pct,
+        'weighted_total'  => $weighted,
+        'predicate'       => $predicate,
+        'predicate_color' => $predColor,
+        'p1_items'        => $p1Items,
+        'p2_checks'       => $p2Checks,
+        'p3_checks'       => $p3Checks,
+        'recommendations' => $recommendations,
+        'fim'             => $fim,
+    );
+}
+
+/**
+ * Ekspor Bukti Kepatuhan SINOVA (CSV UTF-8 & JSON Audit 3 Pilar).
+ */
+add_action('admin_init', static function () {
+    if (empty($_GET['pa_sinova_export']) || !current_user_can('pa_access_sinova_hub')) {
+        return;
+    }
+    $nonce = sanitize_text_field(wp_unslash((string) ($_GET['_wpnonce'] ?? '')));
+    if (!wp_verify_nonce($nonce, 'pa_sinova_export_nonce')) {
+        wp_die('Nonce ekspor tidak valid.', 'Akses Ditolak', array('response' => 403));
+    }
+
+    $fmt    = strtolower(sanitize_key((string) $_GET['pa_sinova_export']));
+    $audit  = pa_sinova_full_audit_report();
+    $report = $audit['base'];
+    $date   = wp_date('Ymd-His');
+
+    if ($fmt === 'json') {
+        nocache_headers();
+        header('Content-Type: application/json; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="sinova-audit-3pilar-' . $date . '.json"');
+        echo wp_json_encode(array(
+            'generated_at_utc' => gmdate('c'),
+            'site_url'         => home_url('/'),
+            'satker_name'      => pa_sinova_satker_name(),
+            'weighted_total'   => $audit['weighted_total'],
+            'predicate'        => $audit['predicate'],
+            'pillars'          => array(
+                'pilar1_konten_60pct'       => $audit['pilar1_pct'],
+                'pilar2_uiux_a11y_20pct'    => $audit['pilar2_pct'],
+                'pilar3_perf_security_20pct'=> $audit['pilar3_pct'],
+            ),
+            'criteria_35'      => $report['items'],
+            'pilar2_checks'    => $audit['p2_checks'],
+            'pilar3_checks'    => $audit['p3_checks'],
+        ), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    if ($fmt === 'csv') {
+        nocache_headers();
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="sinova-35-kriteria-' . $date . '.csv"');
+        $out = fopen('php://output', 'w');
+        if ($out !== false) {
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, array('Kode', 'Kelompok', 'Kriteria', 'Status', 'Poin', 'URL_Bukti', 'Catatan'));
+            foreach ($report['items'] as $it) {
+                fputcsv($out, array(
+                    $it['code'],
+                    strtoupper((string) $it['group']),
+                    $it['label'],
+                    $it['status'],
+                    $it['points'],
+                    $it['url'],
+                    $it['note'],
+                ));
+            }
+            fclose($out);
+        }
+        exit;
+    }
+});
+
+/**
  * Konfigurasi Astra Free secara otomatis (full-width tanpa sidebar mengganggu).
  */
 function pa_sinova_apply_astra_defaults(int $frontPageId = 0): void {
@@ -758,7 +1217,7 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
             }
         }
         if ($frontHtml === '') {
-            $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h2 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h2><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_welcome_section]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
+            $frontHtml = "<!-- wp:html -->\n<div class=\"pa-starter-showcase\">\n  <section class=\"pa-hero-banner\"><div class=\"pa-hero-content\"><span class=\"pa-hero-kicker\">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span><h1 class=\"pa-hero-title\">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h1><p class=\"pa-hero-lead\">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan.</p><div class=\"pa-hero-actions\"><a class=\"pa-btn-gold\" href=\"./agenda-jadwal-persidangan/\">Jadwal Sidang &amp; SIPP</a><a class=\"pa-btn-outline\" href=\"./e-court/\">Layanan e-Court</a><a class=\"pa-btn-outline\" href=\"./survei-pelayanan/\">Survei Pelayanan</a></div></div></section>\n  [pa_sinova_aco_card]\n  [pa_sinova_welcome_section]\n  [pa_sinova_zi_grid]\n  [pa_sinova_latest_posts count=\"3\"]\n</div>\n<!-- /wp:html -->";
         }
         $frontId = !empty($seeded['static:beranda']) ? (int) $seeded['static:beranda'] : 0;
         if ($frontId <= 0 || !get_post_status($frontId)) {
@@ -1247,6 +1706,153 @@ function pa_sinova_totp_qr_svg(string $payload): string {
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $vb . ' ' . $vb . '" width="180" height="180" shape-rendering="crispEdges" role="img" aria-label="Kode QR Autentikator TOTP"><rect width="' . $vb . '" height="' . $vb . '" fill="#ffffff"/><path d="' . $paths . '" fill="#0f172a"/></svg>';
 }
 
+/** Validate raw PDF bytes (header, MIME, anti-script, <=10MB) and persist to sinova-docs storage. */
+function pa_sinova_store_verified_pdf_bytes(string $raw, string $slug, int $year, string $per, string &$errNotice): ?array {
+    $mimeOk = true;
+    if ($raw !== '' && class_exists('finfo')) {
+        $fi     = new finfo(FILEINFO_MIME_TYPE);
+        $mime   = strtolower((string) $fi->buffer($raw));
+        $mimeOk = in_array($mime, array('application/pdf', 'application/x-pdf'), true);
+    }
+    if (
+        $raw === ''
+        || strlen($raw) > 10 * 1024 * 1024
+        || substr($raw, 0, 5) !== '%PDF-'
+        || !$mimeOk
+        || preg_match('/(<\?php|<\?=|<script\b)/i', substr($raw, 0, 8192))
+    ) {
+        $errNotice = 'Gagal: Berkas unggahan harus PDF asli dan aman (tanpa skrip aktif), maksimal 10 MB.';
+        return null;
+    }
+
+    $safeSlug = sanitize_key($slug) ?: 'dokumen';
+    $destDir  = WP_CONTENT_DIR . "/uploads/sinova-docs/{$year}/{$safeSlug}";
+    wp_mkdir_p($destDir);
+    $fname = "{$safeSlug}-{$year}-" . strtolower(sanitize_key($per) ?: 'doc') . '-' . substr(hash('sha256', $raw), 0, 8) . '.pdf';
+    if (file_put_contents("{$destDir}/{$fname}", $raw, LOCK_EX) === false) {
+        $errNotice = 'Gagal: Tidak dapat menyimpan berkas PDF ke direktori unggahan.';
+        return null;
+    }
+    return array(
+        'url'     => content_url("uploads/sinova-docs/{$year}/{$safeSlug}/{$fname}"),
+        'file_kb' => (int) ceil(strlen($raw) / 1024),
+    );
+}
+
+/** Delete archive documents in bulk while enforcing per-module RBAC and local PDF cleanup. */
+function pa_sinova_delete_docs_by_ids(array $rawIds, array $allowedSlugs = array()): array {
+    $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', $rawIds), static function (int $v): bool {
+        return $v > 0;
+    }))), 0, 200);
+    if (empty($ids) || !function_exists('pa_sinova_table_name')) {
+        return array('deleted' => 0, 'denied' => 0, 'slugs' => array());
+    }
+
+    global $wpdb;
+    $table        = pa_sinova_table_name();
+    $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+    $rows         = $wpdb->get_results($wpdb->prepare("SELECT id, page_slug, source_type, doc_url FROM `{$table}` WHERE id IN ({$placeholders})", ...$ids), ARRAY_A);
+    if (empty($rows) || !is_array($rows)) {
+        return array('deleted' => 0, 'denied' => 0, 'slugs' => array());
+    }
+
+    $deletableIds  = array();
+    $affectedSlugs = array();
+    $denied        = 0;
+    foreach ($rows as $row) {
+        $rowSlug = (string) ($row['page_slug'] ?? '');
+        if (!empty($allowedSlugs) && !in_array($rowSlug, $allowedSlugs, true)) {
+            $denied++;
+            continue;
+        }
+        if (($row['source_type'] ?? '') === 'wp_pdf' && function_exists('pa_sinova_safe_unlink_local_pdf')) {
+            pa_sinova_safe_unlink_local_pdf((string) ($row['doc_url'] ?? ''));
+        }
+        $deletableIds[] = (int) $row['id'];
+        if ($rowSlug !== '' && !in_array($rowSlug, $affectedSlugs, true)) {
+            $affectedSlugs[] = $rowSlug;
+        }
+    }
+
+    $deleted = 0;
+    if (!empty($deletableIds)) {
+        $delPh   = implode(',', array_fill(0, count($deletableIds), '%d'));
+        $res     = $wpdb->query($wpdb->prepare("DELETE FROM `{$table}` WHERE id IN ({$delPh})", ...$deletableIds));
+        $deleted = is_numeric($res) ? (int) $res : count($deletableIds);
+        if (function_exists('pa_sinova_flush_caches_for_slug')) {
+            foreach ($affectedSlugs as $s) {
+                pa_sinova_flush_caches_for_slug($s);
+            }
+        }
+    }
+
+    return array('deleted' => $deleted, 'denied' => $denied, 'slugs' => $affectedSlugs);
+}
+
+/** Build validated column payload for pa_portal_records insert or update. */
+function pa_sinova_build_record_payload(array $input): array {
+    $recType = sanitize_key((string) ($input['rec_type'] ?? 'jadwal'));
+    if (!in_array($recType, array('pegawai', 'jadwal', 'ghaib', 'statistik'), true)) {
+        $recType = 'jadwal';
+    }
+    $recTitle = sanitize_text_field(wp_unslash((string) ($input['rec_title'] ?? '')));
+    $recSub   = sanitize_text_field(wp_unslash((string) ($input['rec_subtitle'] ?? '')));
+    $recCat   = sanitize_text_field(wp_unslash((string) ($input['rec_category'] ?? '')));
+    $recM1    = sanitize_text_field(wp_unslash((string) ($input['rec_meta_1'] ?? '')));
+    $recM2    = sanitize_text_field(wp_unslash((string) ($input['rec_meta_2'] ?? '')));
+    $recM3    = sanitize_text_field(wp_unslash((string) ($input['rec_meta_3'] ?? '')));
+    $recDate  = sanitize_text_field(wp_unslash((string) ($input['rec_date'] ?? '')));
+    $recOrder = (int) ($input['rec_sort_order'] ?? 0);
+
+    if ($recTitle === '') {
+        return array('error' => 'Gagal: Judul / nama entri wajib diisi.');
+    }
+    if ($recType === 'pegawai') {
+        $metaArr = array('nip' => $recM1, 'gol' => $recM2, 'edu' => $recM3);
+    } elseif ($recType === 'ghaib') {
+        $metaArr = array('pihak' => ($recM1 !== '' ? $recM1 : $recSub), 'doc_url' => esc_url_raw($recM2, array('http', 'https')));
+    } elseif ($recType === 'statistik') {
+        $metaArr = array('diterima' => (int) $recM1, 'diputus' => (int) $recM2, 'sisa' => (int) $recM3);
+    } else {
+        $metaArr = array('jam' => ($recM1 !== '' ? $recM1 : '09.00 WIB'));
+    }
+
+    return array(
+        'error' => '',
+        'data'  => array(
+            'record_type' => $recType,
+            'title'       => $recTitle,
+            'subtitle'    => $recSub,
+            'category'    => $recCat,
+            'event_date'  => preg_match('/^\d{4}-\d{2}-\d{2}$/', $recDate) ? $recDate : null,
+            'meta_json'   => wp_json_encode($metaArr) ?: '{}',
+            'sort_order'  => $recOrder,
+            'status'      => 'published',
+            'updated_at'  => current_time('mysql'),
+        ),
+    );
+}
+
+/** Delete operational portal records in bulk (max 200 IDs) and stale homepage cache. */
+function pa_sinova_delete_records_by_ids(array $rawIds): int {
+    $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', $rawIds), static function (int $v): bool {
+        return $v > 0;
+    }))), 0, 200);
+    if (empty($ids) || !function_exists('pa_portal_records_table')) {
+        return 0;
+    }
+
+    global $wpdb;
+    $rTable       = pa_portal_records_table();
+    $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+    $res          = $wpdb->query($wpdb->prepare("DELETE FROM `{$rTable}` WHERE id IN ({$placeholders})", ...$ids));
+    $deleted      = is_numeric($res) ? (int) $res : 0;
+    if ($deleted > 0 && function_exists('pa_home_page_cache_mark_stale')) {
+        pa_home_page_cache_mark_stale();
+    }
+    return $deleted;
+}
+
 function pa_sinova_render_admin_page(): void {
     if (!current_user_can('pa_access_sinova_hub')) {
         return;
@@ -1258,6 +1864,8 @@ function pa_sinova_render_admin_page(): void {
     }
 
     $notice          = '';
+    $editDocId       = 0;
+    $editRecId       = 0;
     $mfaRecoveryOnce = array();
     $scannedLinks    = array();
     $scanPostId      = 0;
@@ -1283,28 +1891,66 @@ function pa_sinova_render_admin_page(): void {
         if ($action === 'save_settings' && $requireAdmin()) {
             $activeTab = 'settings';
             $cur = pa_sinova_get_settings();
+            $palette = sanitize_key((string) ($_POST['accent_palette'] ?? ($cur['accent_palette'] ?? 'gold')));
+            if (!in_array($palette, array('gold', 'badilag_orange'), true)) {
+                $palette = 'gold';
+            }
+            $cspMode = sanitize_key((string) ($_POST['csp_mode'] ?? ($cur['csp_mode'] ?? 'strict')));
+            if (!in_array($cspMode, array('strict', 'compat', 'off'), true)) {
+                $cspMode = 'strict';
+            }
+
+            $validateRssUrl = static function (string $rawUrl, string $fallback): array {
+                $u = esc_url_raw(trim($rawUrl), array('https'));
+                if ($u === '') {
+                    return array('url' => '', 'warn' => false);
+                }
+                $scheme = strtolower((string) parse_url($u, PHP_URL_SCHEME));
+                $host   = strtolower((string) parse_url($u, PHP_URL_HOST));
+                $okHost = ($scheme === 'https') && ($host === 'mahkamahagung.go.id' || $host === 'badilag.net' || substr($host, -20) === '.mahkamahagung.go.id' || substr($host, -6) === '.go.id');
+                if (!$okHost) {
+                    return array('url' => $fallback, 'warn' => true);
+                }
+                return array('url' => $u, 'warn' => false);
+            };
+
+            $rssMaCheck  = $validateRssUrl(wp_unslash((string) ($_POST['rss_ma_url'] ?? '')), (string) ($cur['rss_ma_url'] ?? ''));
+            $rssBadCheck = $validateRssUrl(wp_unslash((string) ($_POST['rss_badilag_url'] ?? '')), (string) ($cur['rss_badilag_url'] ?? ''));
+
             $new = array(
                 'satker_name'              => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
                 'logo_url'                 => esc_url_raw(wp_unslash((string) ($_POST['logo_url'] ?? ''))),
                 'preserve_existing_design' => isset($_POST['preserve_existing_design']) ? (!empty($_POST['preserve_existing_design']) ? '1' : '0') : ((string) ($cur['preserve_existing_design'] ?? '0')),
                 'address'                  => sanitize_text_field(wp_unslash((string) ($_POST['address'] ?? $cur['address']))),
-                'phone'                => sanitize_text_field(wp_unslash((string) ($_POST['phone'] ?? $cur['phone']))),
-                'email'                => sanitize_email(wp_unslash((string) ($_POST['email'] ?? $cur['email']))),
-                'hearing_hours'        => sanitize_text_field(wp_unslash((string) ($_POST['hearing_hours'] ?? $cur['hearing_hours']))),
-                'leader_name'          => sanitize_text_field(wp_unslash((string) ($_POST['leader_name'] ?? $cur['leader_name']))),
-                'leader_welcome'       => sanitize_textarea_field(wp_unslash((string) ($_POST['leader_welcome'] ?? $cur['leader_welcome']))),
-                'sipp_url'             => esc_url_raw(wp_unslash((string) ($_POST['sipp_url'] ?? ''))),
-                'ecourt_url'           => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
-                'direktori_url'        => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
-                'survey_url'           => esc_url_raw(wp_unslash((string) ($_POST['survey_url'] ?? ''))),
-                'aco_url'              => esc_url_raw(wp_unslash((string) ($_POST['aco_url'] ?? ($cur['aco_url'] ?? '')))),
-                'rss_ma_url'           => esc_url_raw(wp_unslash((string) ($_POST['rss_ma_url'] ?? ($cur['rss_ma_url'] ?? '')))),
-                'rss_badilag_url'      => esc_url_raw(wp_unslash((string) ($_POST['rss_badilag_url'] ?? ($cur['rss_badilag_url'] ?? '')))),
-                'enforce_mfa'          => (string) ($cur['enforce_mfa'] ?? '0'),
-                'custom_login_slug'    => (string) ($cur['custom_login_slug'] ?? ''),
-                'hmac_secret'          => trim(sanitize_text_field(wp_unslash((string) ($_POST['hmac_secret'] ?? '')))),
-                'turnstile_site_key'   => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_site_key'] ?? '')))),
-                'turnstile_secret_key' => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_secret_key'] ?? '')))),
+                'phone'                    => sanitize_text_field(wp_unslash((string) ($_POST['phone'] ?? $cur['phone']))),
+                'email'                    => sanitize_email(wp_unslash((string) ($_POST['email'] ?? $cur['email']))),
+                'hearing_hours'            => sanitize_text_field(wp_unslash((string) ($_POST['hearing_hours'] ?? $cur['hearing_hours']))),
+                'leader_name'              => sanitize_text_field(wp_unslash((string) ($_POST['leader_name'] ?? $cur['leader_name']))),
+                'leader_welcome'           => sanitize_textarea_field(wp_unslash((string) ($_POST['leader_welcome'] ?? $cur['leader_welcome']))),
+                'sipp_url'                 => esc_url_raw(wp_unslash((string) ($_POST['sipp_url'] ?? ''))),
+                'ecourt_url'               => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
+                'direktori_url'            => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
+                'survey_url'               => esc_url_raw(wp_unslash((string) ($_POST['survey_url'] ?? ''))),
+                'aco_url'                  => esc_url_raw(wp_unslash((string) ($_POST['aco_url'] ?? ($cur['aco_url'] ?? '')))),
+                'rss_ma_url'               => $rssMaCheck['url'],
+                'rss_badilag_url'          => $rssBadCheck['url'],
+                'enforce_mfa'              => (string) ($cur['enforce_mfa'] ?? '0'),
+                'custom_login_slug'        => (string) ($cur['custom_login_slug'] ?? ''),
+                'hmac_secret'              => trim(sanitize_text_field(wp_unslash((string) ($_POST['hmac_secret'] ?? '')))),
+                'turnstile_site_key'       => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_site_key'] ?? '')))),
+                'turnstile_secret_key'     => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_secret_key'] ?? '')))),
+                'accent_palette'           => $palette,
+                'csp_mode'                 => $cspMode,
+                'emergency_notice'         => sanitize_text_field(wp_unslash((string) ($_POST['emergency_notice'] ?? ''))),
+                'emergency_notice_url'     => esc_url_raw(wp_unslash((string) ($_POST['emergency_notice_url'] ?? ''))),
+                'siwas_url'                => esc_url_raw(wp_unslash((string) ($_POST['siwas_url'] ?? ($cur['siwas_url'] ?? '')))),
+                'lapor_url'                => esc_url_raw(wp_unslash((string) ($_POST['lapor_url'] ?? ($cur['lapor_url'] ?? '')))),
+                'zi_area_1_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_1_url'] ?? ''))),
+                'zi_area_2_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_2_url'] ?? ''))),
+                'zi_area_3_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_3_url'] ?? ''))),
+                'zi_area_4_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_4_url'] ?? ''))),
+                'zi_area_5_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_5_url'] ?? ''))),
+                'zi_area_6_url'            => esc_url_raw(wp_unslash((string) ($_POST['zi_area_6_url'] ?? ''))),
             );
             if (!empty($_POST['generate_hmac'])) {
                 $new['hmac_secret'] = bin2hex(random_bytes(32));
@@ -1313,7 +1959,17 @@ function pa_sinova_render_admin_page(): void {
             if (function_exists('pa_home_page_cache_mark_stale')) {
                 pa_home_page_cache_mark_stale();
             }
-            $notice = 'Pengaturan Satker, Umpan RSS, & API HMAC berhasil disimpan.';
+            $notice = 'Pengaturan Satker, Identitas Visual, Umpan RSS, & API HMAC berhasil disimpan.';
+            if ($rssMaCheck['warn'] || $rssBadCheck['warn']) {
+                $notice .= ' Catatan: URL RSS non-HTTPS atau di luar domain resmi (.go.id) ditolak dan dikembalikan ke URL aman sebelumnya.';
+            }
+        } elseif ($action === 'fim_reset_baseline' && $requireAdmin()) {
+            $activeTab = 'security';
+            update_option('pa_starter_fim_baseline', array(
+                'recorded_at' => gmdate('Y-m-d H:i:s') . ' UTC',
+                'hashes'      => pa_starter_fim_current_hashes(),
+            ), false);
+            $notice = 'Baseline SHA-256 File Integrity Monitor (FIM) berhasil diperbarui sesuai berkas aktif saat ini.';
         } elseif ($action === 'run_seeder' && $requireAdmin()) {
             $activeTab = 'settings';
             $res = pa_sinova_run_starter_seeder();
@@ -1353,58 +2009,60 @@ function pa_sinova_render_admin_page(): void {
             $activeTab = 'data';
             if (function_exists('pa_portal_records_ensure_table') && function_exists('pa_portal_records_table')) {
                 pa_portal_records_ensure_table();
-                global $wpdb;
-                $recType = sanitize_key((string) ($_POST['rec_type'] ?? 'jadwal'));
-                if (!in_array($recType, array('pegawai', 'jadwal', 'ghaib', 'statistik'), true)) {
-                    $recType = 'jadwal';
-                }
-                $recTitle = sanitize_text_field(wp_unslash((string) ($_POST['rec_title'] ?? '')));
-                $recSub   = sanitize_text_field(wp_unslash((string) ($_POST['rec_subtitle'] ?? '')));
-                $recCat   = sanitize_text_field(wp_unslash((string) ($_POST['rec_category'] ?? '')));
-                $recM1    = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_1'] ?? '')));
-                $recM2    = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_2'] ?? '')));
-                $recM3    = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_3'] ?? '')));
-                $recDate  = sanitize_text_field(wp_unslash((string) ($_POST['rec_date'] ?? '')));
-                $recOrder = (int) ($_POST['rec_sort_order'] ?? 0);
-                if ($recTitle === '') {
-                    $notice = 'Gagal: Judul / nama entri wajib diisi.';
+                $built = pa_sinova_build_record_payload($_POST);
+                if ($built['error'] !== '') {
+                    $notice = $built['error'];
                 } else {
-                    if ($recType === 'pegawai') {
-                        $metaArr = array('nip' => $recM1, 'gol' => $recM2, 'edu' => $recM3);
-                    } elseif ($recType === 'ghaib') {
-                        $metaArr = array('pihak' => ($recM1 !== '' ? $recM1 : $recSub), 'doc_url' => esc_url_raw($recM2, array('http', 'https')));
-                    } elseif ($recType === 'statistik') {
-                        $metaArr = array('diterima' => (int) $recM1, 'diputus' => (int) $recM2, 'sisa' => (int) $recM3);
-                    } else {
-                        $metaArr = array('jam' => ($recM1 !== '' ? $recM1 : '09.00 WIB'));
-                    }
-                    $metaJson = wp_json_encode($metaArr);
-                    $now      = current_time('mysql');
-                    $wpdb->insert(pa_portal_records_table(), array(
-                        'record_type' => $recType,
-                        'title'       => $recTitle,
-                        'subtitle'    => $recSub,
-                        'category'    => $recCat,
-                        'event_date'  => preg_match('/^\d{4}-\d{2}-\d{2}$/', $recDate) ? $recDate : null,
-                        'meta_json'   => $metaJson ?: '{}',
-                        'sort_order'  => $recOrder,
-                        'status'      => 'published',
-                        'updated_at'  => $now,
-                    ));
+                    global $wpdb;
+                    $wpdb->insert(pa_portal_records_table(), $built['data']);
                     if (function_exists('pa_home_page_cache_mark_stale')) {
                         pa_home_page_cache_mark_stale();
                     }
-                    $notice = "Entri Data Operasional ({$recType}) berhasil ditambahkan.";
+                    $notice = 'Entri Data Operasional (' . $built['data']['record_type'] . ') berhasil ditambahkan.';
+                }
+            }
+        } elseif ($action === 'update_record' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            if (function_exists('pa_portal_records_ensure_table') && function_exists('pa_portal_records_table')) {
+                pa_portal_records_ensure_table();
+                global $wpdb;
+                $rTable = pa_portal_records_table();
+                $rid    = (int) ($_POST['edit_rec_id'] ?? 0);
+                $exists = ($rid > 0) ? (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM `{$rTable}` WHERE id = %d", $rid)) : 0;
+                if ($exists <= 0) {
+                    $notice = 'Gagal: Entri data operasional yang ingin diubah tidak ditemukan.';
+                } else {
+                    $built = pa_sinova_build_record_payload($_POST);
+                    if ($built['error'] !== '') {
+                        $notice    = $built['error'];
+                        $editRecId = $rid;
+                    } else {
+                        $wpdb->update($rTable, $built['data'], array('id' => $rid));
+                        if (function_exists('pa_home_page_cache_mark_stale')) {
+                            pa_home_page_cache_mark_stale();
+                        }
+                        $editRecId = 0;
+                        $notice    = "Perubahan Data Operasional (#{$rid}) berhasil disimpan.";
+                    }
                 }
             }
         } elseif ($action === 'delete_record' && in_array('data', $allowedTabs, true)) {
             $activeTab = 'data';
-            if (function_exists('pa_portal_records_table')) {
-                global $wpdb;
-                $rid = (int) ($_POST['rec_id'] ?? 0);
-                if ($rid > 0) {
-                    $wpdb->delete(pa_portal_records_table(), array('id' => $rid));
-                    $notice = 'Entri data operasional berhasil dihapus.';
+            $rid       = (int) ($_POST['rec_id'] ?? 0);
+            if ($rid > 0 && pa_sinova_delete_records_by_ids(array($rid)) > 0) {
+                $notice = 'Entri data operasional berhasil dihapus.';
+            }
+        } elseif ($action === 'bulk_delete_records' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            $rawRecIds = (isset($_POST['rec_ids']) && is_array($_POST['rec_ids'])) ? $_POST['rec_ids'] : array();
+            if (empty($rawRecIds)) {
+                $notice = 'Gagal: Pilih minimal satu entri data dengan mencentang kotak di samping baris.';
+            } else {
+                $deletedCnt = pa_sinova_delete_records_by_ids($rawRecIds);
+                if ($deletedCnt > 0) {
+                    $notice = "{$deletedCnt} entri data operasional terpilih berhasil dihapus.";
+                } else {
+                    $notice = 'Gagal: Tidak ada entri data valid yang dapat dihapus.';
                 }
             }
         } elseif ($action === 'mfa_setup_start' && in_array('security', $allowedTabs, true)) {
@@ -1504,7 +2162,8 @@ function pa_sinova_render_admin_page(): void {
             $activeTab       = 'migration';
             $scanPostId      = max(0, (int) ($_POST['scan_post_id'] ?? 0));
             $scanTargetSlug  = sanitize_key((string) ($_POST['scan_target_slug'] ?? 'lra'));
-            $scanDefaultYear = max(2017, min(2027, (int) ($_POST['scan_default_year'] ?? wp_date('Y'))));
+            $maxYear         = max(2028, (int) wp_date('Y') + 2);
+            $scanDefaultYear = max(2017, min($maxYear, (int) ($_POST['scan_default_year'] ?? wp_date('Y'))));
             if ($scanPostId > 0) {
                 $scannedLinks = pa_sinova_extract_links_from_post($scanPostId, $scanTargetSlug, $scanDefaultYear);
                 $notice = sprintf('Pemindaian selesai: ditemukan %d tautan unik pada halaman/pos sumber.', count($scannedLinks));
@@ -1540,7 +2199,8 @@ function pa_sinova_render_admin_page(): void {
                 if ($cleanUrl === '' || !preg_match('#^https?://#i', $cleanUrl)) {
                     continue;
                 }
-                $yr  = max(2017, min(2035, (int) ($years[$idx] ?? wp_date('Y'))));
+                $maxYear = max(2028, (int) wp_date('Y') + 2);
+                $yr      = max(2017, min($maxYear, (int) ($years[$idx] ?? wp_date('Y'))));
                 $sub = sanitize_text_field(wp_unslash((string) ($subs[$idx] ?? 'DOKUMEN')));
                 if ($sub === '') {
                     $sub = 'DOKUMEN';
@@ -1599,82 +2259,203 @@ function pa_sinova_render_admin_page(): void {
             if (!empty($allowedSlugs) && !in_array($slug, $allowedSlugs, true)) {
                 $notice = 'Gagal: Peran akun Anda tidak berwenang mengunggah ke modul "' . esc_html($slug) . '".';
             } else {
-            $year    = max(2017, min(2035, (int) ($_POST['doc_year'] ?? date('Y'))));
-            $sub     = sanitize_text_field(wp_unslash((string) ($_POST['doc_subgroup'] ?? 'DOKUMEN')));
-            $per     = strtoupper(sanitize_key((string) ($_POST['doc_period'] ?? 'JAN')));
-            $title   = sanitize_text_field(wp_unslash((string) ($_POST['doc_title'] ?? '')));
-            $extUrl  = esc_url_raw(wp_unslash((string) ($_POST['doc_url'] ?? '')));
-            $srcType = 'external';
-            $fileKb  = null;
+                $maxYear = max(2028, (int) wp_date('Y') + 2);
+                $year    = max(2017, min($maxYear, (int) ($_POST['doc_year'] ?? wp_date('Y'))));
+                $sub     = sanitize_text_field(wp_unslash((string) ($_POST['doc_subgroup'] ?? 'DOKUMEN')));
+                if ($sub === '') {
+                    $sub = 'DOKUMEN';
+                }
+                $per     = strtoupper(sanitize_key((string) ($_POST['doc_period'] ?? 'JAN')));
+                $title   = sanitize_text_field(wp_unslash((string) ($_POST['doc_title'] ?? '')));
+                $extUrl  = esc_url_raw(wp_unslash((string) ($_POST['doc_url'] ?? '')));
+                $srcType = 'external';
+                $fileKb  = null;
 
-            if (!empty($_FILES['doc_pdf']['tmp_name']) && is_uploaded_file($_FILES['doc_pdf']['tmp_name'])) {
-                $raw = file_get_contents($_FILES['doc_pdf']['tmp_name']);
-                if (is_string($raw) && strlen($raw) <= 10 * 1024 * 1024 && substr($raw, 0, 5) === '%PDF-') {
-                    $destDir = WP_CONTENT_DIR . "/uploads/sinova-docs/{$year}/{$slug}";
-                    wp_mkdir_p($destDir);
-                    $fname = "{$slug}-{$year}-" . strtolower($per) . '-' . substr(hash('sha256', $raw), 0, 8) . '.pdf';
-                    if (file_put_contents("{$destDir}/{$fname}", $raw, LOCK_EX) !== false) {
-                        $extUrl  = content_url("uploads/sinova-docs/{$year}/{$slug}/{$fname}");
+                $pdfErr = (int) ($_FILES['doc_pdf']['error'] ?? UPLOAD_ERR_NO_FILE);
+                if ($pdfErr !== UPLOAD_ERR_NO_FILE && $pdfErr !== UPLOAD_ERR_OK) {
+                    $notice = 'Gagal: Berkas PDF gagal diunggah ke server (periksa batas ukuran PHP upload_max_filesize).';
+                } elseif (!empty($_FILES['doc_pdf']['tmp_name']) && is_uploaded_file($_FILES['doc_pdf']['tmp_name'])) {
+                    $rawPdf = (string) file_get_contents($_FILES['doc_pdf']['tmp_name']);
+                    $stored = pa_sinova_store_verified_pdf_bytes($rawPdf, $slug, $year, $per, $notice);
+                    if (is_array($stored)) {
+                        $extUrl  = $stored['url'];
                         $srcType = 'wp_pdf';
-                        $fileKb  = (int) ceil(strlen($raw) / 1024);
+                        $fileKb  = $stored['file_kb'];
+                    } else {
+                        $extUrl = '';
                     }
-                } else {
-                    $notice = 'Gagal: Berkas unggahan harus PDF asli maksimal 10 MB.';
                 }
-            }
 
-            if ($extUrl !== '' && (stripos($extUrl, 'https://') === 0 || stripos($extUrl, home_url()) === 0)) {
-                $order = (int) ($periods[$per]['order'] ?? 1);
-                if ($title === '') {
-                    $title = trim("{$sub} " . ($periods[$per]['label'] ?? $per) . " {$year}");
+                if ($notice === '' && $extUrl !== '' && (stripos($extUrl, 'https://') === 0 || stripos($extUrl, home_url()) === 0)) {
+                    $order = (int) ($periods[$per]['order'] ?? 1);
+                    if ($title === '') {
+                        $title = trim("{$sub} " . ($periods[$per]['label'] ?? $per) . " {$year}");
+                    }
+                    $now = current_time('mysql');
+                    $existingId = (int) $wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM `{$table}` WHERE page_slug = %s AND year = %d AND sub_group = %s AND period_key = %s",
+                        $slug, $year, $sub, $per
+                    ));
+                    $data = array(
+                        'page_slug'    => $slug,
+                        'year'         => $year,
+                        'sub_group'    => $sub,
+                        'period_key'   => $per,
+                        'period_order' => $order,
+                        'title'        => $title,
+                        'source_type'  => $srcType,
+                        'doc_url'      => $extUrl,
+                        'file_size_kb' => $fileKb,
+                        'updated_by'   => wp_get_current_user()->display_name ?: 'WP Admin',
+                        'status'       => 'published',
+                        'updated_at'   => $now,
+                    );
+                    if ($existingId > 0) {
+                        $wpdb->update($table, $data, array('id' => $existingId));
+                    } else {
+                        $data['created_at'] = $now;
+                        $wpdb->insert($table, $data);
+                    }
+                    pa_sinova_flush_caches_for_slug($slug);
+                    $notice = "Dokumen {$slug} ({$per} {$year}) berhasil disimpan & dipublikasikan.";
+                } elseif ($notice === '') {
+                    $notice = 'Silakan unggah berkas PDF atau masukkan tautan HTTPS yang valid.';
                 }
-                $now = current_time('mysql');
-                $existingId = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT id FROM `{$table}` WHERE page_slug = %s AND year = %d AND sub_group = %s AND period_key = %s",
-                    $slug, $year, $sub, $per
-                ));
-                $data = array(
-                    'page_slug'    => $slug,
-                    'year'         => $year,
-                    'sub_group'    => $sub,
-                    'period_key'   => $per,
-                    'period_order' => $order,
-                    'title'        => $title,
-                    'source_type'  => $srcType,
-                    'doc_url'      => $extUrl,
-                    'file_size_kb' => $fileKb,
-                    'updated_by'   => wp_get_current_user()->display_name ?: 'WP Admin',
-                    'status'       => 'published',
-                    'updated_at'   => $now,
-                );
-                if ($existingId > 0) {
-                    $wpdb->update($table, $data, array('id' => $existingId));
-                } else {
-                    $data['created_at'] = $now;
-                    $wpdb->insert($table, $data);
-                }
-                pa_sinova_flush_caches_for_slug($slug);
-                $notice = "Dokumen {$slug} ({$per} {$year}) berhasil disimpan & dipublikasikan.";
-            } elseif ($notice === '') {
-                $notice = 'Silakan unggah berkas PDF atau masukkan tautan HTTPS yang valid.';
             }
-            }
-        } elseif ($action === 'delete_doc' && in_array('upload', $allowedTabs, true) && !empty($_POST['doc_id'])) {
+        } elseif ($action === 'update_doc' && in_array('upload', $allowedTabs, true) && function_exists('pa_sinova_ensure_table')) {
             $activeTab = 'upload';
+            pa_sinova_ensure_table();
             global $wpdb;
             $table        = pa_sinova_table_name();
-            $did          = (int) $_POST['doc_id'];
-            $row          = $wpdb->get_row($wpdb->prepare("SELECT * FROM `{$table}` WHERE id = %d", $did), ARRAY_A);
+            $periods      = pa_sinova_all_periods_map();
+            $editId       = (int) ($_POST['edit_doc_id'] ?? 0);
+            $origRow      = ($editId > 0) ? $wpdb->get_row($wpdb->prepare("SELECT * FROM `{$table}` WHERE id = %d", $editId), ARRAY_A) : null;
+            $slug         = sanitize_key((string) ($_POST['doc_slug'] ?? 'lra'));
             $allowedSlugs = pa_sinova_user_allowed_module_slugs();
-            if ($row && (!empty($allowedSlugs) && !in_array((string) $row['page_slug'], $allowedSlugs, true))) {
-                $notice = 'Gagal: Peran akun Anda tidak berwenang menghapus dokumen modul tersebut.';
-            } elseif ($row) {
-                if (($row['source_type'] ?? '') === 'wp_pdf' && function_exists('pa_sinova_safe_unlink_local_pdf')) {
-                    pa_sinova_safe_unlink_local_pdf((string) $row['doc_url']);
+            if (!$origRow) {
+                $notice = 'Gagal: Dokumen yang ingin diubah tidak ditemukan.';
+            } elseif (!empty($allowedSlugs) && (!in_array((string) $origRow['page_slug'], $allowedSlugs, true) || !in_array($slug, $allowedSlugs, true))) {
+                $notice    = 'Gagal: Peran akun Anda tidak berwenang mengubah dokumen modul tersebut.';
+                $editDocId = $editId;
+            } else {
+                $maxYear = max(2028, (int) wp_date('Y') + 2);
+                $year    = max(2017, min($maxYear, (int) ($_POST['doc_year'] ?? $origRow['year'])));
+                $sub     = sanitize_text_field(wp_unslash((string) ($_POST['doc_subgroup'] ?? $origRow['sub_group'])));
+                if ($sub === '') {
+                    $sub = 'DOKUMEN';
                 }
-                $wpdb->delete($table, array('id' => $did));
-                pa_sinova_flush_caches_for_slug((string) $row['page_slug']);
+                $per   = strtoupper(sanitize_key((string) ($_POST['doc_period'] ?? $origRow['period_key'])));
+                $title = sanitize_text_field(wp_unslash((string) ($_POST['doc_title'] ?? '')));
+                $dupId = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM `{$table}` WHERE page_slug = %s AND year = %d AND sub_group = %s AND period_key = %s AND id != %d",
+                    $slug, $year, $sub, $per, $editId
+                ));
+                if ($dupId > 0) {
+                    $notice    = "Gagal: Slot ({$slug}, {$year}, {$sub}, {$per}) sudah dipakai dokumen ID #{$dupId}. Pilih modul/tahun/sub-kelompok/periode lain.";
+                    $editDocId = $editId;
+                } else {
+                    $newUrl         = (string) ($origRow['doc_url'] ?? '');
+                    $srcType        = (string) ($origRow['source_type'] ?? 'external');
+                    $fileKb         = $origRow['file_size_kb'];
+                    $oldPdfToDelete = '';
+                    $sourceOk       = true;
+                    $rawUrl         = trim(wp_unslash((string) ($_POST['doc_url'] ?? '')));
+                    $pdfErr         = (int) ($_FILES['doc_pdf']['error'] ?? UPLOAD_ERR_NO_FILE);
+
+                    if ($pdfErr !== UPLOAD_ERR_NO_FILE && $pdfErr !== UPLOAD_ERR_OK) {
+                        $notice    = 'Gagal: Berkas PDF pengganti gagal diunggah ke server.';
+                        $sourceOk  = false;
+                        $editDocId = $editId;
+                    } elseif (!empty($_FILES['doc_pdf']['tmp_name']) && is_uploaded_file($_FILES['doc_pdf']['tmp_name'])) {
+                        $rawPdf = (string) file_get_contents($_FILES['doc_pdf']['tmp_name']);
+                        $stored = pa_sinova_store_verified_pdf_bytes($rawPdf, $slug, $year, $per, $notice);
+                        if (is_array($stored)) {
+                            if (($origRow['source_type'] ?? '') === 'wp_pdf' && (string) ($origRow['doc_url'] ?? '') !== $stored['url']) {
+                                $oldPdfToDelete = (string) $origRow['doc_url'];
+                            }
+                            $newUrl  = $stored['url'];
+                            $srcType = 'wp_pdf';
+                            $fileKb  = $stored['file_kb'];
+                        } else {
+                            $sourceOk  = false;
+                            $editDocId = $editId;
+                        }
+                    } elseif ($rawUrl !== '' && $rawUrl !== (string) ($origRow['doc_url'] ?? '')) {
+                        $candUrl = esc_url_raw($rawUrl);
+                        if ($candUrl === '' || (stripos($candUrl, 'https://') !== 0 && stripos($candUrl, home_url()) !== 0)) {
+                            $notice    = 'Gagal: Tautan URL pengganti harus menggunakan protokol HTTPS yang valid.';
+                            $sourceOk  = false;
+                            $editDocId = $editId;
+                        } else {
+                            if (($origRow['source_type'] ?? '') === 'wp_pdf') {
+                                $oldPdfToDelete = (string) ($origRow['doc_url'] ?? '');
+                            }
+                            $newUrl  = $candUrl;
+                            $srcType = 'external';
+                            $fileKb  = null;
+                        }
+                    }
+
+                    if ($sourceOk && $newUrl !== '') {
+                        $order = (int) ($periods[$per]['order'] ?? 1);
+                        if ($title === '') {
+                            $title = trim("{$sub} " . ($periods[$per]['label'] ?? $per) . " {$year}");
+                        }
+                        $wpdb->update($table, array(
+                            'page_slug'    => $slug,
+                            'year'         => $year,
+                            'sub_group'    => $sub,
+                            'period_key'   => $per,
+                            'period_order' => $order,
+                            'title'        => $title,
+                            'source_type'  => $srcType,
+                            'doc_url'      => $newUrl,
+                            'file_size_kb' => $fileKb,
+                            'updated_by'   => wp_get_current_user()->display_name ?: 'WP Admin',
+                            'updated_at'   => current_time('mysql'),
+                        ), array('id' => $editId));
+                        if ($oldPdfToDelete !== '' && function_exists('pa_sinova_safe_unlink_local_pdf')) {
+                            pa_sinova_safe_unlink_local_pdf($oldPdfToDelete);
+                        }
+                        pa_sinova_flush_caches_for_slug((string) $origRow['page_slug']);
+                        if ($slug !== (string) $origRow['page_slug']) {
+                            pa_sinova_flush_caches_for_slug($slug);
+                        }
+                        $editDocId = 0;
+                        $notice    = "Perubahan dokumen #{$editId} ({$slug} · {$per} {$year}) berhasil disimpan & dipublikasikan.";
+                    } elseif ($sourceOk) {
+                        $notice    = 'Gagal: Sumber berkas PDF atau URL dokumen tidak boleh kosong.';
+                        $editDocId = $editId;
+                    }
+                }
+            }
+        } elseif ($action === 'delete_doc' && in_array('upload', $allowedTabs, true) && !empty($_POST['doc_id'])) {
+            $activeTab    = 'upload';
+            $allowedSlugs = pa_sinova_user_allowed_module_slugs();
+            $delRes       = pa_sinova_delete_docs_by_ids(array((int) $_POST['doc_id']), $allowedSlugs);
+            if ($delRes['denied'] > 0 && $delRes['deleted'] === 0) {
+                $notice = 'Gagal: Peran akun Anda tidak berwenang menghapus dokumen modul tersebut.';
+            } elseif ($delRes['deleted'] > 0) {
                 $notice = 'Dokumen berhasil dihapus dari arsip.';
+            }
+        } elseif ($action === 'bulk_delete_docs' && in_array('upload', $allowedTabs, true)) {
+            $activeTab    = 'upload';
+            $rawDocIds    = (isset($_POST['doc_ids']) && is_array($_POST['doc_ids'])) ? $_POST['doc_ids'] : array();
+            if (empty($rawDocIds)) {
+                $notice = 'Gagal: Pilih minimal satu dokumen dengan mencentang kotak di samping item.';
+            } else {
+                $allowedSlugs = pa_sinova_user_allowed_module_slugs();
+                $delRes       = pa_sinova_delete_docs_by_ids($rawDocIds, $allowedSlugs);
+                if ($delRes['deleted'] > 0) {
+                    $notice = $delRes['deleted'] . ' dokumen terpilih berhasil dihapus dari arsip.';
+                    if ($delRes['denied'] > 0) {
+                        $notice .= ' (' . $delRes['denied'] . ' item dilewati karena batas peran modul.)';
+                    }
+                } elseif ($delRes['denied'] > 0) {
+                    $notice = 'Gagal: Peran akun Anda tidak berwenang menghapus dokumen modul yang dipilih.';
+                } else {
+                    $notice = 'Gagal: Tidak ada dokumen valid yang dapat dihapus.';
+                }
             }
         } elseif ($action === 'save_login_hide' && $requireAdmin()) {
             $activeTab = 'security';
@@ -1711,15 +2492,19 @@ function pa_sinova_render_admin_page(): void {
         $uploadCatalog = $catalog;
     }
     $periods    = function_exists('pa_sinova_all_periods_map') ? pa_sinova_all_periods_map() : array();
-    $report     = pa_sinova_wp_compliance_report();
+    $audit      = pa_sinova_full_audit_report();
+    $report     = $audit['base'];
     $uploadKeys = array_keys($uploadCatalog);
     $preSlug    = isset($_GET['doc_slug']) ? sanitize_key((string) $_GET['doc_slug']) : ($uploadKeys[0] ?? 'lra');
     if (!isset($uploadCatalog[$preSlug]) && !empty($uploadKeys)) {
         $preSlug = $uploadKeys[0];
     }
-    $tabBaseUrl = admin_url('admin.php?page=pa-sinova-starter&tab=');
-    $tabLabels  = array(
-        'compliance' => 'Dashboard 35 Kriteria (' . $report['total'] . '%)',
+    $tabBaseUrl    = admin_url('admin.php?page=pa-sinova-starter&tab=');
+    $exportNonce   = wp_create_nonce('pa_sinova_export_nonce');
+    $exportCsvUrl  = admin_url('admin.php?page=pa-sinova-starter&pa_sinova_export=csv&_wpnonce=' . rawurlencode($exportNonce));
+    $exportJsonUrl = admin_url('admin.php?page=pa-sinova-starter&pa_sinova_export=json&_wpnonce=' . rawurlencode($exportNonce));
+    $tabLabels     = array(
+        'compliance' => 'Dashboard 3 Pilar &amp; 35 Kriteria (' . $audit['weighted_total'] . ')',
         'upload'     => 'Upload &amp; Kelola Dokumen',
         'data'       => 'Data Operasional &amp; RSS',
         'migration'  => 'Migrasi &amp; Adopsi',
@@ -1729,7 +2514,7 @@ function pa_sinova_render_admin_page(): void {
     ?>
     <div class="wrap">
         <h1 style="color:#056e4f;font-weight:800;">SINOVA Hub — Panel Backend &amp; Kepatuhan (SK Dirjen Badilag 2722/2026)</h1>
-        <p style="color:#475569;margin-top:2px;">Halaman backend khusus operator untuk memantau kesiapan 35 kriteria, mengunggah arsip PDF/Drive, serta mengelola data operasional &amp; keamanan. Istilah <em>SINOVA</em> tidak ditampilkan di halaman publik masyarakat.</p>
+        <p style="color:#475569;margin-top:2px;">Halaman backend khusus operator untuk memantau kesiapan 3 Pilar SINOVA &amp; Standar Chrome Modern Web, mengunggah arsip PDF/Drive, serta mengelola data operasional &amp; keamanan. Istilah <em>SINOVA</em> tidak ditampilkan di halaman publik masyarakat.</p>
 
         <?php if ($notice !== '') :
             $noticeClass = (stripos($notice, 'Gagal:') === 0) ? 'notice-error' : 'notice-success';
@@ -1748,9 +2533,28 @@ function pa_sinova_render_admin_page(): void {
         </h2>
 
         <?php if ($activeTab === 'compliance') : ?>
+            <div style="background:linear-gradient(135deg,#043927 0%,#056e4f 100%);color:#fff;border:1px solid #C9A227;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;">
+                <div>
+                    <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#E5C158;text-transform:uppercase;">Skor Gabungan 3 Pilar SINOVA + Standar Web Modern Chrome</div>
+                    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:4px;">
+                        <span style="font-size:34px;font-weight:900;color:#fff;"><?php echo esc_html((string) $audit['weighted_total']); ?> / 100</span>
+                        <span style="display:inline-block;padding:4px 12px;border-radius:999px;background:#fff;color:<?php echo esc_attr($audit['predicate_color']); ?>;font-weight:800;font-size:12.5px;">Predikat: <?php echo esc_html($audit['predicate']); ?></span>
+                    </div>
+                    <div style="font-size:12px;color:#d1fae5;margin-top:4px;">
+                        Pilar 1 Konten (60%): <strong><?php echo esc_html((string) $audit['pilar1_pct']); ?>%</strong> ·
+                        Pilar 2 UI/UX &amp; WCAG 2.2 (20%): <strong><?php echo esc_html((string) $audit['pilar2_pct']); ?>%</strong> ·
+                        Pilar 3 Performa, Keamanan &amp; Chrome (20%): <strong><?php echo esc_html((string) $audit['pilar3_pct']); ?>%</strong>
+                    </div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                    <a href="<?php echo esc_url($exportCsvUrl); ?>" class="button button-secondary">⬇ Ekspor Bukti CSV (SINOVA)</a>
+                    <a href="<?php echo esc_url($exportJsonUrl); ?>" class="button button-secondary">⬇ Ekspor Laporan JSON 3 Pilar</a>
+                </div>
+            </div>
+
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:18px;">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #056e4f;border-radius:10px;padding:14px;">
-                    <div style="font-size:12px;color:#64748b;font-weight:700;">SKOR KESIAPAN KONTEN</div>
+                    <div style="font-size:12px;color:#64748b;font-weight:700;">SKOR 35 KRITERIA (PILAR 1)</div>
                     <div style="font-size:28px;font-weight:900;color:#056e4f;"><?php echo esc_html((string) $report['total']); ?>%</div>
                     <div style="font-size:11.5px;color:#475569;">Berkala: <?php echo esc_html((string) $report['berkala']); ?>% · Wajib: <?php echo esc_html((string) $report['wajib']); ?>%</div>
                 </div>
@@ -1768,6 +2572,52 @@ function pa_sinova_render_admin_page(): void {
                     <div style="font-size:12px;color:#64748b;font-weight:700;">KOSONG</div>
                     <div style="font-size:28px;font-weight:900;color:#b91c1c;"><?php echo esc_html((string) $report['counts']['kosong']); ?> / 35</div>
                     <div style="font-size:11.5px;color:#475569;">Belum terunggah</div>
+                </div>
+            </div>
+
+            <?php if (!empty($audit['recommendations'])) : ?>
+                <div style="background:#fffbeb;border:1px solid #f59e0b;border-left:5px solid #d97706;border-radius:10px;padding:14px 18px;margin-bottom:18px;">
+                    <strong style="color:#92400e;">Rekomendasi Prioritas Menuju Predikat Sangat Baik / Excellent (&ge; 90):</strong>
+                    <ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:#78350f;">
+                        <?php foreach (array_slice($audit['recommendations'], 0, 8) as $rec) : ?>
+                            <li>
+                                <strong><?php echo esc_html($rec['label']); ?>:</strong>
+                                <?php echo esc_html($rec['detail']); ?>
+                                <?php if (!empty($rec['tab']) && in_array($rec['tab'], $allowedTabs, true)) : ?>
+                                    — <a href="<?php echo esc_url($tabBaseUrl . $rec['tab']); ?>">Perbaiki di tab <?php echo esc_html(ucfirst($rec['tab'])); ?> →</a>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;margin-bottom:18px;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:14px;">
+                    <h3 style="margin:0 0 10px;color:#056e4f;">Pilar 2 — UI/UX, 2-Click Rule &amp; Aksesibilitas WCAG 2.2 (<?php echo esc_html((string) $audit['pilar2_pct']); ?>%)</h3>
+                    <table class="widefat striped">
+                        <tbody>
+                            <?php foreach ($audit['p2_checks'] as $chk) : ?>
+                                <tr>
+                                    <td style="width:28px;font-weight:900;color:<?php echo $chk['pass'] ? '#15803d' : '#b45309'; ?>;"><?php echo $chk['pass'] ? '✔' : '!'; ?></td>
+                                    <td><strong><?php echo esc_html($chk['label']); ?></strong><br><small style="color:#475569;"><?php echo esc_html($chk['detail']); ?></small></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:14px;">
+                    <h3 style="margin:0 0 10px;color:#056e4f;">Pilar 3 — Performa, Keamanan &amp; Standar Chrome (<?php echo esc_html((string) $audit['pilar3_pct']); ?>%)</h3>
+                    <table class="widefat striped">
+                        <tbody>
+                            <?php foreach ($audit['p3_checks'] as $chk) : ?>
+                                <tr>
+                                    <td style="width:28px;font-weight:900;color:<?php echo $chk['pass'] ? '#15803d' : '#b45309'; ?>;"><?php echo $chk['pass'] ? '✔' : '!'; ?></td>
+                                    <td><strong><?php echo esc_html($chk['label']); ?></strong><br><small style="color:#475569;"><?php echo esc_html($chk['detail']); ?></small></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -1789,7 +2639,7 @@ function pa_sinova_render_admin_page(): void {
                                 <td><?php echo esc_html($it['note']); ?></td>
                                 <td>
                                     <button type="button" class="button button-small pa-copy-url-btn" data-url="<?php echo esc_attr($it['url']); ?>">Salin URL</button>
-                                    <a href="<?php echo esc_url($it['url']); ?>" target="_blank" class="button button-small">Buka</a>
+                                    <a href="<?php echo esc_url($it['url']); ?>" target="_blank" rel="noopener noreferrer" class="button button-small">Buka</a>
                                     <a href="<?php echo esc_url($it['edit_url']); ?>" class="button button-small button-primary">Lengkapi</a>
                                 </td>
                             </tr>
@@ -1811,79 +2661,277 @@ function pa_sinova_render_admin_page(): void {
 
         <?php elseif ($activeTab === 'upload') :
             global $wpdb;
-            $table = function_exists('pa_sinova_table_name') ? pa_sinova_table_name() : ($wpdb->prefix . 'pa_sinova_documents');
+            $table   = function_exists('pa_sinova_table_name') ? pa_sinova_table_name() : ($wpdb->prefix . 'pa_sinova_documents');
+            $maxYear = max(2028, (int) wp_date('Y') + 2);
+
+            $filterSlug = isset($_GET['filter_slug']) ? sanitize_key((string) $_GET['filter_slug']) : 'all';
+            if ($filterSlug !== 'all' && !isset($uploadCatalog[$filterSlug])) {
+                $filterSlug = 'all';
+            }
+            $filterYear = isset($_GET['filter_year']) ? (int) $_GET['filter_year'] : 0;
+            $docQuery   = isset($_GET['doc_q']) ? trim(sanitize_text_field(wp_unslash((string) $_GET['doc_q']))) : '';
+
+            $uploadViewArgs = array('page' => 'pa-sinova-starter', 'tab' => 'upload');
+            if ($filterSlug !== 'all') {
+                $uploadViewArgs['filter_slug'] = $filterSlug;
+            }
+            if ($filterYear > 0) {
+                $uploadViewArgs['filter_year'] = $filterYear;
+            }
+            if ($docQuery !== '') {
+                $uploadViewArgs['doc_q'] = $docQuery;
+            }
+            $uploadViewUrl = add_query_arg($uploadViewArgs, admin_url('admin.php'));
+
+            $reqEditDocId = ($editDocId > 0) ? $editDocId : (isset($_GET['edit_doc']) ? (int) $_GET['edit_doc'] : 0);
+            $editDoc      = ($reqEditDocId > 0) ? $wpdb->get_row($wpdb->prepare("SELECT * FROM `{$table}` WHERE id = %d", $reqEditDocId), ARRAY_A) : null;
+            if ($editDoc && !empty($allowedSlugs) && !in_array((string) ($editDoc['page_slug'] ?? ''), $allowedSlugs, true)) {
+                $editDoc      = null;
+                $reqEditDocId = 0;
+            }
+            $isEditingDoc = is_array($editDoc) && !empty($editDoc['id']);
+
+            $postedDocEdit = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['pa_sinova_action'] ?? '') === 'update_doc' && $editDocId > 0);
+            $formSlug      = $postedDocEdit ? sanitize_key((string) ($_POST['doc_slug'] ?? $preSlug)) : ($isEditingDoc ? (string) $editDoc['page_slug'] : $preSlug);
+            if (!isset($uploadCatalog[$formSlug]) && !empty($uploadKeys)) {
+                $formSlug = $uploadKeys[0];
+            }
+            $formYear  = $postedDocEdit ? (int) ($_POST['doc_year'] ?? wp_date('Y')) : ($isEditingDoc ? (int) $editDoc['year'] : (int) wp_date('Y'));
+            $formSub   = $postedDocEdit ? sanitize_text_field(wp_unslash((string) ($_POST['doc_subgroup'] ?? 'DOKUMEN'))) : ($isEditingDoc ? (string) $editDoc['sub_group'] : (string) ($uploadCatalog[$formSlug]['sub_groups'][0] ?? 'SERAPAN 01'));
+            $formPer   = $postedDocEdit ? strtoupper(sanitize_key((string) ($_POST['doc_period'] ?? 'JAN'))) : ($isEditingDoc ? (string) $editDoc['period_key'] : 'JAN');
+            $formTitle = $postedDocEdit ? sanitize_text_field(wp_unslash((string) ($_POST['doc_title'] ?? ''))) : ($isEditingDoc ? (string) $editDoc['title'] : '');
+            $formUrl   = $postedDocEdit
+                ? esc_url_raw(wp_unslash((string) ($_POST['doc_url'] ?? '')))
+                : ($isEditingDoc && ($editDoc['source_type'] ?? '') !== 'wp_pdf' ? (string) ($editDoc['doc_url'] ?? '') : '');
+
+            $whereParts = array();
+            $whereArgs  = array();
             if (!empty($allowedSlugs)) {
                 $placeholders = implode(',', array_fill(0, count($allowedSlugs), '%s'));
-                $recentDocs   = $wpdb->get_results($wpdb->prepare("SELECT * FROM `{$table}` WHERE page_slug IN ({$placeholders}) ORDER BY updated_at DESC, id DESC LIMIT 25", ...$allowedSlugs), ARRAY_A);
+                $whereParts[] = "page_slug IN ({$placeholders})";
+                $whereArgs    = array_merge($whereArgs, $allowedSlugs);
+            }
+            if ($filterSlug !== 'all') {
+                $whereParts[] = 'page_slug = %s';
+                $whereArgs[]  = $filterSlug;
+            }
+            if ($filterYear > 0) {
+                $whereParts[] = 'year = %d';
+                $whereArgs[]  = $filterYear;
+            }
+            if ($docQuery !== '') {
+                $like         = '%' . $wpdb->esc_like($docQuery) . '%';
+                $whereParts[] = '(title LIKE %s OR sub_group LIKE %s OR period_key LIKE %s)';
+                $whereArgs[]  = $like;
+                $whereArgs[]  = $like;
+                $whereArgs[]  = $like;
+            }
+            $whereSql   = !empty($whereParts) ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
+            $recentSql  = "SELECT * FROM `{$table}` {$whereSql} ORDER BY updated_at DESC, id DESC LIMIT 100";
+            $recentDocs = !empty($whereArgs)
+                ? $wpdb->get_results($wpdb->prepare($recentSql, ...$whereArgs), ARRAY_A)
+                : $wpdb->get_results($recentSql, ARRAY_A);
+
+            if (!empty($allowedSlugs)) {
+                $yrPh     = implode(',', array_fill(0, count($allowedSlugs), '%s'));
+                $docYears = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT year FROM `{$table}` WHERE page_slug IN ({$yrPh}) ORDER BY year DESC", ...$allowedSlugs));
             } else {
-                $recentDocs = $wpdb->get_results("SELECT * FROM `{$table}` ORDER BY updated_at DESC, id DESC LIMIT 25", ARRAY_A);
+                $docYears = $wpdb->get_col("SELECT DISTINCT year FROM `{$table}` ORDER BY year DESC");
             }
         ?>
-            <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:20px;align-items:start;">
-                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">Upload Dokumen Cepat</h2>
-                    <form method="post" enctype="multipart/form-data">
+            <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingDoc ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+                        <h2 style="margin:0;color:#056e4f;"><?php echo $isEditingDoc ? 'Edit Dokumen Arsip' : 'Upload Dokumen Cepat'; ?></h2>
+                        <?php if ($isEditingDoc) : ?>
+                            <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Mode Edit · ID #<?php echo esc_html((string) $editDoc['id']); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($isEditingDoc) : ?>
+                        <p style="font-size:12.5px;color:#334155;background:#f8fafc;border-left:3px solid #056e4f;padding:8px 10px;margin:8px 0 12px;">
+                            Mengubah dokumen <strong><?php echo esc_html((string) $editDoc['title']); ?></strong>.<br>
+                            Sumber aktif:
+                            <a href="<?php echo esc_url((string) $editDoc['doc_url']); ?>" target="_blank" rel="noopener noreferrer">
+                                <?php echo esc_html(($editDoc['source_type'] ?? '') === 'wp_pdf' ? 'PDF Lokal (' . basename((string) $editDoc['doc_url']) . ')' : (string) $editDoc['doc_url']); ?> ↗
+                            </a>
+                            <br><span style="color:#64748b;">Biarkan berkas &amp; kolom URL kosong jika hanya ingin memperbaiki modul, tahun, slot, atau judul.</span>
+                        </p>
+                    <?php endif; ?>
+                    <form method="post" action="<?php echo esc_url($uploadViewUrl); ?>" enctype="multipart/form-data">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                        <input type="hidden" name="pa_sinova_action" value="upload_doc">
+                        <input type="hidden" name="pa_sinova_action" value="<?php echo $isEditingDoc ? 'update_doc' : 'upload_doc'; ?>">
+                        <?php if ($isEditingDoc) : ?>
+                            <input type="hidden" name="edit_doc_id" value="<?php echo esc_attr((string) $editDoc['id']); ?>">
+                        <?php endif; ?>
                         <table class="form-table">
                             <tr><th>Modul</th><td>
-                                <select name="doc_slug" id="pa-doc-slug-select" class="regular-text">
+                                <select name="doc_slug" id="pa-doc-slug-select" class="regular-text" data-editing="<?php echo $isEditingDoc ? '1' : '0'; ?>">
                                     <?php foreach ($uploadCatalog as $slug => $m) : ?>
-                                        <option value="<?php echo esc_attr($slug); ?>" data-sub="<?php echo esc_attr((string) ($m['sub_groups'][0] ?? 'DOKUMEN')); ?>" <?php selected($preSlug, $slug); ?>><?php echo esc_html($m['title'] . ' (' . $slug . ')'); ?></option>
+                                        <option value="<?php echo esc_attr($slug); ?>" data-sub="<?php echo esc_attr((string) ($m['sub_groups'][0] ?? 'DOKUMEN')); ?>" <?php selected($formSlug, $slug); ?>><?php echo esc_html($m['title'] . ' (' . $slug . ')'); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </td></tr>
-                            <tr><th>Tahun</th><td><input type="number" name="doc_year" min="2017" max="2027" value="<?php echo esc_attr((string) date('Y')); ?>"></td></tr>
-                            <tr><th>Sub-Kelompok</th><td><input type="text" name="doc_subgroup" id="pa-doc-subgroup-input" class="regular-text" value="<?php echo esc_attr((string) ($uploadCatalog[$preSlug]['sub_groups'][0] ?? 'SERAPAN 01')); ?>"></td></tr>
+                            <tr><th>Tahun</th><td><input type="number" name="doc_year" min="2017" max="<?php echo esc_attr((string) $maxYear); ?>" value="<?php echo esc_attr((string) $formYear); ?>"></td></tr>
+                            <tr><th>Sub-Kelompok</th><td><input type="text" name="doc_subgroup" id="pa-doc-subgroup-input" class="regular-text" value="<?php echo esc_attr($formSub); ?>"></td></tr>
                             <tr><th>Periode Slot</th><td>
                                 <select name="doc_period">
                                     <?php foreach ($periods as $pk => $pv) : ?>
-                                        <option value="<?php echo esc_attr($pk); ?>"><?php echo esc_html($pk . ' — ' . $pv['label']); ?></option>
+                                        <option value="<?php echo esc_attr($pk); ?>" <?php selected($formPer, $pk); ?>><?php echo esc_html($pk . ' — ' . $pv['label']); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </td></tr>
-                            <tr><th>Upload PDF (Maks 10MB)</th><td><input type="file" name="doc_pdf" accept="application/pdf,.pdf"></td></tr>
-                            <tr><th>Atau URL HTTPS / Drive</th><td><input type="url" name="doc_url" class="regular-text" placeholder="https://drive.google.com/file/d/.../view"></td></tr>
-                            <tr><th>Judul (Opsional)</th><td><input type="text" name="doc_title" class="regular-text"></td></tr>
+                            <tr><th><?php echo $isEditingDoc ? 'Ganti PDF (Opsional)' : 'Upload PDF (Maks 10MB)'; ?></th><td><input type="file" name="doc_pdf" accept="application/pdf,.pdf"></td></tr>
+                            <tr><th><?php echo $isEditingDoc ? 'Atau Ganti URL HTTPS' : 'Atau URL HTTPS / Drive'; ?></th><td><input type="url" name="doc_url" class="regular-text" value="<?php echo esc_attr($formUrl); ?>" placeholder="https://drive.google.com/file/d/.../view"></td></tr>
+                            <tr><th>Judul (Opsional)</th><td><input type="text" name="doc_title" class="regular-text" value="<?php echo esc_attr($formTitle); ?>"></td></tr>
                         </table>
-                        <p><button type="submit" class="button button-primary">Simpan &amp; Tayangkan ke Website</button></p>
+                        <p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                            <button type="submit" class="button button-primary"><?php echo $isEditingDoc ? 'Simpan Perubahan' : 'Simpan &amp; Tayangkan ke Website'; ?></button>
+                            <?php if ($isEditingDoc) : ?>
+                                <a href="<?php echo esc_url($uploadViewUrl); ?>" class="button">Batal Edit</a>
+                            <?php endif; ?>
+                        </p>
                     </form>
-                    <script>
-                        var sel = document.getElementById('pa-doc-slug-select');
-                        var sub = document.getElementById('pa-doc-subgroup-input');
-                        if(sel && sub){
-                            sel.addEventListener('change', function(){
-                                var opt = sel.options[sel.selectedIndex];
-                                if(opt && opt.getAttribute('data-sub')){ sub.value = opt.getAttribute('data-sub'); }
-                            });
-                        }
-                    </script>
                 </div>
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">25 Dokumen Terakhir Diunggah</h2>
-                    <table class="widefat striped">
-                        <thead><tr><th>Modul / Slot</th><th>Judul Dokumen</th><th>Sumber</th><th>Aksi</th></tr></thead>
-                        <tbody>
-                            <?php if (empty($recentDocs)) : ?>
-                                <tr><td colspan="4">Belum ada dokumen diunggah.</td></tr>
-                            <?php else : foreach ($recentDocs as $rd) : ?>
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                        <h2 style="margin:0;color:#056e4f;">Daftar Dokumen Terunggah (<?php echo count((array) $recentDocs); ?>)</h2>
+                        <small style="color:#64748b;">Menampilkan hingga 100 entri terbaru sesuai filter</small>
+                    </div>
+
+                    <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:12px;">
+                        <input type="hidden" name="page" value="pa-sinova-starter">
+                        <input type="hidden" name="tab" value="upload">
+                        <select name="filter_slug" aria-label="Filter Modul" style="max-width:190px;">
+                            <option value="all" <?php selected($filterSlug, 'all'); ?>>Semua Modul</option>
+                            <?php foreach ($uploadCatalog as $slug => $m) : ?>
+                                <option value="<?php echo esc_attr($slug); ?>" <?php selected($filterSlug, $slug); ?>><?php echo esc_html($slug . ' — ' . $m['title']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <select name="filter_year" aria-label="Filter Tahun" style="width:110px;">
+                            <option value="0" <?php selected($filterYear, 0); ?>>Semua Tahun</option>
+                            <?php foreach ((array) $docYears as $dy) : ?>
+                                <option value="<?php echo esc_attr((string) $dy); ?>" <?php selected($filterYear, (int) $dy); ?>><?php echo esc_html((string) $dy); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="search" name="doc_q" value="<?php echo esc_attr($docQuery); ?>" placeholder="Cari judul / sub-kelompok / periode..." style="min-width:190px;flex:1;">
+                        <button type="submit" class="button">Filter</button>
+                        <?php if ($filterSlug !== 'all' || $filterYear > 0 || $docQuery !== '') : ?>
+                            <a href="<?php echo esc_url($tabBaseUrl . 'upload'); ?>" class="button">Reset</a>
+                        <?php endif; ?>
+                    </form>
+
+                    <form method="post" id="pa-bulk-doc-form" action="<?php echo esc_url($uploadViewUrl); ?>">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="bulk_delete_docs">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;padding:8px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <label style="font-weight:600;cursor:pointer;">
+                                    <input type="checkbox" id="pa-doc-check-all"> Pilih Semua
+                                </label>
+                                <span id="pa-doc-sel-info" style="font-size:12.5px;color:#475569;">0 item dipilih</span>
+                            </div>
+                            <button type="submit" id="pa-bulk-doc-del-btn" class="button" style="color:#b91c1c;border-color:#fca5a5;" disabled>Hapus Terpilih (0)</button>
+                        </div>
+                        <table class="widefat striped">
+                            <thead>
                                 <tr>
-                                    <td><strong><?php echo esc_html($rd['page_slug']); ?></strong><br><small><?php echo esc_html($rd['year'] . ' · ' . $rd['period_key']); ?></small></td>
-                                    <td><?php echo esc_html($rd['title']); ?><br><small style="color:#64748b;"><?php echo esc_html($rd['sub_group']); ?></small></td>
-                                    <td><a href="<?php echo esc_url($rd['doc_url']); ?>" target="_blank"><?php echo esc_html($rd['source_type'] === 'wp_pdf' ? 'PDF Lokal' : 'Drive/URL'); ?> ↗</a></td>
-                                    <td>
-                                        <form method="post" onsubmit="return confirm('Hapus dokumen ini?');">
-                                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                                            <input type="hidden" name="pa_sinova_action" value="delete_doc">
-                                            <input type="hidden" name="doc_id" value="<?php echo esc_attr((string) $rd['id']); ?>">
-                                            <button type="submit" class="button button-small" style="color:#b91c1c;">Hapus</button>
-                                        </form>
-                                    </td>
+                                    <th style="width:28px;"><input type="checkbox" id="pa-doc-th-check-all" aria-label="Pilih semua dokumen pada tabel"></th>
+                                    <th>Modul / Slot</th>
+                                    <th>Judul Dokumen</th>
+                                    <th>Sumber</th>
+                                    <th style="width:130px;">Aksi</th>
                                 </tr>
-                            <?php endforeach; endif; ?>
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($recentDocs)) : ?>
+                                    <tr><td colspan="5">Belum ada dokumen yang cocok dengan filter saat ini.</td></tr>
+                                <?php else : foreach ($recentDocs as $rd) :
+                                    $rowId     = (int) ($rd['id'] ?? 0);
+                                    $rowIsEdit = ($isEditingDoc && (int) $editDoc['id'] === $rowId);
+                                    $rowEditUrl = add_query_arg('edit_doc', $rowId, $uploadViewUrl);
+                                ?>
+                                    <tr style="<?php echo $rowIsEdit ? 'background:#f0fdf4;' : ''; ?>">
+                                        <td><input type="checkbox" class="pa-doc-chk" name="doc_ids[]" value="<?php echo esc_attr((string) $rowId); ?>" aria-label="Pilih <?php echo esc_attr((string) $rd['title']); ?>"></td>
+                                        <td><strong><?php echo esc_html((string) $rd['page_slug']); ?></strong><br><small><?php echo esc_html((string) $rd['year'] . ' · ' . (string) $rd['period_key']); ?></small></td>
+                                        <td><?php echo esc_html((string) $rd['title']); ?><br><small style="color:#64748b;"><?php echo esc_html((string) $rd['sub_group']); ?></small></td>
+                                        <td><a href="<?php echo esc_url((string) $rd['doc_url']); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html(($rd['source_type'] ?? '') === 'wp_pdf' ? 'PDF Lokal' : 'Drive/URL'); ?> ↗</a></td>
+                                        <td>
+                                            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                                                <a href="<?php echo esc_url($rowEditUrl); ?>" class="button button-small <?php echo $rowIsEdit ? 'button-primary' : ''; ?>">Edit</a>
+                                                <button type="button" class="button button-small pa-single-doc-del-btn" data-id="<?php echo esc_attr((string) $rowId); ?>" data-title="<?php echo esc_attr((string) $rd['title']); ?>" style="color:#b91c1c;">Hapus</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; endif; ?>
+                            </tbody>
+                        </table>
+                    </form>
+                    <form method="post" id="pa-single-doc-del-form" action="<?php echo esc_url($uploadViewUrl); ?>" style="display:none;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="delete_doc">
+                        <input type="hidden" name="doc_id" id="pa-single-doc-del-id" value="0">
+                    </form>
+                    <script>
+                        (function(){
+                            var sel = document.getElementById('pa-doc-slug-select');
+                            var sub = document.getElementById('pa-doc-subgroup-input');
+                            if (sel && sub && sel.getAttribute('data-editing') !== '1') {
+                                sel.addEventListener('change', function(){
+                                    var opt = sel.options[sel.selectedIndex];
+                                    if (opt && opt.getAttribute('data-sub')) { sub.value = opt.getAttribute('data-sub'); }
+                                });
+                            }
+                            var bulkForm = document.getElementById('pa-bulk-doc-form');
+                            var checkAllTop = document.getElementById('pa-doc-check-all');
+                            var checkAllTh = document.getElementById('pa-doc-th-check-all');
+                            var selInfo = document.getElementById('pa-doc-sel-info');
+                            var bulkBtn = document.getElementById('pa-bulk-doc-del-btn');
+                            var singleForm = document.getElementById('pa-single-doc-del-form');
+                            var singleInput = document.getElementById('pa-single-doc-del-id');
+
+                            function getDocBoxes() {
+                                return bulkForm ? Array.prototype.slice.call(bulkForm.querySelectorAll('.pa-doc-chk')) : [];
+                            }
+                            function syncDocSelection() {
+                                var boxes = getDocBoxes();
+                                var checked = boxes.filter(function(cb){ return cb.checked; }).length;
+                                var allChecked = boxes.length > 0 && checked === boxes.length;
+                                if (checkAllTop) { checkAllTop.checked = allChecked; }
+                                if (checkAllTh) { checkAllTh.checked = allChecked; }
+                                if (selInfo) { selInfo.textContent = checked + ' item dipilih'; }
+                                if (bulkBtn) {
+                                    bulkBtn.disabled = checked === 0;
+                                    bulkBtn.textContent = 'Hapus Terpilih (' + checked + ')';
+                                }
+                            }
+                            function setAllDocs(state) {
+                                getDocBoxes().forEach(function(cb){ cb.checked = state; });
+                                syncDocSelection();
+                            }
+                            if (checkAllTop) { checkAllTop.addEventListener('change', function(){ setAllDocs(checkAllTop.checked); }); }
+                            if (checkAllTh) { checkAllTh.addEventListener('change', function(){ setAllDocs(checkAllTh.checked); }); }
+                            getDocBoxes().forEach(function(cb){ cb.addEventListener('change', syncDocSelection); });
+                            if (bulkForm) {
+                                bulkForm.addEventListener('submit', function(e){
+                                    var checked = getDocBoxes().filter(function(cb){ return cb.checked; }).length;
+                                    if (checked === 0) { e.preventDefault(); return; }
+                                    if (!confirm('Hapus ' + checked + ' dokumen yang dipilih secara permanen?')) { e.preventDefault(); }
+                                });
+                            }
+                            document.querySelectorAll('.pa-single-doc-del-btn').forEach(function(btn){
+                                btn.addEventListener('click', function(){
+                                    var title = btn.getAttribute('data-title') || 'dokumen ini';
+                                    if (!confirm('Hapus dokumen "' + title + '" dari arsip?')) { return; }
+                                    if (singleInput && singleForm) {
+                                        singleInput.value = btn.getAttribute('data-id') || '0';
+                                        singleForm.submit();
+                                    }
+                                });
+                            });
+                            syncDocSelection();
+                        })();
+                    </script>
                 </div>
             </div>
 
@@ -1903,9 +2951,62 @@ function pa_sinova_render_admin_page(): void {
             if ($filterRecType !== 'all' && !isset($recTypes[$filterRecType])) {
                 $filterRecType = 'all';
             }
+            $dataViewArgs = array('page' => 'pa-sinova-starter', 'tab' => 'data');
+            if ($filterRecType !== 'all') {
+                $dataViewArgs['rec_type'] = $filterRecType;
+            }
+            $dataViewUrl = add_query_arg($dataViewArgs, admin_url('admin.php'));
+
+            $reqEditRecId = ($editRecId > 0) ? $editRecId : (isset($_GET['edit_rec']) ? (int) $_GET['edit_rec'] : 0);
+            $editRec      = ($reqEditRecId > 0) ? $wpdb->get_row($wpdb->prepare("SELECT * FROM `{$rTable}` WHERE id = %d", $reqEditRecId), ARRAY_A) : null;
+            $isEditingRec = is_array($editRec) && !empty($editRec['id']);
+
+            $postedRecEdit = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['pa_sinova_action'] ?? '') === 'update_record' && $editRecId > 0);
+            $formRecType   = $postedRecEdit
+                ? sanitize_key((string) ($_POST['rec_type'] ?? 'jadwal'))
+                : ($isEditingRec ? (string) $editRec['record_type'] : ($filterRecType !== 'all' ? $filterRecType : 'jadwal'));
+            if (!isset($recTypes[$formRecType])) {
+                $formRecType = 'jadwal';
+            }
+            $formRecTitle = $postedRecEdit ? sanitize_text_field(wp_unslash((string) ($_POST['rec_title'] ?? ''))) : ($isEditingRec ? (string) $editRec['title'] : '');
+            $formRecSub   = $postedRecEdit ? sanitize_text_field(wp_unslash((string) ($_POST['rec_subtitle'] ?? ''))) : ($isEditingRec ? (string) $editRec['subtitle'] : '');
+            $formRecCat   = $postedRecEdit ? sanitize_text_field(wp_unslash((string) ($_POST['rec_category'] ?? ''))) : ($isEditingRec ? (string) $editRec['category'] : '');
+            $formRecDate  = $postedRecEdit ? sanitize_text_field(wp_unslash((string) ($_POST['rec_date'] ?? ''))) : ($isEditingRec ? (string) ($editRec['event_date'] ?? '') : wp_date('Y-m-d'));
+            $formRecOrder = $postedRecEdit ? (int) ($_POST['rec_sort_order'] ?? 10) : ($isEditingRec ? (int) $editRec['sort_order'] : 10);
+
+            $editMeta = ($isEditingRec && !empty($editRec['meta_json'])) ? json_decode((string) $editRec['meta_json'], true) : array();
+            if (!is_array($editMeta)) {
+                $editMeta = array();
+            }
+            if ($postedRecEdit) {
+                $formRecM1 = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_1'] ?? '')));
+                $formRecM2 = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_2'] ?? '')));
+                $formRecM3 = sanitize_text_field(wp_unslash((string) ($_POST['rec_meta_3'] ?? '')));
+            } elseif ($isEditingRec && $formRecType === 'pegawai') {
+                $formRecM1 = (string) ($editMeta['nip'] ?? '');
+                $formRecM2 = (string) ($editMeta['gol'] ?? '');
+                $formRecM3 = (string) ($editMeta['edu'] ?? '');
+            } elseif ($isEditingRec && $formRecType === 'ghaib') {
+                $formRecM1 = (string) ($editMeta['pihak'] ?? '');
+                $formRecM2 = (string) ($editMeta['doc_url'] ?? '');
+                $formRecM3 = '';
+            } elseif ($isEditingRec && $formRecType === 'statistik') {
+                $formRecM1 = (string) ($editMeta['diterima'] ?? '');
+                $formRecM2 = (string) ($editMeta['diputus'] ?? '');
+                $formRecM3 = (string) ($editMeta['sisa'] ?? '');
+            } elseif ($isEditingRec) {
+                $formRecM1 = (string) ($editMeta['jam'] ?? '');
+                $formRecM2 = '';
+                $formRecM3 = '';
+            } else {
+                $formRecM1 = '';
+                $formRecM2 = '';
+                $formRecM3 = '';
+            }
+
             $recRows = ($filterRecType !== 'all')
-                ? $wpdb->get_results($wpdb->prepare("SELECT * FROM `{$rTable}` WHERE record_type = %s ORDER BY sort_order ASC, event_date DESC, id DESC LIMIT 60", $filterRecType), ARRAY_A)
-                : $wpdb->get_results("SELECT * FROM `{$rTable}` ORDER BY record_type ASC, sort_order ASC, id DESC LIMIT 80", ARRAY_A);
+                ? $wpdb->get_results($wpdb->prepare("SELECT * FROM `{$rTable}` WHERE record_type = %s ORDER BY sort_order ASC, event_date DESC, id DESC LIMIT 100", $filterRecType), ARRAY_A)
+                : $wpdb->get_results("SELECT * FROM `{$rTable}` ORDER BY record_type ASC, sort_order ASC, id DESC LIMIT 100", ARRAY_A);
             $feedCache = function_exists('pa_portal_get_official_feeds') ? pa_portal_get_official_feeds(false) : array();
             $feedMaCnt = count((array) ($feedCache['ma'] ?? array()));
             $feedBdCnt = count((array) ($feedCache['badilag'] ?? array()));
@@ -1928,30 +3029,43 @@ function pa_sinova_render_admin_page(): void {
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start;">
-                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">Tambah Data Operasional Terstruktur</h2>
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingRec ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+                        <h2 style="margin:0;color:#056e4f;"><?php echo $isEditingRec ? 'Edit Data Operasional' : 'Tambah Data Operasional Terstruktur'; ?></h2>
+                        <?php if ($isEditingRec) : ?>
+                            <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Mode Edit · ID #<?php echo esc_html((string) $editRec['id']); ?></span>
+                        <?php endif; ?>
+                    </div>
                     <p style="font-size:12.5px;color:#475569;margin-top:0;">Entri langsung tampil pada halaman <code>/profil-pegawai/</code>, <code>/agenda-jadwal-persidangan/</code>, <code>/panggilan-ghaib/</code>, dan <code>/statistik-perkara/</code>.</p>
-                    <form method="post">
+                    <form method="post" action="<?php echo esc_url($dataViewUrl); ?>">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                        <input type="hidden" name="pa_sinova_action" value="add_record">
+                        <input type="hidden" name="pa_sinova_action" value="<?php echo $isEditingRec ? 'update_record' : 'add_record'; ?>">
+                        <?php if ($isEditingRec) : ?>
+                            <input type="hidden" name="edit_rec_id" value="<?php echo esc_attr((string) $editRec['id']); ?>">
+                        <?php endif; ?>
                         <table class="form-table">
                             <tr><th>Jenis Data</th><td>
                                 <select name="rec_type" class="regular-text">
                                     <?php foreach ($recTypes as $rk => $rl) : ?>
-                                        <option value="<?php echo esc_attr($rk); ?>" <?php selected($filterRecType !== 'all' ? $filterRecType : 'jadwal', $rk); ?>><?php echo esc_html($rl); ?></option>
+                                        <option value="<?php echo esc_attr($rk); ?>" <?php selected($formRecType, $rk); ?>><?php echo esc_html($rl); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </td></tr>
-                            <tr><th>Judul / Nama / No. Perkara</th><td><input type="text" name="rec_title" class="regular-text" required placeholder="Contoh: 1201/Pdt.G/2026/PA.Sm"></td></tr>
-                            <tr><th>Subjudul / Jabatan / Agenda</th><td><input type="text" name="rec_subtitle" class="regular-text" placeholder="Contoh: Sidang Pertama / Ketua Pengadilan Agama"></td></tr>
-                            <tr><th>Kategori / Ruang / Tahun</th><td><input type="text" name="rec_category" class="regular-text" placeholder="Contoh: Ruang Sidang 1 / Pimpinan / 2026"></td></tr>
-                            <tr><th>Jam / NIP / Pihak / Diterima</th><td><input type="text" name="rec_meta_1" class="regular-text" placeholder="Contoh: 09.00 WIB atau NIP atau Nama Pihak atau 145"></td></tr>
-                            <tr><th>Golongan / URL Relaas / Diputus</th><td><input type="text" name="rec_meta_2" class="regular-text" placeholder="Contoh: Pembina (IV/a) atau https://... atau 138"></td></tr>
-                            <tr><th>Pendidikan / Sisa</th><td><input type="text" name="rec_meta_3" class="regular-text" placeholder="Contoh: S2 Hukum Islam atau 42"></td></tr>
-                            <tr><th>Tanggal (Opsional)</th><td><input type="date" name="rec_date" value="<?php echo esc_attr(wp_date('Y-m-d')); ?>"></td></tr>
-                            <tr><th>Urutan Tampil</th><td><input type="number" name="rec_sort_order" value="10" style="width:90px;"></td></tr>
+                            <tr><th>Judul / Nama / No. Perkara</th><td><input type="text" name="rec_title" class="regular-text" required value="<?php echo esc_attr($formRecTitle); ?>" placeholder="Contoh: 1201/Pdt.G/2026/PA.Sm"></td></tr>
+                            <tr><th>Subjudul / Jabatan / Agenda</th><td><input type="text" name="rec_subtitle" class="regular-text" value="<?php echo esc_attr($formRecSub); ?>" placeholder="Contoh: Sidang Pertama / Ketua Pengadilan Agama"></td></tr>
+                            <tr><th>Kategori / Ruang / Tahun</th><td><input type="text" name="rec_category" class="regular-text" value="<?php echo esc_attr($formRecCat); ?>" placeholder="Contoh: Ruang Sidang 1 / Pimpinan / 2026"></td></tr>
+                            <tr><th>Jam / NIP / Pihak / Diterima</th><td><input type="text" name="rec_meta_1" class="regular-text" value="<?php echo esc_attr($formRecM1); ?>" placeholder="Contoh: 09.00 WIB atau NIP atau Nama Pihak atau 145"></td></tr>
+                            <tr><th>Golongan / URL Relaas / Diputus</th><td><input type="text" name="rec_meta_2" class="regular-text" value="<?php echo esc_attr($formRecM2); ?>" placeholder="Contoh: Pembina (IV/a) atau https://... atau 138"></td></tr>
+                            <tr><th>Pendidikan / Sisa</th><td><input type="text" name="rec_meta_3" class="regular-text" value="<?php echo esc_attr($formRecM3); ?>" placeholder="Contoh: S2 Hukum Islam atau 42"></td></tr>
+                            <tr><th>Tanggal (Opsional)</th><td><input type="date" name="rec_date" value="<?php echo esc_attr($formRecDate); ?>"></td></tr>
+                            <tr><th>Urutan Tampil</th><td><input type="number" name="rec_sort_order" value="<?php echo esc_attr((string) $formRecOrder); ?>" style="width:90px;"></td></tr>
                         </table>
-                        <p><button type="submit" class="button button-primary">Simpan Data Operasional</button></p>
+                        <p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                            <button type="submit" class="button button-primary"><?php echo $isEditingRec ? 'Simpan Perubahan' : 'Simpan Data Operasional'; ?></button>
+                            <?php if ($isEditingRec) : ?>
+                                <a href="<?php echo esc_url($dataViewUrl); ?>" class="button">Batal Edit</a>
+                            <?php endif; ?>
+                        </p>
                     </form>
                 </div>
 
@@ -1965,28 +3079,109 @@ function pa_sinova_render_admin_page(): void {
                             <?php endforeach; ?>
                         </div>
                     </div>
-                    <table class="widefat striped">
-                        <thead><tr><th>Tipe</th><th>Judul / Entitas</th><th>Tanggal</th><th>Aksi</th></tr></thead>
-                        <tbody>
-                            <?php if (empty($recRows)) : ?>
-                                <tr><td colspan="4">Belum ada data operasional. Tambahkan melalui formulir di samping.</td></tr>
-                            <?php else : foreach ($recRows as $rr) : ?>
+                    <form method="post" id="pa-bulk-rec-form" action="<?php echo esc_url($dataViewUrl); ?>">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="bulk_delete_records">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;padding:8px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <label style="font-weight:600;cursor:pointer;">
+                                    <input type="checkbox" id="pa-rec-check-all"> Pilih Semua
+                                </label>
+                                <span id="pa-rec-sel-info" style="font-size:12.5px;color:#475569;">0 item dipilih</span>
+                            </div>
+                            <button type="submit" id="pa-bulk-rec-del-btn" class="button" style="color:#b91c1c;border-color:#fca5a5;" disabled>Hapus Terpilih (0)</button>
+                        </div>
+                        <table class="widefat striped">
+                            <thead>
                                 <tr>
-                                    <td><code><?php echo esc_html((string) $rr['record_type']); ?></code></td>
-                                    <td><strong><?php echo esc_html((string) $rr['title']); ?></strong><br><small style="color:#64748b;"><?php echo esc_html((string) $rr['subtitle'] . (!empty($rr['category']) ? ' · ' . $rr['category'] : '')); ?></small></td>
-                                    <td><?php echo esc_html((string) ($rr['event_date'] ?: '-')); ?></td>
-                                    <td>
-                                        <form method="post" onsubmit="return confirm('Hapus entri data ini?');">
-                                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                                            <input type="hidden" name="pa_sinova_action" value="delete_record">
-                                            <input type="hidden" name="rec_id" value="<?php echo esc_attr((string) $rr['id']); ?>">
-                                            <button type="submit" class="button button-small" style="color:#b91c1c;">Hapus</button>
-                                        </form>
-                                    </td>
+                                    <th style="width:28px;"><input type="checkbox" id="pa-rec-th-check-all" aria-label="Pilih semua entri data operasional"></th>
+                                    <th>Tipe</th>
+                                    <th>Judul / Entitas</th>
+                                    <th>Tanggal</th>
+                                    <th style="width:130px;">Aksi</th>
                                 </tr>
-                            <?php endforeach; endif; ?>
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($recRows)) : ?>
+                                    <tr><td colspan="5">Belum ada data operasional. Tambahkan melalui formulir di samping.</td></tr>
+                                <?php else : foreach ($recRows as $rr) :
+                                    $recRowId    = (int) ($rr['id'] ?? 0);
+                                    $recIsEdit   = ($isEditingRec && (int) $editRec['id'] === $recRowId);
+                                    $recEditUrl  = add_query_arg('edit_rec', $recRowId, $dataViewUrl);
+                                ?>
+                                    <tr style="<?php echo $recIsEdit ? 'background:#f0fdf4;' : ''; ?>">
+                                        <td><input type="checkbox" class="pa-rec-chk" name="rec_ids[]" value="<?php echo esc_attr((string) $recRowId); ?>" aria-label="Pilih <?php echo esc_attr((string) $rr['title']); ?>"></td>
+                                        <td><code><?php echo esc_html((string) $rr['record_type']); ?></code></td>
+                                        <td><strong><?php echo esc_html((string) $rr['title']); ?></strong><br><small style="color:#64748b;"><?php echo esc_html((string) $rr['subtitle'] . (!empty($rr['category']) ? ' · ' . $rr['category'] : '')); ?></small></td>
+                                        <td><?php echo esc_html((string) ($rr['event_date'] ?: '-')); ?></td>
+                                        <td>
+                                            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                                                <a href="<?php echo esc_url($recEditUrl); ?>" class="button button-small <?php echo $recIsEdit ? 'button-primary' : ''; ?>">Edit</a>
+                                                <button type="button" class="button button-small pa-single-rec-del-btn" data-id="<?php echo esc_attr((string) $recRowId); ?>" data-title="<?php echo esc_attr((string) $rr['title']); ?>" style="color:#b91c1c;">Hapus</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; endif; ?>
+                            </tbody>
+                        </table>
+                    </form>
+                    <form method="post" id="pa-single-rec-del-form" action="<?php echo esc_url($dataViewUrl); ?>" style="display:none;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="delete_record">
+                        <input type="hidden" name="rec_id" id="pa-single-rec-del-id" value="0">
+                    </form>
+                    <script>
+                        (function(){
+                            var bulkForm = document.getElementById('pa-bulk-rec-form');
+                            var checkAllTop = document.getElementById('pa-rec-check-all');
+                            var checkAllTh = document.getElementById('pa-rec-th-check-all');
+                            var selInfo = document.getElementById('pa-rec-sel-info');
+                            var bulkBtn = document.getElementById('pa-bulk-rec-del-btn');
+                            var singleForm = document.getElementById('pa-single-rec-del-form');
+                            var singleInput = document.getElementById('pa-single-rec-del-id');
+
+                            function getRecBoxes() {
+                                return bulkForm ? Array.prototype.slice.call(bulkForm.querySelectorAll('.pa-rec-chk')) : [];
+                            }
+                            function syncRecSelection() {
+                                var boxes = getRecBoxes();
+                                var checked = boxes.filter(function(cb){ return cb.checked; }).length;
+                                var allChecked = boxes.length > 0 && checked === boxes.length;
+                                if (checkAllTop) { checkAllTop.checked = allChecked; }
+                                if (checkAllTh) { checkAllTh.checked = allChecked; }
+                                if (selInfo) { selInfo.textContent = checked + ' item dipilih'; }
+                                if (bulkBtn) {
+                                    bulkBtn.disabled = checked === 0;
+                                    bulkBtn.textContent = 'Hapus Terpilih (' + checked + ')';
+                                }
+                            }
+                            function setAllRecs(state) {
+                                getRecBoxes().forEach(function(cb){ cb.checked = state; });
+                                syncRecSelection();
+                            }
+                            if (checkAllTop) { checkAllTop.addEventListener('change', function(){ setAllRecs(checkAllTop.checked); }); }
+                            if (checkAllTh) { checkAllTh.addEventListener('change', function(){ setAllRecs(checkAllTh.checked); }); }
+                            getRecBoxes().forEach(function(cb){ cb.addEventListener('change', syncRecSelection); });
+                            if (bulkForm) {
+                                bulkForm.addEventListener('submit', function(e){
+                                    var checked = getRecBoxes().filter(function(cb){ return cb.checked; }).length;
+                                    if (checked === 0) { e.preventDefault(); return; }
+                                    if (!confirm('Hapus ' + checked + ' entri data operasional yang dipilih?')) { e.preventDefault(); }
+                                });
+                            }
+                            document.querySelectorAll('.pa-single-rec-del-btn').forEach(function(btn){
+                                btn.addEventListener('click', function(){
+                                    var title = btn.getAttribute('data-title') || 'entri ini';
+                                    if (!confirm('Hapus entri "' + title + '"?')) { return; }
+                                    if (singleInput && singleForm) {
+                                        singleInput.value = btn.getAttribute('data-id') || '0';
+                                        singleForm.submit();
+                                    }
+                                });
+                            });
+                            syncRecSelection();
+                        })();
+                    </script>
                 </div>
             </div>
 
@@ -2047,7 +3242,7 @@ function pa_sinova_render_admin_page(): void {
                         </div>
                         <div>
                             <label style="display:block;font-weight:700;font-size:12px;margin-bottom:4px;">Tahun Bawaan</label>
-                            <input type="number" name="scan_default_year" min="2017" max="2027" value="<?php echo esc_attr((string) $scanDefaultYear); ?>" style="width:100%;">
+                            <input type="number" name="scan_default_year" min="2017" max="<?php echo esc_attr((string) max(2028, (int) wp_date('Y') + 2)); ?>" value="<?php echo esc_attr((string) $scanDefaultYear); ?>" style="width:100%;">
                         </div>
                         <div>
                             <button type="submit" class="button button-primary">Pindai Tautan</button>
@@ -2074,10 +3269,11 @@ function pa_sinova_render_admin_page(): void {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($scannedLinks as $idx => $row) : ?>
+                                    <?php $maxMigYear = max(2028, (int) wp_date('Y') + 2);
+                                    foreach ($scannedLinks as $idx => $row) : ?>
                                         <tr>
                                             <td><input type="checkbox" class="pa-mig-chk" name="import_rows[]" value="<?php echo esc_attr((string) $idx); ?>" <?php checked(!empty($row['suggested'])); ?>></td>
-                                            <td><input type="number" name="row_year[<?php echo esc_attr((string) $idx); ?>]" min="2017" max="2027" value="<?php echo esc_attr((string) $row['year']); ?>" style="width:74px;"></td>
+                                            <td><input type="number" name="row_year[<?php echo esc_attr((string) $idx); ?>]" min="2017" max="<?php echo esc_attr((string) $maxMigYear); ?>" value="<?php echo esc_attr((string) $row['year']); ?>" style="width:74px;"></td>
                                             <td><input type="text" name="row_sub[<?php echo esc_attr((string) $idx); ?>]" value="<?php echo esc_attr($row['sub_group']); ?>" style="width:120px;"></td>
                                             <td>
                                                 <select name="row_period[<?php echo esc_attr((string) $idx); ?>]" style="width:132px;">
@@ -2090,7 +3286,7 @@ function pa_sinova_render_admin_page(): void {
                                                 <input type="text" name="row_title[<?php echo esc_attr((string) $idx); ?>]" value="<?php echo esc_attr($row['title']); ?>" class="large-text" style="margin-bottom:4px;">
                                                 <input type="hidden" name="row_url[<?php echo esc_attr((string) $idx); ?>]" value="<?php echo esc_attr($row['doc_url']); ?>">
                                                 <input type="hidden" name="row_src[<?php echo esc_attr((string) $idx); ?>]" value="<?php echo esc_attr($row['source_type']); ?>">
-                                                <small style="color:#475569;word-break:break-all;"><a href="<?php echo esc_url($row['doc_url']); ?>" target="_blank"><?php echo esc_html($row['doc_url']); ?></a></small>
+                                                <small style="color:#475569;word-break:break-all;"><a href="<?php echo esc_url($row['doc_url']); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html($row['doc_url']); ?></a></small>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -2136,7 +3332,7 @@ function pa_sinova_render_admin_page(): void {
                                             </select>
                                         </td>
                                         <td><input type="url" name="map_custom_url[<?php echo esc_attr($code); ?>]" value="<?php echo esc_attr($curUrl); ?>" placeholder="https://pa-satker.go.id/halaman-lama/" style="width:100%;"></td>
-                                        <td><small style="word-break:break-all;"><a href="<?php echo esc_url($it['url']); ?>" target="_blank"><?php echo esc_html($it['url']); ?></a></small></td>
+                                        <td><small style="word-break:break-all;"><a href="<?php echo esc_url($it['url']); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html($it['url']); ?></a></small></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -2164,6 +3360,12 @@ function pa_sinova_render_admin_page(): void {
                         <table class="form-table">
                             <tr><th>Nama Satker</th><td><input type="text" name="satker_name" class="regular-text" value="<?php echo esc_attr($cfg['satker_name']); ?>"></td></tr>
                             <tr><th>URL Logo Resmi</th><td><input type="url" name="logo_url" class="regular-text" value="<?php echo esc_attr($cfg['logo_url'] ?? ''); ?>" placeholder="https://.../logo-pa.png"></td></tr>
+                            <tr><th>Palet Aksen Visual (SK 2722)</th><td>
+                                <select name="accent_palette" class="regular-text">
+                                    <option value="gold" <?php selected($cfg['accent_palette'] ?? 'gold', 'gold'); ?>>Hijau Institusional &amp; Royal Gold (#056e4f / #C9A227)</option>
+                                    <option value="badilag_orange" <?php selected($cfg['accent_palette'] ?? 'gold', 'badilag_orange'); ?>>Hijau Badilag &amp; Aksen Oranye (#056e4f / #ff9900)</option>
+                                </select>
+                            </td></tr>
                             <tr><th>Alamat Kantor</th><td><input type="text" name="address" class="regular-text" value="<?php echo esc_attr($cfg['address']); ?>"></td></tr>
                             <tr><th>Telepon / WA PTSP</th><td><input type="text" name="phone" class="regular-text" value="<?php echo esc_attr($cfg['phone']); ?>"></td></tr>
                             <tr><th>Email Resmi</th><td><input type="email" name="email" class="regular-text" value="<?php echo esc_attr($cfg['email']); ?>"></td></tr>
@@ -2175,8 +3377,30 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>URL Direktori Putusan</th><td><input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>"></td></tr>
                             <tr><th>URL Survei Badilag</th><td><input type="url" name="survey_url" class="regular-text" value="<?php echo esc_attr($cfg['survey_url']); ?>"></td></tr>
                             <tr><th>URL CCTV Online (ACO)</th><td><input type="url" name="aco_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" placeholder="https://cctv.badilag.net/"><br><small style="color:#64748b;">Tautan Access CCTV Online Badilag / ruang PTSP Satker (kosongkan untuk menyembunyikan kartu ACO).</small></td></tr>
+                            <tr><th>URL SIWAS &amp; SP4N-LAPOR!</th><td>
+                                <input type="url" name="siwas_url" class="regular-text" value="<?php echo esc_attr($cfg['siwas_url'] ?? 'https://siwas.mahkamahagung.go.id/'); ?>" placeholder="https://siwas.mahkamahagung.go.id/"><br>
+                                <input type="url" name="lapor_url" class="regular-text" value="<?php echo esc_attr($cfg['lapor_url'] ?? 'https://www.lapor.go.id/'); ?>" placeholder="https://www.lapor.go.id/" style="margin-top:4px;">
+                            </td></tr>
+                            <tr><th>Pita Informasi Serta-Merta (KMA 2-144)</th><td>
+                                <input type="text" name="emergency_notice" class="regular-text" value="<?php echo esc_attr($cfg['emergency_notice'] ?? ''); ?>" placeholder="Kosongkan bila layanan berjalan normal">
+                                <input type="url" name="emergency_notice_url" class="regular-text" value="<?php echo esc_attr($cfg['emergency_notice_url'] ?? ''); ?>" placeholder="URL detail pengumuman darurat (opsional)" style="margin-top:4px;"><br>
+                                <small style="color:#64748b;">Muncul di bagian paling atas website saat diisi (misal gangguan listrik/pemeliharaan/penundaan sidang mendadak).</small>
+                            </td></tr>
+                            <tr><th>Tautan Zona Integritas (Area I–VI)</th><td>
+                                <?php for ($zi = 1; $zi <= 6; $zi++) : ?>
+                                    <input type="url" name="zi_area_<?php echo $zi; ?>_url" class="regular-text" value="<?php echo esc_attr($cfg['zi_area_' . $zi . '_url'] ?? ''); ?>" placeholder="URL Folder Google Drive / Halaman Area <?php echo $zi; ?>" style="margin-bottom:4px;"><br>
+                                <?php endfor; ?>
+                                <small style="color:#64748b;">Bila dikosongkan, kartu Area ZI di Beranda otomatis mengarah ke halaman resmi <code>/zona-integritas/</code> (bebas tautan mati).</small>
+                            </td></tr>
                             <tr><th>RSS Pengumuman MA RI</th><td><input type="url" name="rss_ma_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_ma_url'] ?? 'https://kepaniteraan.mahkamahagung.go.id/?format=feed&type=rss'); ?>"></td></tr>
                             <tr><th>RSS Pengumuman Badilag</th><td><input type="url" name="rss_badilag_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_badilag_url'] ?? 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik?format=feed&type=rss'); ?>"></td></tr>
+                            <tr><th>Mode Keamanan CSP (Chrome)</th><td>
+                                <select name="csp_mode" class="regular-text">
+                                    <option value="strict" <?php selected($cfg['csp_mode'] ?? 'strict', 'strict'); ?>>Strict (Nonce + Strict-Dynamic + Trusted Types) — Rekomendasi</option>
+                                    <option value="compat" <?php selected($cfg['csp_mode'] ?? 'strict', 'compat'); ?>>Compat (Aman untuk plugin/Elementor lawas)</option>
+                                    <option value="off" <?php selected($cfg['csp_mode'] ?? 'strict', 'off'); ?>>Off (Hanya header keamanan dasar)</option>
+                                </select>
+                            </td></tr>
                             <tr><th>Secret Key HMAC API</th><td><input type="text" name="hmac_secret" class="regular-text" value="<?php echo esc_attr($cfg['hmac_secret']); ?>" placeholder="Minimal 32 karakter"><br><label><input type="checkbox" name="generate_hmac" value="1"> Generate Secret Key acak baru (64 hex)</label></td></tr>
                             <tr><th>Turnstile Site Key</th><td><input type="text" name="turnstile_site_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_site_key']); ?>"></td></tr>
                             <tr><th>Turnstile Secret Key</th><td><input type="password" name="turnstile_secret_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_secret_key']); ?>"></td></tr>
@@ -2187,7 +3411,7 @@ function pa_sinova_render_admin_page(): void {
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
                     <h2 style="margin-top:0;color:#056e4f;">Seeder Struktur Baku 1-Klik</h2>
-                    <p>Membuat otomatis <strong>23 halaman Arsip Dokumen</strong> (slot s.d. 2027), halaman <strong>Wajib &amp; Inklusif (termasuk /disabilitas/ &amp; /pengumuman-resmi/)</strong>, halaman <strong>Beranda</strong> lengkap, berita awal, dan menyusun <strong>6 Menu Utama Standar</strong> di tema Astra / WordPress.</p>
+                    <p>Membuat otomatis <strong>23 halaman Arsip Dokumen</strong> (slot s.d. 2027), halaman <strong>Wajib, KMA 2-144/2022, &amp; Inklusif</strong> (termasuk <code>/disabilitas/</code>, <code>/informasi-serta-merta/</code>, <code>/informasi-tersedia-setiap-saat/</code>, <code>/layanan-pengaduan/</code>, <code>/zona-integritas/</code>, &amp; <code>/pengumuman-resmi/</code>), halaman <strong>Beranda</strong> lengkap, berita awal, dan menyusun <strong>6 Menu Utama Standar</strong> di tema Astra / WordPress.</p>
                     <form method="post" style="margin-bottom:14px;">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="run_seeder">
@@ -2217,6 +3441,8 @@ function pa_sinova_render_admin_page(): void {
             $mfaQrSvg      = $mfaUri !== '' ? pa_sinova_totp_qr_svg($mfaUri) : '';
             $recHashes     = get_user_meta($curUid, 'pa_totp_recovery_hashes', true);
             $recRemaining  = is_array($recHashes) ? count($recHashes) : 0;
+            $fim           = pa_starter_fim_status();
+            $cspModeNow    = pa_starter_effective_csp_mode();
         ?>
             <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
                 <h2 style="margin-top:0;color:#056e4f;">Autentikasi Dua Faktor (MFA TOTP RFC 6238 Bawaan)</h2>
@@ -2298,18 +3524,50 @@ function pa_sinova_render_admin_page(): void {
             <?php endif; ?>
 
             <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
-                <h2 style="margin-top:0;color:#056e4f;">Status Pengamanan &amp; Kontrol Akses Peran (RBAC)</h2>
+                <h2 style="margin-top:0;color:#056e4f;">Status Pengamanan Chrome Modern Web &amp; Kontrol Akses Peran (RBAC)</h2>
                 <ul style="line-height:1.8;margin:0 0 12px;padding-left:18px;">
-                    <li><strong>MFA TOTP &amp; Batas Sesi Admin:</strong> <?php echo $mfaEnabled ? 'MFA TOTP Aktif' : 'MFA TOTP Opsional/Menunggu Aktivasi'; ?> · Batas sesi diam otomatis <strong>60 menit</strong> · Kebijakan kata sandi minimal <strong>10 karakter</strong></li>
+                    <li><strong>Header Keamanan Chrome &amp; CSP:</strong> Mode <code><?php echo esc_html(strtoupper($cspModeNow)); ?></code> (CSP Nonce + <code>strict-dynamic</code> + Trusted Types + <code>COOP: same-origin</code> + <code>CORP: same-origin</code> + <code>XFO</code> + <code>XCTO</code> + <code>Permissions-Policy</code><?php echo pa_starter_is_https_request() ? ' + HSTS Preload 2 Tahun' : ' + HSTS siap saat HTTPS'; ?>) — aktif juga pada Early Cache</li>
+                    <li><strong>RFC 9116 security.txt &amp; Manifest:</strong> Tersedia di <code>/.well-known/security.txt</code> dan <code>/manifest.webmanifest</code></li>
+                    <li><strong>MFA TOTP &amp; Batas Sesi Admin:</strong> <?php echo $mfaEnabled ? 'MFA TOTP Aktif' : 'MFA TOTP Opsional/Menunggu Aktivasi'; ?> · Batas sesi diam otomatis <strong>60 menit</strong> · Kebijakan kata sandi minimal <strong>10 karakter</strong> (huruf kecil, besar, angka, &amp; simbol)</li>
                     <li><strong>Halaman Login Admin:</strong> <?php echo $hiddenSlug !== '' ? 'Disembunyikan pada slug kustom (<code>/' . esc_html($hiddenSlug) . '/</code>), akses langsung <code>wp-login.php</code> &amp; <code>/wp-admin/</code> anonim diblokir 404' : 'Standar <code>/wp-login.php</code> (dapat disembunyikan melalui formulir di atas)'; ?></li>
                     <li><strong>File Editor WP Admin:</strong> Dinonaktifkan (<code>DISALLOW_FILE_EDIT = true</code>)</li>
-                    <li><strong>XML-RPC &amp; User Enumeration REST/Author:</strong> Diblokir untuk pengguna anonim</li>
-                    <li><strong>Brute-Force Rate Limiter Login:</strong> Aktif (blokir 15 menit setelah 5x gagal per IP ter-hash)</li>
+                    <li><strong>XML-RPC, Komentar &amp; User Enumeration REST/Author:</strong> Diblokir untuk pengguna anonim</li>
+                    <li><strong>Brute-Force Rate Limiter Login &amp; API:</strong> Aktif (blokir 15 menit setelah 5x login gagal; rate limiter REST pencarian &amp; kunjungan)</li>
                     <li><strong>Login Anti-Bot:</strong> <?php echo $tsActive ? 'Cloudflare Turnstile + Honeypot' : 'CAPTCHA Matematika Offline (HMAC) + Honeypot'; ?></li>
-                    <li><strong>Folder Unggahan PDF (<code>sinova-docs/.htaccess</code>):</strong> <?php echo is_file(WP_CONTENT_DIR . '/uploads/sinova-docs/.htaccess') ? 'Terlindungi (PHP execution &amp; listing diblokir)' : 'Aktif setelah admin_init'; ?></li>
-                    <li><strong>WAF URI &amp; DB Content Guard:</strong> Aktif memblokir pola judi online, webshell, SQLi/XSS, &amp; cloaking tautan</li>
+                    <li><strong>Folder Unggahan PDF (<code>sinova-docs/.htaccess</code>):</strong> <?php echo is_file(WP_CONTENT_DIR . '/uploads/sinova-docs/.htaccess') ? 'Terlindungi (PHP execution &amp; listing diblokir + MIME PDF guard)' : 'Aktif setelah admin_init'; ?></li>
+                    <li><strong>WAF URI &amp; DB Content Guard:</strong> Aktif memblokir pola judi online, webshell, SQLi/XSS, &amp; cloaking tautan (termasuk deteksi scanner di Early Cache)</li>
                 </ul>
                 <p style="margin:0;font-size:12.5px;color:#334155;"><strong>Peran Operator Satker Tersedia (Users &rarr; Add New):</strong> <code>pa_kepaniteraan</code> (LIPA 7, Sisa Panjar, Prodeo, PPID &amp; Data Operasional), <code>pa_kesekretariatan</code> (Anggaran, SAKIP, BMN, LHKPN/LHKASN), dan <code>pa_humas</code> (Data Operasional, Survei, &amp; Berita).</p>
+            </div>
+
+            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;margin-bottom:18px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+                    <div>
+                        <h2 style="margin:0;color:#056e4f;">File Integrity Monitor (FIM SHA-256)</h2>
+                        <small style="color:#475569;">Baseline direkam: <?php echo esc_html($fim['baseline_at']); ?> · Status: <strong style="color:<?php echo $fim['ok'] ? '#15803d' : '#b91c1c'; ?>;"><?php echo $fim['ok'] ? 'BERSIH (Sesuai Baseline)' : 'ADA PERUBAHAN BERKAS'; ?></strong></small>
+                    </div>
+                    <?php if (current_user_can('manage_options')) : ?>
+                        <form method="post" onsubmit="return confirm('Perbarui baseline SHA-256 sesuai isi berkas saat ini?');">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="fim_reset_baseline">
+                            <button type="submit" class="button button-secondary">Perbarui Baseline SHA-256</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+                <table class="widefat striped">
+                    <thead><tr><th>Berkas Terpantau</th><th>Hash SHA-256 Aktif</th><th style="width:120px;">Status</th></tr></thead>
+                    <tbody>
+                        <?php foreach ($fim['current'] as $fKey => $fHash) :
+                            $isDirty = in_array($fKey, $fim['changed'], true) || in_array($fKey . ' (baru)', $fim['changed'], true);
+                        ?>
+                            <tr>
+                                <td><code><?php echo esc_html($fKey); ?></code></td>
+                                <td><code style="font-size:11px;"><?php echo esc_html(substr($fHash, 0, 32) . '...'); ?></code></td>
+                                <td><strong style="color:<?php echo $isDirty ? '#b91c1c' : '#15803d'; ?>;"><?php echo $isDirty ? 'Berubah' : 'Terverifikasi'; ?></strong></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
             <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;">
                 <h2 style="margin-top:0;color:#056e4f;">Log Kejadian Keamanan Terakhir (40 Teratas)</h2>

@@ -142,10 +142,44 @@ add_action('save_post', 'pa_home_page_cache_mark_stale');
 add_action('wp_update_nav_menu', 'pa_home_page_cache_mark_stale');
 add_action('customize_save_after', 'pa_home_page_cache_mark_stale');
 
+function pa_home_page_cache_send_body(string $html, bool $isHead): void {
+    if ($isHead) {
+        return;
+    }
+    $acceptEnc = strtolower((string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? ''));
+    $zlibOn    = ini_get('zlib.output_compression');
+    $canGzip   = (!$zlibOn || strtolower((string) $zlibOn) === 'off')
+        && strpos($acceptEnc, 'gzip') !== false
+        && function_exists('gzencode')
+        && strlen($html) > 1024;
+
+    if ($canGzip && !headers_sent()) {
+        $gz = @gzencode($html, 6);
+        if (is_string($gz) && $gz !== '') {
+            header('Content-Encoding: gzip');
+            header('Content-Length: ' . strlen($gz));
+            echo $gz;
+            return;
+        }
+    }
+    echo $html;
+}
+
 (static function () {
     if (!pa_home_page_cache_is_early_eligible()) {
         return;
     }
+    $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+    if ($ua !== '' && preg_match('#\b(sqlmap|nikto|acunetix|havij|wpscan|masscan)\b#i', $ua)) {
+        if (!headers_sent()) {
+            status_header(403);
+            header('Content-Type: application/json; charset=UTF-8');
+            header('X-PA-WAF-Block: scanner-ua');
+        }
+        echo json_encode(array('ok' => false, 'code' => 403, 'reason' => 'scanner-ua'));
+        exit;
+    }
+
     $file = pa_home_page_cache_file();
     if (!is_readable($file)) {
         return;
@@ -157,18 +191,43 @@ add_action('customize_save_after', 'pa_home_page_cache_mark_stale');
     }
     $age    = time() - $mtime;
     $isHead = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'HEAD';
+    $etag   = 'W/"pa-' . dechex((int) $mtime) . '-' . dechex((int) $size) . '"';
+    $nonce  = function_exists('pa_starter_csp_nonce') ? pa_starter_csp_nonce() : null;
 
     if ($age <= PA_HOME_CACHE_FRESH_TTL) {
         if (!headers_sent()) {
+            if (function_exists('pa_starter_emit_security_headers')) {
+                pa_starter_emit_security_headers(true, $nonce);
+            }
             header('X-PA-Homepage-Cache: HIT-EARLY');
             header('X-PA-Cache-Age: ' . max(0, $age));
+            header('ETag: ' . $etag);
+            header('Vary: Accept-Encoding');
             header('Cache-Control: public, max-age=120, s-maxage=600, stale-while-revalidate=3600');
             header('Content-Type: text/html; charset=UTF-8');
         }
+
+        $ifNoneMatch = trim((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
+        if ($ifNoneMatch !== '' && strpos($ifNoneMatch, $etag) !== false) {
+            if (!headers_sent()) {
+                status_header(304);
+            }
+            exit;
+        }
+
         if (!$isHead) {
             $html = @file_get_contents($file);
             if (is_string($html) && $html !== '') {
-                echo pa_home_page_cache_stamp_render_time($html);
+                $html = pa_home_page_cache_stamp_render_time($html);
+                if (
+                    $nonce !== null
+                    && function_exists('pa_starter_effective_csp_mode')
+                    && pa_starter_effective_csp_mode() === 'strict'
+                    && function_exists('pa_starter_inject_csp_nonce_into_html')
+                ) {
+                    $html = pa_starter_inject_csp_nonce_into_html($html, $nonce);
+                }
+                pa_home_page_cache_send_body($html, false);
             }
         }
         exit;
@@ -177,15 +236,29 @@ add_action('customize_save_after', 'pa_home_page_cache_mark_stale');
     if ($age <= PA_HOME_CACHE_STALE_TTL && (function_exists('litespeed_finish_request') || function_exists('fastcgi_finish_request'))) {
         @touch($file, time() - (PA_HOME_CACHE_FRESH_TTL - 45));
         if (!headers_sent()) {
+            if (function_exists('pa_starter_emit_security_headers')) {
+                pa_starter_emit_security_headers(true, $nonce);
+            }
             header('X-PA-Homepage-Cache: STALE-REVALIDATE');
             header('X-PA-Cache-Age: ' . max(0, $age));
+            header('ETag: ' . $etag);
+            header('Vary: Accept-Encoding');
             header('Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=3600');
             header('Content-Type: text/html; charset=UTF-8');
         }
         if (!$isHead) {
             $html = @file_get_contents($file);
             if (is_string($html) && $html !== '') {
-                echo pa_home_page_cache_stamp_render_time($html);
+                $html = pa_home_page_cache_stamp_render_time($html);
+                if (
+                    $nonce !== null
+                    && function_exists('pa_starter_effective_csp_mode')
+                    && pa_starter_effective_csp_mode() === 'strict'
+                    && function_exists('pa_starter_inject_csp_nonce_into_html')
+                ) {
+                    $html = pa_starter_inject_csp_nonce_into_html($html, $nonce);
+                }
+                pa_home_page_cache_send_body($html, false);
             }
         }
         @ignore_user_abort(true);
@@ -199,7 +272,8 @@ add_action('customize_save_after', 'pa_home_page_cache_mark_stale');
 })();
 
 function pa_home_page_cache_start(): void {
-    if (pa_home_page_cache_is_eligible() || !empty($GLOBALS['pa_home_bg_revalidate'])) {
+    $needStrictCsp = (!is_admin() && function_exists('pa_starter_effective_csp_mode') && pa_starter_effective_csp_mode() === 'strict');
+    if (pa_home_page_cache_is_eligible() || !empty($GLOBALS['pa_home_bg_revalidate']) || $needStrictCsp) {
         ob_start('pa_home_page_cache_store');
     }
 }
@@ -218,29 +292,52 @@ function pa_home_page_cache_store($html) {
         stripos($html, 'name="wp-submit"') !== false ||
         stripos($html, 'cf-turnstile') !== false
     );
-    if ($code !== 200 || $hasSensitiveForm || !pa_home_page_cache_is_eligible()) {
-        return $isBg ? '' : $html;
+
+    $canCache = ($code === 200 && !$hasSensitiveForm && pa_home_page_cache_is_eligible());
+
+    if ($canCache) {
+        $optimized = preg_replace_callback('/<style\b([^>]*)>([\s\S]*?)<\/style>/i', static function ($m) {
+            $css = $m[2];
+            $css = preg_replace('/\/\*[\s\S]*?\*\//', '', $css);
+            $css = preg_replace('/\s*\r?\n\s*/', '', $css);
+            $css = preg_replace('/\s{2,}/', ' ', $css);
+            $css = str_replace(array(' {', '{ ', ' }', '; ', ': '), array('{', '{', '}', ';', ':'), $css);
+            return '<style' . $m[1] . '>' . trim($css) . '</style>';
+        }, $html);
+        if (is_string($optimized) && $optimized !== '') {
+            $html = $optimized;
+        }
+        $strippedComments = preg_replace('/<(script|style|textarea)\b[^>]*>[\s\S]*?<\/\1>(*SKIP)(*FAIL)|<!--(?!\s*\[if\b)[\s\S]*?-->/i', '', $html);
+        if (is_string($strippedComments) && $strippedComments !== '') {
+            $html = $strippedComments;
+        }
+
+        $cacheHtml = function_exists('pa_starter_strip_csp_nonce_from_html')
+            ? pa_starter_strip_csp_nonce_from_html($html)
+            : $html;
+
+        $file = pa_home_page_cache_file();
+        $tmp  = $file . '.tmp.' . getmypid();
+        if (@file_put_contents($tmp, $cacheHtml, LOCK_EX) !== false) {
+            @rename($tmp, $file);
+        } else {
+            @unlink($tmp);
+        }
     }
 
-    $optimized = preg_replace_callback('/<style\b([^>]*)>([\s\S]*?)<\/style>/i', static function ($m) {
-        $css = $m[2];
-        $css = preg_replace('/\/\*[\s\S]*?\*\//', '', $css);
-        $css = preg_replace('/\s*\r?\n\s*/', '', $css);
-        $css = preg_replace('/\s{2,}/', ' ', $css);
-        $css = str_replace(array(' {', '{ ', ' }', '; ', ': '), array('{', '{', '}', ';', ':'), $css);
-        return '<style' . $m[1] . '>' . trim($css) . '</style>';
-    }, $html);
-    if (is_string($optimized) && $optimized !== '') {
-        $html = $optimized;
+    if ($isBg) {
+        return '';
     }
 
-    $file = pa_home_page_cache_file();
-    $tmp  = $file . '.tmp.' . getmypid();
-    if (@file_put_contents($tmp, $html, LOCK_EX) !== false) {
-        @rename($tmp, $file);
-    } else {
-        @unlink($tmp);
+    if (
+        !is_admin()
+        && function_exists('pa_starter_effective_csp_mode')
+        && pa_starter_effective_csp_mode() === 'strict'
+        && function_exists('pa_starter_csp_nonce')
+        && function_exists('pa_starter_inject_csp_nonce_into_html')
+    ) {
+        $html = pa_starter_inject_csp_nonce_into_html($html, pa_starter_csp_nonce());
     }
 
-    return $isBg ? '' : $html;
+    return $html;
 }

@@ -635,8 +635,9 @@ function pa_sinova_render_year_card(int $year, array $subGroups, array $grid, st
         }
     }
 
+    $curY      = (int) wp_date('Y');
     $cardClass = $featured ? 'pa-sinova-year-card is-featured' : 'pa-sinova-year-card';
-    $badgeText = $year > (int) date('Y') ? 'Arsip Terjadwal ' . $year : ($year === (int) date('Y') ? 'Tahun Berjalan' : 'Arsip Tahun ' . $year);
+    $badgeText = $year > $curY ? 'Arsip Terjadwal ' . $year : ($year === $curY ? 'Tahun Berjalan' : 'Arsip Tahun ' . $year);
 
     ob_start();
     ?>
@@ -673,7 +674,7 @@ function pa_sinova_render_year_card(int $year, array $subGroups, array $grid, st
                                     <span class="pa-sinova-btn-meta"><?php echo esc_html(($isMonthly ? '' : $pInfo['label'] . ' · ') . $badge); ?> ↗</span>
                                 </a>
                                 <?php if ($previewUrl !== '') : ?>
-                                    <button type="button" class="pa-doc-preview-trigger" data-preview-url="<?php echo esc_url($previewUrl); ?>" data-open-url="<?php echo esc_url($url); ?>" data-preview-title="<?php echo esc_attr($modTitle . ' — ' . ($isMonthly ? $pInfo['label'] : $displayTitle) . ' ' . $year); ?>">Pratinjau</button>
+                                    <button type="button" class="pa-doc-preview-trigger" data-preview-url="<?php echo esc_url($previewUrl); ?>" data-open-url="<?php echo esc_url($url); ?>" data-preview-title="<?php echo esc_attr($modTitle . ' — ' . ($isMonthly ? $pInfo['label'] : $displayTitle) . ' ' . $year); ?>" aria-label="<?php echo esc_attr('Pratinjau ' . ($isMonthly ? $pInfo['label'] : $displayTitle) . ' ' . $year); ?>">Pratinjau</button>
                                 <?php endif; ?>
                             </div>
                         <?php else : ?>
@@ -716,7 +717,7 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
 
     $featuredYears = array();
     $archiveYears  = array();
-    $curY = (int) date('Y');
+    $curY = (int) wp_date('Y');
     for ($y = $end; $y >= $start; $y--) {
         if ($y >= $curY) $featuredYears[] = $y;
         else $archiveYears[] = $y;
@@ -752,16 +753,22 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
         <?php if (!empty($archiveYears)) : ?>
             <div class="pa-sinova-archive-wrap" id="<?php echo $uid; ?>-archive">
                 <h3 class="pa-sinova-archive-heading">Arsip Tahun Sebelumnya (<?php echo esc_html(min($archiveYears) . ' – ' . max($archiveYears)); ?>)</h3>
-                <div class="pa-sinova-tabs" role="tablist">
-                    <?php foreach ($archiveYears as $idx => $ay) : ?>
-                        <button type="button" role="tab" class="pa-sinova-tab-btn<?php echo $idx === 0 ? ' is-active' : ''; ?>" data-pa-year-tab="<?php echo esc_attr((string) $ay); ?>">
+                <div class="pa-sinova-tabs" role="tablist" aria-label="Pilih Tahun Arsip">
+                    <?php foreach ($archiveYears as $idx => $ay) :
+                        $tabId  = $uid . '-tab-' . (int) $ay;
+                        $paneId = $uid . '-pane-' . (int) $ay;
+                    ?>
+                        <button type="button" role="tab" id="<?php echo esc_attr($tabId); ?>" aria-selected="<?php echo $idx === 0 ? 'true' : 'false'; ?>" aria-controls="<?php echo esc_attr($paneId); ?>" tabindex="<?php echo $idx === 0 ? '0' : '-1'; ?>" class="pa-sinova-tab-btn<?php echo $idx === 0 ? ' is-active' : ''; ?>" data-pa-year-tab="<?php echo esc_attr((string) $ay); ?>">
                             Tahun <?php echo esc_html((string) $ay); ?>
                         </button>
                     <?php endforeach; ?>
                 </div>
                 <div class="pa-sinova-tab-panels">
-                    <?php foreach ($archiveYears as $idx => $ay) : ?>
-                        <div class="pa-sinova-tab-pane<?php echo $idx === 0 ? ' is-active' : ''; ?>" role="tabpanel" data-pa-year-pane="<?php echo esc_attr((string) $ay); ?>">
+                    <?php foreach ($archiveYears as $idx => $ay) :
+                        $tabId  = $uid . '-tab-' . (int) $ay;
+                        $paneId = $uid . '-pane-' . (int) $ay;
+                    ?>
+                        <div id="<?php echo esc_attr($paneId); ?>" class="pa-sinova-tab-pane<?php echo $idx === 0 ? ' is-active' : ''; ?>" role="tabpanel" aria-labelledby="<?php echo esc_attr($tabId); ?>" data-pa-year-pane="<?php echo esc_attr((string) $ay); ?>"<?php echo $idx === 0 ? '' : ' hidden'; ?>>
                             <?php echo pa_sinova_render_year_card($ay, $resolveSubGroups($ay), $grid, $cfg['title'], $periods, false); ?>
                         </div>
                     <?php endforeach; ?>
@@ -788,16 +795,17 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
         .pa-sinova-subgroup{margin-bottom:18px}
         .pa-sinova-subgroup:last-child{margin-bottom:0}
         .pa-sinova-subgroup-title{margin:0 0 10px;padding-bottom:6px;border-bottom:2px solid #edf5f0;color:#056e4f;font-size:.95rem;font-weight:800;text-transform:uppercase}
-        .pa-sinova-month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
-        .pa-sinova-btn{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;min-height:54px;padding:9px 12px;border-radius:10px;text-decoration:none!important;transition:.16s ease}
+        .pa-sinova-month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+        .pa-sinova-btn{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;min-height:56px;padding:9px 12px;border-radius:10px;text-decoration:none!important;transition:.16s ease}
+        .pa-sinova-slot-wrap:has(.pa-doc-preview-trigger) .pa-sinova-btn{padding-right:84px}
         .pa-sinova-btn.is-filled{background:#f4faf7;border:1.5px solid #056e4f;color:#043927}
         .pa-sinova-btn.is-filled:hover{background:#056e4f;border-color:#C9A227;color:#fff;transform:translateY(-2px)}
         .pa-sinova-btn.is-filled .pa-sinova-btn-month{font-weight:800;font-size:13.5px}
-        .pa-sinova-btn.is-filled .pa-sinova-btn-meta{font-size:11px;font-weight:700;color:#8A6808;margin-top:2px}
+        .pa-sinova-btn.is-filled .pa-sinova-btn-meta{font-size:11px;font-weight:700;color:#6e5204;margin-top:2px}
         .pa-sinova-btn.is-filled:hover .pa-sinova-btn-meta{color:#E5C158}
         .pa-sinova-btn.is-empty{background:#f8fafc;border:1px dashed #cbd5e1;color:#475569}
         .pa-sinova-btn.is-empty .pa-sinova-btn-month{font-weight:700;font-size:13px}
-        .pa-sinova-btn.is-empty .pa-sinova-btn-meta{font-size:10.5px;color:#64748b;margin-top:2px}
+        .pa-sinova-btn.is-empty .pa-sinova-btn-meta{font-size:10.5px;color:#475569;margin-top:2px}
         .pa-sinova-archive-wrap{margin-top:24px;padding:18px 20px;border-radius:14px;background:#f7fbf8;border:1px solid #d5e6dc}
         .pa-sinova-archive-heading{margin:0 0 12px;color:#056e4f;font-size:1.05rem;font-weight:800}
         .pa-sinova-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
@@ -810,10 +818,10 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
         html[data-pa-theme="dark"] .pa-sinova-subgroup-title,html[data-pa-theme="dark"] .pa-sinova-archive-heading{color:#E5C158;border-bottom-color:#2c4637}
         html[data-pa-theme="dark"] .pa-sinova-btn.is-filled{background:#21392b;border-color:#C9A227;color:#fff}
         html[data-pa-theme="dark"] .pa-sinova-btn.is-filled .pa-sinova-btn-meta{color:#E5C158}
-        html[data-pa-theme="dark"] .pa-sinova-btn.is-empty{background:#122018;border-color:#355241;color:#94a3b8}
+        html[data-pa-theme="dark"] .pa-sinova-btn.is-empty{background:#122018;border-color:#355241;color:#cbd5e1}
         .pa-sinova-slot-wrap{position:relative;display:flex;flex-direction:column}
         .pa-sinova-slot-wrap .pa-sinova-btn{flex:1}
-        .pa-doc-preview-trigger{position:absolute;top:7px;right:7px;padding:2px 8px;border-radius:999px;border:1px solid #056e4f;background:#ffffff;color:#056e4f;font-size:10.5px;font-weight:800;cursor:pointer;z-index:2;transition:background-color .15s ease,color .15s ease}
+        .pa-doc-preview-trigger{position:absolute;top:7px;right:7px;min-height:28px;min-width:66px;padding:4px 10px;border-radius:999px;border:1px solid #056e4f;background:#ffffff;color:#056e4f;font-size:11px;font-weight:800;cursor:pointer;z-index:2;transition:background-color .15s ease,color .15s ease}
         .pa-doc-preview-trigger:hover{background:#056e4f;color:#E5C158;border-color:#C9A227}
         html[data-pa-theme="dark"] .pa-doc-preview-trigger{background:#022c22;color:#E5C158;border-color:#C9A227}
         .pa-preview-dialog{width:min(960px,95vw);max-width:95vw;padding:0;border:2px solid #C9A227;border-radius:16px;background:#ffffff;box-shadow:0 24px 60px rgba(0,0,0,.38);overflow:hidden}
@@ -821,8 +829,8 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
         .pa-preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:linear-gradient(135deg,#043927,#056e4f);border-bottom:3px solid #C9A227;color:#ffffff}
         .pa-preview-head strong{font-size:14px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .pa-preview-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-        .pa-preview-ext{padding:5px 11px;border-radius:8px;background:#E5C158;color:#022c22!important;font-size:12px;font-weight:800;text-decoration:none!important}
-        .pa-preview-close{padding:5px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#ffffff;font-weight:800;cursor:pointer}
+        .pa-preview-ext{padding:7px 12px;border-radius:8px;background:#E5C158;color:#022c22!important;font-size:12px;font-weight:800;text-decoration:none!important}
+        .pa-preview-close{min-height:32px;padding:5px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#ffffff;font-weight:800;cursor:pointer}
         .pa-preview-body{height:min(76vh,720px);background:#f1f5f9}
         .pa-preview-body iframe{width:100%;height:100%;border:0;display:block}
         html[data-pa-theme="dark"] .pa-preview-dialog{background:#13221a}
@@ -841,13 +849,36 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
     <script id="pa-sinova-hub-js">
         (function(){
             document.querySelectorAll('.pa-sinova-archive-wrap').forEach(function(wrap){
-                var btns = wrap.querySelectorAll('[data-pa-year-tab]');
+                var btns = Array.prototype.slice.call(wrap.querySelectorAll('[data-pa-year-tab]'));
                 var panes = wrap.querySelectorAll('[data-pa-year-pane]');
-                btns.forEach(function(btn){
-                    btn.addEventListener('click', function(){
-                        var yr = btn.getAttribute('data-pa-year-tab');
-                        btns.forEach(function(b){ b.classList.toggle('is-active', b.getAttribute('data-pa-year-tab') === yr); });
-                        panes.forEach(function(p){ p.classList.toggle('is-active', p.getAttribute('data-pa-year-pane') === yr); });
+                function activateTab(btn){
+                    var yr = btn.getAttribute('data-pa-year-tab');
+                    btns.forEach(function(b){
+                        var on = b === btn;
+                        b.classList.toggle('is-active', on);
+                        b.setAttribute('aria-selected', on ? 'true' : 'false');
+                        b.setAttribute('tabindex', on ? '0' : '-1');
+                    });
+                    panes.forEach(function(p){
+                        var on = p.getAttribute('data-pa-year-pane') === yr;
+                        p.classList.toggle('is-active', on);
+                        if(on) p.removeAttribute('hidden');
+                        else p.setAttribute('hidden', 'hidden');
+                    });
+                }
+                btns.forEach(function(btn, idx){
+                    btn.addEventListener('click', function(){ activateTab(btn); });
+                    btn.addEventListener('keydown', function(e){
+                        var next = -1;
+                        if(e.key === 'ArrowRight') next = (idx + 1) % btns.length;
+                        else if(e.key === 'ArrowLeft') next = (idx - 1 + btns.length) % btns.length;
+                        else if(e.key === 'Home') next = 0;
+                        else if(e.key === 'End') next = btns.length - 1;
+                        if(next !== -1){
+                            e.preventDefault();
+                            activateTab(btns[next]);
+                            btns[next].focus();
+                        }
                     });
                 });
             });
@@ -950,7 +981,7 @@ add_filter('the_content', static function ($content) {
     $rows  = $wpdb->get_results($wpdb->prepare(
         "SELECT year, sub_group, period_key, doc_url FROM `{$table}` WHERE page_slug = %s AND status = 'published' AND year = %d",
         'survei-pelayanan',
-        (int) date('Y')
+        (int) wp_date('Y')
     ), ARRAY_A);
     if (empty($rows)) return $content;
 
@@ -975,3 +1006,39 @@ add_filter('the_content', static function ($content) {
     );
     return is_string($updated) ? $updated : $content;
 }, 20);
+
+add_shortcode('pa_sinova_zi_grid', static function () {
+    $cfg      = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $fallback = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('zona-integritas') : home_url('/zona-integritas/');
+    $areas    = array(
+        1 => array('Area I', 'MANAJEMEN PERUBAHAN', '<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'),
+        2 => array('Area II', 'PENATAAN TATA LAKSANA', '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>'),
+        3 => array('Area III', 'PENATAAN MANAJEMEN SDM', '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+        4 => array('Area IV', 'PENGUATAN AKUNTABILITAS', '<path d="M18 20V10M12 20V4M6 20v-6"/>'),
+        5 => array('Area V', 'PENGUATAN PENGAWASAN', '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+        6 => array('Area VI', 'KUALITAS PELAYANAN PUBLIK', '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'),
+    );
+
+    ob_start();
+    ?>
+    <section class="pa-section-block" aria-label="Dokumen Pembangunan Zona Integritas">
+        <h2 class="pa-starter-heading">DOKUMEN PEMBANGUNAN ZONA INTEGRITAS <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+        <p class="pa-starter-sub">Transparansi 6 Area Perubahan Menuju Wilayah Bebas dari Korupsi (WBK) &amp; WBBM</p>
+        <div class="pa-zi-grid">
+            <?php foreach ($areas as $n => $meta) :
+                $customUrl = trim((string) ($cfg['zi_area_' . $n . '_url'] ?? ''));
+                $isExt     = ($customUrl !== '' && preg_match('#^https?://#i', $customUrl));
+                $href      = $isExt ? $customUrl : ($fallback . '#area-' . $n);
+                $extAttr   = $isExt ? ' target="_blank" rel="noopener noreferrer"' : '';
+            ?>
+                <a class="pa-zi-card" id="area-<?php echo (int) $n; ?>" href="<?php echo esc_url($href); ?>"<?php echo $extAttr; ?>>
+                    <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><?php echo $meta[2]; ?></svg></span>
+                    <span class="pa-zi-area"><?php echo esc_html($meta[0]); ?></span>
+                    <span class="pa-zi-desc"><?php echo esc_html($meta[1]); ?></span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+});

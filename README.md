@@ -2,7 +2,7 @@
 
 Paket *starter* **open source** (Lisensi MIT) untuk membantu satuan kerja **Pengadilan Agama** di Indonesia menyiapkan dan menata website resmi berbasis **WordPress** sesuai standar tata kelola informasi **SK Dirjen Badilag Nomor 2722/DJA/SK.TI1/X/2026**.
 
-Seluruh fitur dikemas dalam 5 berkas `mu-plugins` tanpa ketergantungan plugin komersial. Paket ini dapat dipakai pada **website baru**, maupun diterapkan secara aman pada **website WordPress yang sudah berjalan** dan **hasil migrasi dari Joomla** tanpa menghapus berita ataupun arsip lama.
+Seluruh fitur dikemas dalam 6 berkas `mu-plugins` tanpa ketergantungan plugin komersial. Paket ini dapat dipakai pada **website baru**, maupun diterapkan secara aman pada **website WordPress yang sudah berjalan** dan **hasil migrasi dari Joomla** tanpa menghapus berita ataupun arsip lama.
 
 ---
 
@@ -30,17 +30,18 @@ Seluruh fitur dikemas dalam 5 berkas `mu-plugins` tanpa ketergantungan plugin ko
 
 ## Ringkasan Kemampuan
 
-1. **Tampilan Publik Bersih, Modern, Formal & Independen CDN:** Seluruh istilah teknis penilaian hanya muncul di ruang admin operator (**WP Admin → SINOVA Hub**) dan tidak ditampilkan ke masyarakat. Tampilan mengusung **6 Menu Utama Standar** (*Beranda*, *Profil Pengadilan*, *Layanan Hukum*, *Transparansi*, *Layanan Publik & Pengaduan*, *Berita & Publikasi*), keterangan hover-clean & **efek parallax ringan berbasis GPU**, **Mode Terang & Mode Gelap**, jam WIB + **indikator status PTSP**, kotak pencarian & **Command Palette `Ctrl+K`** instan, **Pratinjau Dokumen PDF/Drive di Halaman (Modal)**, **JSON-LD (`GovernmentOrganization`, `WebSite`, `BreadcrumbList`) + Open Graph**, jam font sistem **tanpa ketergantungan Google Fonts CDN eksternal**, kartu **Access CCTV Online (ACO)** berlogo resmi, halaman khusus **`/disabilitas/`**, serta **Sarana Aksesibilitas Web** (pembesar teks, kontras tinggi, & pembaca suara).
-2. **Umpan RSS Resmi Mahkamah Agung RI & Ditjen Badilag (`[pa_official_announcements]`):** Menampilkan 2 kolom pengumuman resmi terbaru dari Kepaniteraan Mahkamah Agung RI dan Ditjen Badilag secara otomatis dengan perlindungan **SSRF-safe** (pembatasan domain resmi `.mahkamahagung.go.id` serta blokir IP privat/loopback/link-local) dan pembaruan terjadwal setiap 6 jam.
-3. **Data Operasional Terstruktur & Integrasi Read-Only SIPP Opsional:** Mengelola **Jadwal Sidang Harian** (`[pa_jadwal_sidang]`), **Direktori Hakim & Pegawai** (`[pa_pegawai_grid]`), **Panggilan Ghaib Pasal 27** (`[pa_panggilan_ghaib]`), serta **Statistik Perkara Bulanan** (`[pa_statistik_perkara]`) melalui tabel database terstruktur, lengkap dengan filter instan di frontend serta dukungan opsional pembacaan *read-only* langsung dari database SIPP (`PA_SIPP_DB_*`).
-4. **Dashboard Kepatuhan 35 Kriteria & 23 Modul Arsip s.d. 2027:** Memeriksa otomatis kelengkapan `B1.1–W4.1` serta entri data operasional, menyediakan tombol **Salin URL** dan pemetaan URL lama, mendukung unggahan PDF langsung atau tautan Google Drive terverifikasi ke survei SKM/SPAK/SPKP, serta pembagian **3 peran operator RBAC** (`pa_kepaniteraan`, `pa_kesekretariatan`, `pa_humas`).
+1. **Tampilan Publik Bersih, Modern, Formal, WCAG 2.2 & Independen CDN:** Seluruh istilah teknis penilaian hanya muncul di ruang admin operator (**WP Admin → SINOVA Hub**) dan tidak ditampilkan ke masyarakat. Tampilan mengusung **6 Menu Utama Standar** (*Beranda*, *Profil Pengadilan*, *Layanan Hukum*, *Transparansi*, *Layanan Publik & Pengaduan*, *Berita & Publikasi*), pilihan **Palet Aksen Visual** (Royal Gold `#C9A227` atau Oranye Badilag `#ff9900`), keterangan hover-clean & **efek parallax ringan berbasis GPU**, **Mode Terang & Mode Gelap**, jam WIB + **indikator status PTSP**, pita **Informasi Serta-Merta (KMA 2-144/2022)**, kotak pencarian & **Command Palette `Ctrl+K`** instan, **Pratinjau Dokumen PDF/Drive di Halaman (Modal)**, **Meta Description dinamis + JSON-LD (`GovernmentOrganization`, `WebSite`, `NewsArticle`, `BreadcrumbList`) + Open Graph + Twitter Card + Web App Manifest**, font sistem **tanpa ketergantungan Google Fonts CDN eksternal**, kartu **Access CCTV Online (ACO)** berlogo resmi, kartu **6 Area Zona Integritas dinamis (`[pa_sinova_zi_grid]`)**, halaman wajib **KMA 2-144/2022** (`/disabilitas/`, `/informasi-serta-merta/`, `/informasi-tersedia-setiap-saat/`, `/layanan-pengaduan/`, `/zona-integritas/`), serta **Panel Aksesibilitas WCAG 2.2 Paripurna** (pembesar teks, kontras tinggi, mode gelap, spasi disleksia, garis bawah tautan, monokrom, hentikan animasi, & pembaca suara Bahasa Indonesia).
+2. **Umpan RSS Resmi Mahkamah Agung RI & Ditjen Badilag (`[pa_official_announcements]`):** Menampilkan 2 kolom pengumuman resmi terbaru dari Kepaniteraan Mahkamah Agung RI dan Ditjen Badilag secara otomatis dengan perlindungan **SSRF-safe** (pembatasan ketat suffix domain `.mahkamahagung.go.id` / `.badilag.net` / `.go.id` serta validasi IP publik di setiap hop redirect) dan pembaruan terjadwal.
+3. **Data Operasional Terstruktur & Integrasi Read-Only SIPP Opsional:** Mengelola **Jadwal Sidang Harian** (`[pa_jadwal_sidang]`), **Direktori Hakim & Pegawai** (`[pa_pegawai_grid]`), **Panggilan Ghaib Pasal 27** (`[pa_panggilan_ghaib]`), serta **Statistik Perkara Bulanan** (`[pa_statistik_perkara]`) melalui tabel database terstruktur lengkap dengan filter ARIA aksesibel di frontend serta dukungan opsional pembacaan *read-only* langsung dari database SIPP (`PA_SIPP_DB_*`).
+4. **Dashboard 3 Pilar SINOVA + Standar Web Modern Chrome & Ekspor Bukti:** Menghitung otomatis skor berbobot **3 Pilar** (*60% Kualitas & Kepatuhan Konten Wajib 35 Kriteria + KMA 2-144*, *20% Desain UI/UX 2-Click Rule & WCAG 2.2*, *20% Performa, Keamanan & Standar Chrome*) beserta predikat (**Sangat Baik / Excellent** &ge; 90), menyediakan tombol **Ekspor Bukti CSV** dan **Laporan JSON 3 Pilar**, tombol **Salin URL**, pemetaan URL lama, dan pembagian **3 peran operator RBAC** (`pa_kepaniteraan`, `pa_kesekretariatan`, `pa_humas`).
 5. **Dukungan Migrasi & Adopsi Situs Lama (Non-Destruktif):**
-   * **Mode Adopsi Situs Lama:** Memasang mesin arsip dokumen, keamanan WAF, cache halaman, dan pemantauan 35 kriteria tanpa menimpa header, menu, ataupun Beranda website WordPress yang sudah aktif.
+   * **Mode Adopsi Situs Lama:** Memasang mesin arsip dokumen, keamanan WAF, cache halaman, dan pemantauan 35 kriteria tanpa menimpa header, menu, ataupun Beranda website WordPress yang sudah aktif (otomatis menyesuaikan mode CSP ke `compat`).
    * **Alat Pindai & Impor Tautan:** Membaca tautan Google Drive/PDF dari halaman lama WordPress maupun artikel hasil impor Joomla ke dalam arsip terstruktur.
-6. **Pengamanan Berlapis & Autentikasi Dua Faktor (MFA TOTP Bawaan):**
+6. **Pengamanan Chrome Modern Web & Autentikasi Dua Faktor (MFA TOTP Bawaan):**
+   * **Chrome Modern Security Headers (Berjalan juga pada Early Cache):** `Content-Security-Policy` per-request **Nonce + `'strict-dynamic'` + `require-trusted-types-for 'script'`** (Trusted Types aman tanpa `innerHTML` di frontend), `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, `Strict-Transport-Security` (**HSTS Preload 2 Tahun** saat HTTPS), `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, serta endpoint **`/.well-known/security.txt`** (RFC 9116).
    * **MFA TOTP RFC 6238 Bawaan + 8 Kode Cadangan:** Menghasilkan kode QR **SVG lokal** (rahasia TOTP tidak pernah dikirim ke layanan QR pihak ketiga), perlindungan anti-replay OTP, opsi pengingat wajib MFA, dan flag darurat `PA_DISABLE_CUSTOM_MFA`.
-   * **Sembunyikan Halaman Login Admin & Session Hardening:** Memindahkan halaman masuk ke slug khusus satker dengan respon `404 Not Found` pada `/wp-login.php` dan `/wp-admin/` anonim, pembatasan sesi diam admin otomatis **60 menit**, serta kebijakan kata sandi operator minimal **10 karakter** campuran huruf, angka, dan simbol.
-   * **Proteksi Aktif:** Cache HTML statis halaman publik, penghitung kunjungan aman privasi (hash IP anonim harian), pembatasan login gagal (*Brute-Force Rate Limiter* 5x/15 menit), header keamanan OWASP, proteksi `.htaccess` unggahan PDF, blokir XML-RPC dan enumerasi pengguna, WAF URI/DB, serta anti-bot (**Cloudflare Turnstile** atau soal matematika HMAC offline + honeypot).
+   * **Sembunyikan Halaman Login Admin & Session Hardening:** Memindahkan halaman masuk ke slug khusus satker dengan respon `404 Not Found` pada `/wp-login.php` dan `/wp-admin/` anonim, pembatasan sesi diam admin otomatis **60 menit**, serta kebijakan kata sandi operator minimal **10 karakter** campuran huruf kecil, huruf besar, angka, dan simbol.
+   * **Performa Core Web Vitals & Proteksi Aktif:** Cache HTML statis (SWR + **ETag/304** + **Gzip** + `Speculation Rules` + penghapusan bloat WP Emoji/Dashicons/layout thrashing), **File Integrity Monitor (SHA-256)**, penghitung kunjungan aman privasi (hash IP anonim harian), pembatasan login gagal & REST API publik (*Rate Limiter*), proteksi `.htaccess` unggahan PDF + validasi MIME `finfo`, blokir XML-RPC/komentar/enumerasi pengguna, WAF URI/DB, serta anti-bot (**Cloudflare Turnstile** atau soal matematika HMAC offline + honeypot).
 
 ---
 
@@ -51,15 +52,16 @@ sinova-starter-kit/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
+├── .htaccess.hardened.example             # Contoh aturan hardening Apache, gzip, & browser caching
 ├── wordpress-mu-plugins/                  # Salin semua 6 berkas ke wp-content/mu-plugins/
-│   ├── 00-pa-sinova-config.php            # Konfigurasi satker, Seeder 6 Menu, RBAC, Data Operasional, & Dashboard
-│   ├── pa-sinova-hub.php                  # Mesin 23 modul dokumen, modal pratinjau PDF/Drive, & REST API HMAC
+│   ├── 00-pa-sinova-config.php            # Konfigurasi satker, Security Headers/CSP helper, Seeder, FIM, & Audit 3 Pilar
+│   ├── pa-sinova-hub.php                  # Mesin 23 modul dokumen, kartu ZI [pa_sinova_zi_grid], modal pratinjau, & REST HMAC
 │   ├── pa-official-feeds-and-data.php     # Umpan RSS resmi MA RI & Badilag (SSRF-safe), tabel operasional, & SEO JSON-LD
-│   ├── pa-home-page-cache.php             # Cache HTML halaman publik & shortcode [waktu_render]
-│   ├── pa-ui-performance-a11y.php         # Desain portal zero-CDN, Command Palette Ctrl+K, & sarana disabilitas
-│   └── pa-security-hardening.php          # MFA TOTP RFC 6238, sesi 60 menit, custom login URL, WAF, & OWASP headers
+│   ├── pa-home-page-cache.php             # Cache HTML Early-Serve + CSP Nonce + ETag/304 + Gzip + [waktu_render]
+│   ├── pa-ui-performance-a11y.php         # Desain zero-CDN, CWV, Panel WCAG 2.2 Paripurna, & Command Palette Ctrl+K (Trusted Types)
+│   └── pa-security-hardening.php          # MFA TOTP RFC 6238, security.txt, manifest, password kuat+simbol, custom login URL, & WAF
 ├── wordpress-templates/
-│   └── beranda-blocks-starter.html        # Kerangka HTML halaman Beranda standar Pengadilan Agama
+│   └── beranda-blocks-starter.html        # Kerangka HTML halaman Beranda standar Pengadilan Agama (H1 tunggal + [pa_sinova_zi_grid])
 ├── docs/
 │   └── screenshots/                       # Pratinjau tampilan
 └── laravel-sinova-panel/                  # Opsional: integrasi jika kantor memakai aplikasi internal Laravel
@@ -90,10 +92,11 @@ Cocok bagi satuan kerja yang membangun portal dari awal di hosting cPanel/Direct
 2. Lengkapi **Nama Satker**, URL logo (opsional), alamat kantor, telepon/WA PTSP, email, jam sidang, sambutan pimpinan, serta tautan **SIPP**, **e-Court**, **Direktori Putusan**, **Survei Pelayanan**, dan **URL CCTV Online (ACO)** (`https://cctv.badilag.net/` atau tautan ruangan PTSP satker), lalu klik **Simpan Pengaturan**.
 3. Klik **"Generate Halaman, Beranda & Menu (1-Klik)"** untuk membuat 23 halaman modul dokumen, 17 halaman profil/wajib bertanda `[LENGKAPI]`, halaman Beranda, statistik pengunjung, 3 artikel awal, serta `Menu Utama` pada Astra.
 
-### Langkah 4: Kelola Dokumen & Lengkapi Halaman Profil
-1. **Dokumen Rutin (Bulanan/Triwulanan/Tahunan):** Buka tab **Upload & Kelola Dokumen**, pilih modul dan periode slot (hingga 2027), unggah PDF (maks. 10 MB) atau tempel tautan Google Drive (*Anyone with the link*), lalu simpan.
-2. **Halaman Profil Statis:** Buka **WP Admin → Pages (Laman)**, sunting halaman yang bertanda `[LENGKAPI: ...]` (*Visi dan Misi*, *Struktur Organisasi*, *Wilayah Yurisdiksi*, *Prosedur Berperkara*, dll.). Pantau kemajuannya di tab **Dashboard 35 Kriteria**.
-3. **Tautan Zona Integritas Beranda:** Sunting halaman **Beranda** dan ganti `href="#ganti-link-area-1"` s.d. `area-6` ke folder Google Drive masing-masing area.
+### Langkah 4: Kelola Dokumen, Edit/Hapus Massal & Lengkapi Halaman Profil
+1. **Dokumen Rutin (Bulanan/Triwulanan/Tahunan):** Buka tab **Upload & Kelola Dokumen**, pilih modul dan periode slot (hingga 2028+), unggah PDF (maks. 10 MB) atau tempel tautan Google Drive (*Anyone with the link*), lalu simpan.
+2. **Perbaikan & Penghapusan Cepat (Edit + Hapus Massal Checklist):** Gunakan filter **Modul / Tahun / Pencarian** pada daftar 100 dokumen terakhir, klik **Edit** pada baris yang perlu direvisi (tidak perlu menghapus atau mengunggah ulang PDF jika hanya memperbaiki judul/slot), atau centang beberapa baris / **Pilih Semua** lalu klik **Hapus Terpilih** untuk menghapus banyak entri sekaligus. Fitur **Edit** dan **Hapus Massal Checklist** juga tersedia pada tab **Data Operasional & RSS**.
+3. **Halaman Profil Statis:** Buka **WP Admin → Pages (Laman)**, sunting halaman yang bertanda `[LENGKAPI: ...]` (*Visi dan Misi*, *Struktur Organisasi*, *Wilayah Yurisdiksi*, *Prosedur Berperkara*, dll.). Pantau kemajuannya di tab **Dashboard 3 Pilar & 35 Kriteria**.
+4. **Tautan Zona Integritas Beranda:** Isikan URL folder Google Drive Area I–VI pada **WP Admin → SINOVA Hub → Pengaturan Satker** (atau kosongkan agar otomatis mengarah ke halaman `/zona-integritas/`).
 
 ---
 
@@ -128,7 +131,7 @@ Secara bawaan, starter kit **tidak menampilkan tautan Login Admin** pada topbar 
 Jika satuan kerja sudah memiliki website WordPress berisi berita, galeri, serta tata letak Elementor/Astra yang tidak ingin diubah tampilannya, Anda tetap dapat memakai fitur arsip dokumen, dashboard kepatuhan, dan keamanannya secara aman:
 
 1. **Cadangkan Website Terlebih Dahulu:** Ekspor database melalui phpMyAdmin (`.sql`) dan simpan salinan folder `wp-content/` sebelum menambahkan berkas baru.
-2. **Pasang Folder `mu-plugins`:** Salin 5 berkas `.php` dari `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
+2. **Pasang Folder `mu-plugins`:** Salin 6 berkas `.php` dari `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
 3. **Aktifkan Mode Adopsi Situs Lama (Wajib sebelum menjalankan Seeder):**
    * Buka **WP Admin → SINOVA Hub → tab Migrasi & Adopsi**.
    * Centang opsi **"Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)"**, lalu klik **Simpan Mode & Jalankan Seeder Aman**.
@@ -155,11 +158,11 @@ Untuk satuan kerja yang ingin beralih dari **Joomla (3.x / 4.x)** ke WordPress a
    * Salin folder dokumen lama dari server Joomla (umumnya di direktori `images/` atau `files/`) ke path yang sama pada WordPress agar tautan PDF di dalam berita lama tetap dapat diunduh.
    * Bila alamat halaman utama berubah (misalnya dari `/index.php/profil/visi-misi` ke `/visi-dan-misi/`), pasang aturan *Redirect 301* melalui `.htaccess` atau plugin *Redirection* supaya tautan dari mesin pencari tidak menghasilkan halaman tidak ditemukan (`404`).
 4. **Pasang Starter Kit & Rapikan Arsip:**
-   * Salin 5 berkas `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
+   * Salin 6 berkas `wordpress-mu-plugins/` ke `wp-content/mu-plugins/`.
    * Jalankan **Seeder 1-Klik** (atau gunakan **Tab Migrasi & Adopsi** untuk memindai tautan Google Drive/PDF yang ikut terbawa di artikel hasil impor Joomla agar masuk ke 23 modul dokumen terstruktur).
    * Berita lama hasil migrasi Joomla secara otomatis muncul pada blok **Berita Terkini** di Beranda dan terindeks oleh fitur pencarian website.
 5. **Pengujian Sebelum Pengalihan Domain (*Cut-Over*):**
-   * Periksa seluruh tautan melalui **WP Admin → SINOVA Hub → Dashboard 35 Kriteria**, pastikan SSL/HTTPS aktif pada domain produksi, barulah pindahkan WordPress hasil migrasi ke domain utama.
+   * Periksa seluruh tautan melalui **WP Admin → SINOVA Hub → Dashboard 3 Pilar & 35 Kriteria**, pastikan SSL/HTTPS aktif pada domain produksi, barulah pindahkan WordPress hasil migrasi ke domain utama.
 
 ---
 
@@ -181,8 +184,22 @@ Jika satuan kerja memiliki aplikasi manajemen internal terpisah berbasis Laravel
 
 ---
 
+## Panduan Pembaruan (Upgrade) untuk Website yang Sudah Berjalan
+
+Bila satuan kerja sudah memasang versi sebelumnya dan ingin menerapkan pembaruan ini (misalnya fitur **Edit**, **Hapus Massal Checklist**, pengamanan Chrome Modern Web, & halaman wajib KMA 2-144/2022) **tanpa menghilangkan data yang sudah ada**:
+
+1. **Non-Destruktif (Aman untuk Database):** Cukup unduh/tarik pembaruan dari repositori ini lalu salin & timpa seluruh 6 berkas `.php` di `wordpress-mu-plugins/` ke folder `wp-content/mu-plugins/` pada server WordPress Anda. Tabel dokumen (`pa_sinova_documents`), tabel data operasional (`pa_portal_records`), berita, halaman, menu, dan pengaturan tidak akan terhapus.
+2. **Bersihkan Cache HTML (Bila Aktif):** Hapus berkas `.html` sementara di `wp-content/cache/pa-pages/` (atau klik **Purge / Regenerasi** dari panel cache / simpan ulang pengaturan di WP Admin).
+3. **Lengkapi Halaman KMA Baru & Perbarui Baseline FIM (Opsional):**
+   * Jalankan kembali **Seeder 1-Klik** (dengan atau tanpa Mode Adopsi) jika halaman baru (`/informasi-serta-merta/`, `/informasi-tersedia-setiap-saat/`, `/layanan-pengaduan/`, `/zona-integritas/`) belum ada — halaman yang sudah terbit dan telah disunting tidak akan ditimpa.
+   * Buka tab **Keamanan, MFA & Audit** lalu klik **Perbarui Baseline SHA-256** agar *File Integrity Monitor* mencatat hash versi terbaru sebagai kondisi bersih.
+
+---
+
 ## Daftar Periksa Sebelum Publikasi Online
-- Pastikan sertifikat **HTTPS/SSL** aktif dan valid di domain produksi.
-- Wajibkan **Autentikasi Dua Faktor (2FA)** pada seluruh akun Administrator WordPress.
+- Pastikan domain resmi **`.go.id`** serta sertifikat **HTTPS/SSL** aktif dan valid di server produksi (lalu aktifkan aturan *Force HTTPS* pada `.htaccess` dari contoh `.htaccess.hardened.example` sehingga **HSTS Preload** aktif otomatis).
+- Pastikan **Settings → Reading → Search Engine Visibility** tidak mencentang *Discourage search engines from indexing this site* agar situs terindeks Google dan lolos audit SEO Chrome Lighthouse.
+- Wajibkan **Autentikasi Dua Faktor (MFA TOTP)** untuk seluruh akun Administrator/Operator dan sembunyikan URL login admin melalui tab **Keamanan, MFA & Audit**.
 - Bila memakai **Cloudflare Turnstile**, isikan *Site Key* dan *Secret Key* pada **WP Admin → SINOVA Hub** (bila dikosongkan, sistem otomatis memakai CAPTCHA hitung matematika offline + honeypot).
+- Verifikasi kesiapan skor gabungan **3 Pilar SINOVA + Chrome Standards &ge; 90 (Predikat Sangat Baik / Excellent)** serta ekspor bukti CSV/JSON melalui tab **Dashboard 3 Pilar & 35 Kriteria**.
 - Pastikan akses database MariaDB/MySQL hanya mendengarkan koneksi lokal (`bind-address = 127.0.0.1`) dan jadwalkan pencadangan database serta `wp-content/uploads/` secara berkala.

@@ -3,7 +3,7 @@
   Starter Kit Website Resmi Pengadilan Agama - Template Beranda Portabel
   100% Bebas Ketergantungan Plugin Berbayar & Bebas Istilah Internal Penilaian pada Tampilan Publik.
   1. Seluruh styling dan script dikelola otomatis oleh pa-ui-performance-a11y.php agar aman dari filter KSES.
-  2. Ganti tautan href="#ganti-link-area-1" s.d. "#ganti-link-area-6" sesuai folder dokumen Zona Integritas satker Anda.
+  2. Tautan 6 Area Zona Integritas dikelola dinamis melalui [pa_sinova_zi_grid] (Pengaturan → SINOVA Hub).
   3. Kartu SKM / SPAK / SPKP otomatis tertaut ke laporan survei oleh pa-sinova-hub.php (modul: survei-pelayanan).
 -->
 <div class="pa-starter-showcase">
@@ -18,7 +18,7 @@
   <section class="pa-hero-banner" aria-label="Portal Resmi Pengadilan Agama">
     <div class="pa-hero-content">
       <span class="pa-hero-kicker">Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik</span>
-      <h2 class="pa-hero-title">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h2>
+      <h1 class="pa-hero-title">Portal Keterbukaan Informasi &amp; Layanan Peradilan</h1>
       <p class="pa-hero-lead">Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan yang akurat dan mudah diakses masyarakat pencari keadilan.</p>
       <div class="pa-hero-actions">
         <a class="pa-btn-gold" href="./agenda-jadwal-persidangan/" data-pa-tip="Pantau agenda persidangan harian &amp; riwayat perkara melalui SIPP.">Jadwal Sidang &amp; SIPP</a>
@@ -31,7 +31,7 @@
 
   <!-- 3. Layanan Inti Pencari Keadilan (8 Kartu Berikon SVG, Label Publik Bersih) -->
   <section class="pa-section-block" aria-label="Layanan Inti Peradilan">
-    <h2 class="pa-starter-heading" tabindex="0">LAYANAN PERADILAN &amp; INFORMASI PERKARA <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+    <h2 class="pa-starter-heading">LAYANAN PERADILAN &amp; INFORMASI PERKARA <span class="pa-hint-i" aria-hidden="true">i</span></h2>
     <p class="pa-starter-sub">Akses Langsung Layanan Elektronik, Informasi Berperkara, dan Transparansi Pengadilan</p>
     <div class="pa-services-grid pa-services-grid-8">
       <a class="pa-service-card" href="./agenda-jadwal-persidangan/">
@@ -83,43 +83,8 @@
   <!-- 4. Sambutan Pimpinan & Standar Maklumat Pelayanan -->
   [pa_sinova_welcome_section]
 
-  <!-- 5. Dokumen Pembangunan Zona Integritas (6 Area Sejajar + Ikon SVG) -->
-  <section class="pa-section-block" aria-label="Dokumen Pembangunan Zona Integritas">
-    <h2 class="pa-starter-heading" tabindex="0">DOKUMEN PEMBANGUNAN ZONA INTEGRITAS <span class="pa-hint-i" aria-hidden="true">i</span></h2>
-    <p class="pa-starter-sub">Transparansi 6 Area Perubahan Menuju Wilayah Bebas dari Korupsi (WBK) &amp; WBBM</p>
-    <div class="pa-zi-grid">
-      <a class="pa-zi-card" href="#ganti-link-area-1">
-        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
-        <span class="pa-zi-area">Area I</span>
-        <span class="pa-zi-desc">MANAJEMEN PERUBAHAN</span>
-      </a>
-      <a class="pa-zi-card" href="#ganti-link-area-2">
-        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
-        <span class="pa-zi-area">Area II</span>
-        <span class="pa-zi-desc">PENATAAN TATA LAKSANA</span>
-      </a>
-      <a class="pa-zi-card" href="#ganti-link-area-3">
-        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-        <span class="pa-zi-area">Area III</span>
-        <span class="pa-zi-desc">PENATAAN MANAJEMEN SDM</span>
-      </a>
-      <a class="pa-zi-card" href="#ganti-link-area-4">
-        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>
-        <span class="pa-zi-area">Area IV</span>
-        <span class="pa-zi-desc">PENGUATAN AKUNTABILITAS</span>
-      </a>
-      <a class="pa-zi-card" href="#ganti-link-area-5">
-        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-        <span class="pa-zi-area">Area V</span>
-        <span class="pa-zi-desc">PENGUATAN PENGAWASAN</span>
-      </a>
-      <a class="pa-zi-card" href="#ganti-link-area-6">
-        <span class="pa-zi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
-        <span class="pa-zi-area">Area VI</span>
-        <span class="pa-zi-desc">KUALITAS PELAYANAN PUBLIK</span>
-      </a>
-    </div>
-  </section>
+  <!-- 5. Dokumen Pembangunan Zona Integritas (6 Area Sejajar + Tautan Dinamis) -->
+  [pa_sinova_zi_grid]
 
   <!-- 6. Berita & Pengumuman Terkini -->
   [pa_sinova_latest_posts count="3"]
@@ -130,7 +95,7 @@
   <!-- 7. Indeks Pelayanan Publik + Direktori Transparansi & Dokumen Publik -->
   <section class="pa-split-section" aria-label="Survei Pelayanan & Direktori Dokumen Publik">
     <section class="survey-panel pa-starter-survey" aria-label="Indeks Pelayanan Publik">
-      <div class="survey-slider">
+      <div class="survey-slider" aria-live="polite">
         <article class="survey-slide is-active" data-slide="0">
           <div class="survey-head">
             <span class="survey-pill">★ Mutu A (Sangat Baik)</span>
@@ -168,16 +133,16 @@
           </div>
         </article>
       </div>
-      <div class="survey-dots">
-        <button type="button" class="survey-dot is-active" data-target="0">TW III</button>
-        <button type="button" class="survey-dot" data-target="1">TW II</button>
-        <button type="button" class="survey-dot" data-target="2">TW I</button>
+      <div class="survey-dots" role="group" aria-label="Pilih Triwulan Indeks Survei">
+        <button type="button" class="survey-dot is-active" data-target="0" aria-pressed="true">TW III</button>
+        <button type="button" class="survey-dot" data-target="1" aria-pressed="false">TW II</button>
+        <button type="button" class="survey-dot" data-target="2" aria-pressed="false">TW I</button>
       </div>
     </section>
 
     <div class="pa-hub-shortcuts">
       <div class="pa-hub-shortcuts-head">
-        <h3 tabindex="0">Direktori Transparansi &amp; Dokumen Publik <span class="pa-hint-i" aria-hidden="true">i</span></h3>
+        <h3>Direktori Transparansi &amp; Dokumen Publik <span class="pa-hint-i" aria-hidden="true">i</span></h3>
         <p>Akses cepat laporan keuangan, perencanaan kinerja, biaya perkara, dan hasil survei kepuasan masyarakat.</p>
       </div>
       <div class="pa-shortcut-grid">
