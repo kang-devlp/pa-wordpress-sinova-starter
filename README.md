@@ -3,9 +3,9 @@
 Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menata website resmi **Pengadilan Agama** berbasis **WordPress** (PHP 8.1+, disarankan 8.2/8.3) sesuai standar **SK Dirjen Badilag 2722/2026** dan **SK KMA 2-144/2022**.
 
 - **Tanpa Elementor & tanpa plugin berbayar** — ringan, cepat, dan ramah operator non-IT.
-- **Editor Grid Beranda 12 Kolom (*Drag & Resize*)** — seret kotak, tarik sudut atur lebar (`2–12` kolom), edit isi langsung lewat popup modal (Slider Foto, Jadwal Sidang & Live SIPP, Statistik Perkara, Pengumuman, Berita, Galeri Video, Ucapan & Belasungkawa, hingga Konten Bebas/Sematan).
-- **Update 1-Klik + Rollback** — perbarui langsung dari GitHub di WP Admin dengan cadangan otomatis (*Batalkan Pembaruan Terakhir*) dan tombol **Bersihkan Cache** 1-klik.
-- 👉 **Unduh Plugin Siap Pakai (v2.3.1):** **[Download `pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)**
+- **Editor Grid Beranda 12 Kolom (*Drag & Resize*)** — seret kotak, tarik sudut atur lebar (`2–12` kolom), edit isi langsung lewat popup modal (Slider Foto, Jadwal Sidang & Live SIPP, Statistik Perkara, **Direktori Putusan MA RI per Satker via RSS**, Pengumuman, Berita, Galeri Video, Ucapan & Belasungkawa, hingga Konten Bebas/Sematan).
+- **Update 1-Klik + Rollback + Notifikasi WP Admin** — perbarui langsung dari GitHub di WP Admin dengan cadangan otomatis (*Batalkan Pembaruan Terakhir*) dan tombol **Bersihkan Cache** 1-klik.
+- 👉 **Unduh Plugin Siap Pakai (v2.3.2):** **[Download `pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)**
 
 ---
 
@@ -23,15 +23,15 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 5. Buka **SINOVA Hub → Identitas & Seeder**, lengkapi identitas satker → **Simpan Pengaturan** → klik **`Generate Halaman, Beranda & Menu (1-Klik)`**.
 6. *(Alternatif mode `mu-plugins`)* Jika ingin memakai folder `mu-plugins`, salin seluruh isi `wordpress-mu-plugins/` (**6 file `.php` + folder `assets/`**) ke `wp-content/mu-plugins/` lalu lakukan langkah 1, 2, 4, dan 5.
 
-### 2. Sudah Install Versi 1.0 → Upgrade ke v2.3.1
+### 2. Sudah Install Versi 1.0 → Upgrade ke v2.3.2
 *(Cukup 1 kali pindah ke paket Plugin `.zip`, selanjutnya update v2.4 dst. cukup 1 klik dari WP Admin)*
 1. Hapus **5 file `.php` lama** di `wp-content/mu-plugins/` dan hapus isi `wp-content/cache/` (jika ada).
 2. Unduh **[`pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)** → upload lewat **WP Admin → Plugins → Add New → Upload Plugin → Activate**.
 3. Buka **SINOVA Hub → Tampilan Beranda → klik `Aktifkan Beranda Dinamis (1-Klik)`**.
 4. Buka **SINOVA Hub → Identitas & Seeder → klik `Rapikan 6 Menu Resmi Sekarang`** *(lewati bila memakai Mode Adopsi situs lama)*.
-5. *(Opsional khusus v1.0)* Jika 5 halaman ini (`profil-pegawai`, `agenda-jadwal-persidangan`, `statistik-perkara`, `panggilan-ghaib`, `wilayah-yurisdiksi`) isinya masih teks `[LENGKAPI]`, hapus permanen (*Trash → Empty Trash*) 5 halaman itu saja lalu klik **`Generate Halaman, Beranda & Menu (1-Klik)`** agar otomatis terisi tabel/kartu dinamis v2.3.1.
+5. *(Opsional khusus v1.0)* Jika 5 halaman ini (`profil-pegawai`, `agenda-jadwal-persidangan`, `statistik-perkara`, `panggilan-ghaib`, `wilayah-yurisdiksi`) isinya masih teks `[LENGKAPI]`, hapus permanen (*Trash → Empty Trash*) 5 halaman itu saja lalu klik **`Generate Halaman, Beranda & Menu (1-Klik)`** agar otomatis terisi tabel/kartu dinamis v2.3.2.
 
-### 3. Sudah Install Versi 2.0 / 2.1 → Upgrade ke v2.3.1
+### 3. Sudah Install Versi 2.0 / 2.1 → Upgrade ke v2.3.2
 *(6 menu & halaman operasional sudah ada — upgrade hanya 4 langkah singkat)*
 1. Hapus **6 file `.php` + folder `assets/` lama** di `wp-content/mu-plugins/` dan hapus isi `wp-content/cache/` (jika ada).
 2. Unduh **[`pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)** → upload lewat **WP Admin → Plugins → Add New → Upload Plugin → Activate**.
@@ -65,7 +65,7 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 ## Fitur Utama
 
 1. **Tampilan Publik Modern & Aksesibel (WCAG 2.2):** Header 2 baris + Mega Menu 4 kolom, 6 Menu Utama standar, Pencarian Kilat `Ctrl+K`, Mode Terang/Gelap, Jam WIB + status PTSP, Dock CCTV ACO lokal, Panel Aksesibilitas & Pembaca Suara Bahasa Indonesia, tanpa Google Fonts CDN.
-2. **Editor Grid Beranda 12 Kolom & Live SIPP:** Atur seluruh susunan Beranda lewat **SINOVA Hub → Tampilan Beranda** (seret posisi & tarik ukuran 13 jenis blok, termasuk **Konten Bebas/Sematan**). Tempel link `https://sipp.pa-satker.go.id/Slide_sidang` pada blok **Jadwal Sidang** — otomatis tampil bersama tab *Agenda Terstruktur* dan otomatis diizinkan CSP `frame-src`. Tersedia juga **API Push SIPP** (`POST /wp-json/pa-sinova/v1/sipp/push-hearings` + contoh [scripts/sipp-push-example.php](scripts/sipp-push-example.php)).
+2. **Editor Grid Beranda 12 Kolom, Live SIPP & Direktori Putusan MA RI:** Atur seluruh susunan Beranda lewat **SINOVA Hub → Tampilan Beranda** (seret posisi & tarik ukuran 14 jenis blok, termasuk **Direktori Putusan Terbaru (MA RI)** dan **Konten Bebas/Sematan**). Cukup tempel URL profil satker `https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-satker.html` di **Identitas & Seeder** — umpan RSS Putusan (`.../rss/pengadilan/pa-satker.html`) dan pencarian putusan satker aktif otomatis! Tempel juga link `https://sipp.pa-satker.go.id/Slide_sidang` pada blok **Jadwal Sidang**, plus **API Push SIPP** (`POST /wp-json/pa-sinova/v1/sipp/push-hearings` + contoh [scripts/sipp-push-example.php](scripts/sipp-push-example.php)).
 3. **23 Modul Arsip Dokumen & Publikasi Lengkap:** Kelola LRA, DIPA, LKJiP, LIPA 7, Sisa Panjar, LHKPN, Survei (PDF maks. 10 MB / Google Drive), **Pengumuman 3 Kolom** (Satker, RSS MA RI, Badilag), **Slider Foto**, **Galeri Video**, **Ucapan & Belasungkawa**, **Wilayah Yurisdiksi**, serta **Profil Pegawai lengkap dengan modal detail**.
 4. **Dashboard Audit 3 Pilar & 35 Kriteria:** Skor kepatuhan otomatis (target **Sangat Baik ≥ 90**) + ekspor bukti **CSV & JSON** serta pembagian peran operator (`pa_kepaniteraan`, `pa_kesekretariatan`, `pa_humas`).
 5. **Keamanan Berlapis Bawaan:** CSP Nonce + Trusted Types, **MFA TOTP** (Google Authenticator/Aegis, QR dibuat lokal), **Sembunyikan URL Login Admin** (404 untuk `/wp-login.php`), Rate Limiter, WAF Anti-Judol, CAPTCHA offline / Turnstile, Rollback Update, dan *File Integrity Monitor (SHA-256)*.

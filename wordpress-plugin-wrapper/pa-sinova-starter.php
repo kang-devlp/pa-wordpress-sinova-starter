@@ -3,7 +3,7 @@
  * Plugin Name: PA SINOVA Starter Kit (Portal Resmi Pengadilan Agama)
  * Plugin URI: https://github.com/kang-devlp/pa-wordpress-sinova-starter
  * Description: Paket starter open source website resmi Pengadilan Agama (SK Dirjen Badilag 2722/2026): Editor Grid Beranda 12 Kolom Drag & Resize tanpa Elementor, Dashboard Jadwal Sidang & Live SIPP, API Push SIPP, 23 Modul Dokumen Publik, Audit 3 Pilar, MFA TOTP, dan Update 1-Klik + Rollback dari GitHub.
- * Version: 2.3.1
+ * Version: 2.3.2
  * Requires at least: 6.2
  * Requires PHP: 8.1
  * Author: M. Agus Hayyudin
@@ -46,6 +46,21 @@ foreach ($paSinovaCoreFiles as $paFile) {
 }
 
 register_activation_hook(__FILE__, static function () {
+    // Deteksi otomatis website WordPress lama agar desain/menu/Elementor eksisting langsung terlindungi (Mode Adopsi)
+    if (get_option('pa_sinova_starter_settings', null) === null && function_exists('pa_sinova_get_settings')) {
+        $postCnt = wp_count_posts('post');
+        $pageCnt = wp_count_posts('page');
+        $pubPosts = isset($postCnt->publish) ? (int) $postCnt->publish : 0;
+        $pubPages = isset($pageCnt->publish) ? (int) $pageCnt->publish : 0;
+        $hasBuilder = defined('ELEMENTOR_VERSION') || class_exists('\Elementor\Plugin') || defined('ET_BUILDER_VERSION') || defined('WPB_VC_VERSION');
+        if ($pubPosts > 2 || $pubPages > 3 || $hasBuilder) {
+            $initCfg = pa_sinova_get_settings();
+            $initCfg['preserve_existing_design'] = '1';
+            $initCfg['csp_mode'] = 'compat';
+            update_option('pa_sinova_starter_settings', $initCfg, false);
+            set_transient('pa_sinova_auto_adoption_notice', array('posts' => $pubPosts, 'pages' => $pubPages), 7 * DAY_IN_SECONDS);
+        }
+    }
     if (function_exists('pa_sinova_register_roles')) {
         pa_sinova_register_roles();
     }

@@ -298,11 +298,20 @@ function pa_sinova_module_periods(array $cfg): array {
 }
 
 function pa_sinova_ensure_table(): void {
-    if (get_option('pa_sinova_hub_db_ver') === PA_SINOVA_HUB_DB_VER) {
-        return;
-    }
     global $wpdb;
-    $table   = pa_sinova_table_name();
+    $table = pa_sinova_table_name();
+    if (get_option('pa_sinova_hub_db_ver') === PA_SINOVA_HUB_DB_VER) {
+        // Saat di WP Admin, verifikasi ringan bila tabel hilang akibat restore DB parsial
+        static $verified = false;
+        if ($verified || !is_admin()) {
+            return;
+        }
+        $verified = true;
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if ($exists === $table) {
+            return;
+        }
+    }
     $charset = $wpdb->get_charset_collate();
     $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
         `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -324,7 +333,10 @@ function pa_sinova_ensure_table(): void {
         KEY `idx_slug_year` (`page_slug`, `year`)
     ) {$charset};";
     $wpdb->query($sql);
-    update_option('pa_sinova_hub_db_ver', PA_SINOVA_HUB_DB_VER, false);
+    $created = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+    if ($created === $table) {
+        update_option('pa_sinova_hub_db_ver', PA_SINOVA_HUB_DB_VER, false);
+    }
 }
 add_action('init', 'pa_sinova_ensure_table', 5);
 

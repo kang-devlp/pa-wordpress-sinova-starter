@@ -71,7 +71,8 @@ function pa_home_page_cache_is_early_eligible(): bool {
         if (substr($path, -1) !== '/') {
             return false;
         }
-        if (preg_match('#^/(?:wp-admin|wp-content|wp-includes|wp-json|wp-login|xmlrpc|feed|author|comments|cart|checkout|my-account)(?:/|$)#i', $path)) {
+        // Dukung instalasi WordPress di root maupun subfolder (misal /web_pa/feed/, /web_pa/author/)
+        if (preg_match('#/(?:wp-admin|wp-content|wp-includes|wp-json|wp-login|xmlrpc|feed|author|comments|cart|checkout|my-account)(?:/|$)#i', $path)) {
             return false;
         }
         if (preg_match('/(?:sitemap|\.[a-z0-9]{2,5}\/?$)/i', $path)) {

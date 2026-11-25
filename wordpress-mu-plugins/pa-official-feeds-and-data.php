@@ -457,6 +457,283 @@ add_shortcode('pa_official_announcements', static function ($atts) {
 });
 
 // ============================================================================
+// 1B. DIREKTORI PUTUSAN SATKER (RSS FEED PUTUSAN3.MAHKAMAHAGUNG.GO.ID)
+// ============================================================================
+
+function pa_portal_dirput_resolve_urls(string $rawDirUrl = '', string $rawRssUrl = ''): array {
+    $cfg = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $dir = trim($rawDirUrl !== '' ? $rawDirUrl : (string) ($cfg['direktori_url'] ?? ''));
+    $rss = trim($rawRssUrl !== '' ? $rawRssUrl : (string) ($cfg['dirput_rss_url'] ?? ''));
+
+    $slug = '';
+    foreach (array($dir, $rss) as $candidate) {
+        if ($candidate === '') {
+            continue;
+        }
+        if (preg_match('#/(?:pengadilan/profil/pengadilan|direktori/index/pengadilan|rss/pengadilan|rss/index/pengadilan)/([a-z0-9-]+?)(?:\.html|/|(?:\?|$))#i', $candidate, $m)) {
+            $slug = strtolower(preg_replace('/[^a-z0-9-]/', '', $m[1]));
+            break;
+        }
+        if (preg_match('/^((?:pa|pta|ms|pn|pt|ptun|dilmil)-[a-z0-9-]+)$/i', $candidate, $m)) {
+            $slug = strtolower($m[1]);
+            break;
+        }
+    }
+
+    if ($slug !== '') {
+        $profileUrl   = 'https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/' . $slug . '.html';
+        $directoryUrl = 'https://putusan3.mahkamahagung.go.id/direktori/index/pengadilan/' . $slug . '.html';
+        $autoRssUrl   = 'https://putusan3.mahkamahagung.go.id/rss/pengadilan/' . $slug . '.html';
+        $courtLabel   = strtoupper(str_replace('-', ' ', $slug));
+    } else {
+        $profileUrl   = ($dir !== '' && preg_match('#^https?://#i', $dir)) ? esc_url_raw($dir, array('http', 'https')) : 'https://putusan3.mahkamahagung.go.id/';
+        $directoryUrl = $profileUrl;
+        $autoRssUrl   = '';
+        $courtLabel   = '';
+    }
+
+    $finalRss = ($rss !== '' && preg_match('#^https?://#i', $rss)) ? esc_url_raw($rss, array('http', 'https')) : $autoRssUrl;
+
+    return array(
+        'slug'          => $slug,
+        'court_label'   => $courtLabel,
+        'profile_url'   => $profileUrl,
+        'directory_url' => $directoryUrl,
+        'rss_url'       => $finalRss,
+        'search_url'    => 'https://putusan3.mahkamahagung.go.id/search.html',
+    );
+}
+
+function pa_portal_parse_dirput_html_fallback(string $html, int $limit = 10): array {
+    if ($html === '' || !preg_match_all('/<a\b[^>]*href=["\']([^"\']*\/direktori\/putusan\/[^"\']+)["\'][^>]*>(.*?)<\/a>/is', $html, $matches, PREG_SET_ORDER)) {
+        return array();
+    }
+    $items = array();
+    $seen  = array();
+    foreach ($matches as $m) {
+        $href = html_entity_decode(trim((string) $m[1]), ENT_QUOTES, 'UTF-8');
+        if (strpos($href, '/') === 0) {
+            $href = 'https://putusan3.mahkamahagung.go.id' . $href;
+        }
+        $link = esc_url_raw($href, array('http', 'https'));
+        if ($link === '' || isset($seen[$link])) {
+            continue;
+        }
+        $title = pa_portal_trim_text(html_entity_decode((string) $m[2], ENT_QUOTES, 'UTF-8'), 120);
+        if ($title === '' || strlen($title) < 6) {
+            continue;
+        }
+        $seen[$link] = true;
+        $items[] = array(
+            'title'      => $title,
+            'link'       => $link,
+            'date_ts'    => 0,
+            'date_label' => 'Putusan',
+            'excerpt'    => '',
+            'category'   => 'Direktori Putusan',
+        );
+        if (count($items) >= $limit) {
+            break;
+        }
+    }
+    return $items;
+}
+
+function pa_portal_refresh_dirput_feed(string $overrideUrl = ''): array {
+    $resolved = pa_portal_dirput_resolve_urls($overrideUrl);
+    $rssUrl   = (string) ($resolved['rss_url'] ?? '');
+    $dirUrl   = (string) ($resolved['directory_url'] ?? '');
+    $cacheKey = md5($rssUrl . '|' . $dirUrl);
+
+    $prev = get_option('pa_dirput_feed_cache', array());
+    if (!is_array($prev) || ($prev['source_key'] ?? '') !== $cacheKey) {
+        $prev = array('source_key' => $cacheKey, 'items' => array(), 'updated_at' => 0, 'status' => 'empty');
+    }
+
+    $items  = is_array($prev['items'] ?? null) ? $prev['items'] : array();
+    $status = !empty($items) ? 'ok' : 'unavailable';
+    $allowedSuffixes = array('mahkamahagung.go.id', 'go.id');
+
+    if ($rssUrl !== '') {
+        $resp = pa_portal_ssrf_safe_get($rssUrl, $allowedSuffixes, 7);
+        if ($resp['ok']) {
+            $parsed = pa_portal_parse_rss_xml($resp['body'], 12);
+            if (!empty($parsed)) {
+                $items  = $parsed;
+                $status = 'ok';
+            }
+        }
+    }
+
+    if (empty($items) && $dirUrl !== '' && strpos($dirUrl, '/direktori/index/pengadilan/') !== false) {
+        $respHtml = pa_portal_ssrf_safe_get($dirUrl, $allowedSuffixes, 7);
+        if ($respHtml['ok']) {
+            $parsedHtml = pa_portal_parse_dirput_html_fallback($respHtml['body'], 12);
+            if (!empty($parsedHtml)) {
+                $items  = $parsedHtml;
+                $status = 'ok';
+            }
+        }
+    }
+
+    $payload = array(
+        'source_key' => $cacheKey,
+        'resolved'   => $resolved,
+        'items'      => $items,
+        'status'     => $status,
+        'updated_at' => time(),
+    );
+    update_option('pa_dirput_feed_cache', $payload, false);
+    set_transient('pa_dirput_feed_fresh_' . substr($cacheKey, 0, 12), 1, 3600);
+    if (function_exists('pa_home_page_cache_mark_stale')) {
+        pa_home_page_cache_mark_stale();
+    }
+    return $payload;
+}
+add_action('pa_dirput_feed_cron_refresh', static function () {
+    pa_portal_refresh_dirput_feed();
+});
+
+function pa_portal_get_dirput_feed(bool $allowSyncIfEmpty = false, string $overrideUrl = ''): array {
+    $resolved = pa_portal_dirput_resolve_urls($overrideUrl);
+    $cacheKey = md5(((string) ($resolved['rss_url'] ?? '')) . '|' . ((string) ($resolved['directory_url'] ?? '')));
+    $cache    = get_option('pa_dirput_feed_cache', array());
+    $matched  = is_array($cache) && (($cache['source_key'] ?? '') === $cacheKey);
+    $items    = ($matched && is_array($cache['items'] ?? null)) ? $cache['items'] : array();
+    $freshKey = 'pa_dirput_feed_fresh_' . substr($cacheKey, 0, 12);
+
+    if ($allowSyncIfEmpty && empty($items) && ($resolved['rss_url'] ?? '') !== '' && !get_transient($freshKey)) {
+        return pa_portal_refresh_dirput_feed($overrideUrl);
+    }
+
+    if (!get_transient($freshKey) && ($resolved['rss_url'] ?? '') !== '') {
+        if (!wp_next_scheduled('pa_dirput_feed_cron_refresh')) {
+            wp_schedule_single_event(time() + 2, 'pa_dirput_feed_cron_refresh');
+        }
+    }
+
+    return array(
+        'source_key' => $cacheKey,
+        'resolved'   => $resolved,
+        'items'      => $items,
+        'status'     => !empty($items) ? 'ok' : (get_transient($freshKey) ? 'unavailable' : 'pending'),
+        'updated_at' => $matched ? (int) ($cache['updated_at'] ?? 0) : 0,
+    );
+}
+
+add_action('rest_api_init', static function () {
+    register_rest_route('pa-portal/v1', '/dirput', array(
+        'methods'             => 'GET',
+        'permission_callback' => '__return_true',
+        'callback'            => static function () {
+            $data = pa_portal_get_dirput_feed(true);
+            return new WP_REST_Response(array(
+                'ok'         => true,
+                'status'     => (string) ($data['status'] ?? 'empty'),
+                'resolved'   => $data['resolved'] ?? array(),
+                'items'      => array_slice((array) ($data['items'] ?? array()), 0, 12),
+                'updated_at' => (int) ($data['updated_at'] ?? 0),
+            ), 200);
+        },
+    ));
+});
+
+function pa_portal_render_dirput_widget(string $title = '', int $limit = 6, string $overrideUrl = ''): string {
+    $limit    = max(2, min(12, $limit));
+    $data     = pa_portal_get_dirput_feed(false, $overrideUrl);
+    $resolved = is_array($data['resolved'] ?? null) ? $data['resolved'] : pa_portal_dirput_resolve_urls($overrideUrl);
+    $items    = array_slice((array) ($data['items'] ?? array()), 0, $limit);
+    $slug     = (string) ($resolved['slug'] ?? '');
+    $courtLbl = (string) ($resolved['court_label'] ?? '');
+    $profUrl  = (string) ($resolved['profile_url'] ?? 'https://putusan3.mahkamahagung.go.id/');
+    $dirUrl   = (string) ($resolved['directory_url'] ?? 'https://putusan3.mahkamahagung.go.id/');
+    $rssUrl   = (string) ($resolved['rss_url'] ?? '');
+    $needsHyd = (empty($items) && $rssUrl !== '' && ($data['status'] ?? '') === 'pending');
+    $heading  = $title !== '' ? $title : 'Direktori Putusan Terbaru';
+
+    ob_start();
+    ?>
+    <section class="pa-dirput-card pa-hg-fullh" aria-label="<?php echo esc_attr($heading); ?>" data-pa-dirput-hydrate="<?php echo $needsHyd ? '1' : '0'; ?>" data-pa-dirput-limit="<?php echo (int) $limit; ?>">
+        <header class="pa-dirput-head">
+            <div class="pa-dirput-head-title">
+                <span class="pa-dirput-kicker">DIREKTORI PUTUSAN MA RI<?php echo $courtLbl !== '' ? ' · ' . esc_html($courtLbl) : ''; ?></span>
+                <h3><?php echo esc_html($heading); ?></h3>
+            </div>
+            <div class="pa-dirput-actions">
+                <a class="pa-dirput-btn-ghost" href="<?php echo esc_url($profUrl); ?>" target="_blank" rel="noopener noreferrer">Profil Satker ↗</a>
+                <a class="pa-dirput-btn-primary" href="<?php echo esc_url($dirUrl); ?>" target="_blank" rel="noopener noreferrer">Semua Putusan ↗</a>
+            </div>
+        </header>
+
+        <form class="pa-dirput-search" action="https://putusan3.mahkamahagung.go.id/search.html" method="get" target="_blank" rel="noopener noreferrer" role="search">
+            <label class="screen-reader-text" for="pa-dirput-q-<?php echo esc_attr($slug ?: 'ma'); ?>">Cari Nomor Perkara atau Kata Kunci Putusan</label>
+            <input id="pa-dirput-q-<?php echo esc_attr($slug ?: 'ma'); ?>" type="search" name="q" placeholder="Cari nomor perkara, jenis perkara, atau kata kunci putusan<?php echo $courtLbl !== '' ? ' (' . esc_attr($courtLbl) . ')' : ''; ?>..." required>
+            <?php if ($slug !== '') : ?>
+                <input type="hidden" name="court" value="<?php echo esc_attr($slug); ?>">
+            <?php endif; ?>
+            <button type="submit">Cari Putusan</button>
+        </form>
+
+        <div class="pa-dirput-list" data-pa-dirput-list>
+            <?php if (!empty($items)) : ?>
+                <?php foreach ($items as $it) :
+                    $dtRaw   = trim((string) ($it['date_label'] ?? ''));
+                    $dtLabel = $dtRaw !== '' ? $dtRaw : 'Putusan';
+                    $itTitle = (string) ($it['title'] ?? '');
+                    $itEx    = (string) ($it['excerpt'] ?? '');
+                ?>
+                    <article class="pa-dirput-item">
+                        <a href="<?php echo esc_url((string) ($it['link'] ?? $dirUrl)); ?>" target="_blank" rel="noopener noreferrer">
+                            <div class="pa-dirput-item-top">
+                                <span class="pa-dirput-badge">PUTUSAN</span>
+                                <span class="pa-dirput-date"><?php echo esc_html($dtLabel); ?></span>
+                            </div>
+                            <strong class="pa-dirput-title"><?php echo esc_html($itTitle); ?></strong>
+                            <?php if ($itEx !== '') : ?>
+                                <p class="pa-dirput-ex"><?php echo esc_html($itEx); ?></p>
+                            <?php endif; ?>
+                            <span class="pa-dirput-cta">Lihat Salinan &amp; Detail ↗</span>
+                        </a>
+                    </article>
+                <?php endforeach; ?>
+            <?php else : ?>
+                <div class="pa-dirput-fallback">
+                    <div class="pa-dirput-fb-icon" aria-hidden="true">⚖</div>
+                    <div class="pa-dirput-fb-body">
+                        <strong><?php echo $slug !== '' ? 'Portal Resmi Direktori Putusan ' . esc_html($courtLbl) : 'Portal Direktori Putusan Mahkamah Agung RI'; ?></strong>
+                        <p>
+                            <?php if ($slug !== '') : ?>
+                                Akses langsung arsip salinan putusan perkara yang telah dianonimisasi dan dipublikasikan pada Direktori Putusan Mahkamah Agung RI.
+                            <?php else : ?>
+                                Tempelkan URL profil Direktori Putusan satker Anda (contoh: <code>https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-semarang.html</code>) pada <strong>WP Admin → SINOVA Hub → Identitas &amp; Seeder</strong> untuk mengaktifkan RSS Putusan satker secara otomatis.
+                            <?php endif; ?>
+                        </p>
+                        <div class="pa-dirput-fb-links">
+                            <a href="<?php echo esc_url($dirUrl); ?>" target="_blank" rel="noopener noreferrer" class="pa-dirput-chip">Buka Daftar Putusan ↗</a>
+                            <a href="<?php echo esc_url($profUrl); ?>" target="_blank" rel="noopener noreferrer" class="pa-dirput-chip">Statistik &amp; Profil Pengadilan ↗</a>
+                            <?php if ($rssUrl !== '') : ?>
+                                <a href="<?php echo esc_url($rssUrl); ?>" target="_blank" rel="noopener noreferrer" class="pa-dirput-chip">Umpan RSS Satker ↗</a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+}
+
+add_shortcode('pa_direktori_putusan', static function ($atts) {
+    $a = shortcode_atts(array(
+        'title' => 'Direktori Putusan Terbaru',
+        'limit' => 6,
+        'url'   => '',
+    ), $atts, 'pa_direktori_putusan');
+    return pa_portal_render_dirput_widget((string) $a['title'], (int) $a['limit'], (string) $a['url']);
+});
+
+// ============================================================================
 // 2. DATA OPERASIONAL TERSTRUKTUR (PEGAWAI, JADWAL SIDANG, GHAIB, STATISTIK)
 // ============================================================================
 
@@ -466,30 +743,67 @@ function pa_portal_records_table(): string {
 }
 
 function pa_portal_records_ensure_table(): void {
-    if (get_option('pa_portal_records_db_ver') === PA_PORTAL_RECORDS_DB_VER) {
-        return;
-    }
     global $wpdb;
-    $table   = pa_portal_records_table();
+    $table = pa_portal_records_table();
+    if (get_option('pa_portal_records_db_ver') === PA_PORTAL_RECORDS_DB_VER) {
+        static $verified = false;
+        if ($verified || !is_admin()) {
+            return;
+        }
+        $verified = true;
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if ($exists === $table) {
+            return;
+        }
+    }
     $charset = $wpdb->get_charset_collate();
-    $sql     = "CREATE TABLE IF NOT EXISTS `{$table}` (
-        `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-        `record_type` varchar(24) NOT NULL,
-        `title` varchar(220) NOT NULL,
-        `subtitle` varchar(220) NOT NULL DEFAULT '',
-        `category` varchar(80) NOT NULL DEFAULT '',
-        `event_date` date DEFAULT NULL,
-        `meta_json` text DEFAULT NULL,
-        `sort_order` int(11) NOT NULL DEFAULT 0,
-        `status` varchar(20) NOT NULL DEFAULT 'published',
-        `updated_at` datetime NOT NULL,
-        PRIMARY KEY (`id`),
-        KEY `idx_type_status` (`record_type`, `status`, `sort_order`)
+    $sql     = "CREATE TABLE {$table} (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        record_type varchar(24) NOT NULL,
+        title varchar(220) NOT NULL,
+        subtitle varchar(220) NOT NULL DEFAULT '',
+        category varchar(80) NOT NULL DEFAULT '',
+        event_date date DEFAULT NULL,
+        meta_json text DEFAULT NULL,
+        sort_order int(11) NOT NULL DEFAULT 0,
+        status varchar(20) NOT NULL DEFAULT 'published',
+        updated_at datetime NOT NULL,
+        PRIMARY KEY  (id),
+        KEY idx_type_status (record_type, status, sort_order)
     ) {$charset};";
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta($sql);
-    update_option('pa_portal_records_db_ver', PA_PORTAL_RECORDS_DB_VER, false);
-    pa_portal_seed_sample_records();
+    $created = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+    if ($created === $table) {
+        update_option('pa_portal_records_db_ver', PA_PORTAL_RECORDS_DB_VER, false);
+        pa_portal_seed_sample_records();
+    }
+}
+
+function pa_portal_delete_sample_records(): int {
+    pa_portal_records_ensure_table();
+    global $wpdb;
+    $table = pa_portal_records_table();
+    $sampleTitles = array(
+        'Dr. H. Ahmad Contoh, S.H., M.H.',
+        'Dra. Hj. Siti Amanah, M.H.',
+        'H. Budi Santoso, S.Ag., M.H.',
+        'Rina Kartika, S.E., M.M.',
+        '0101/Pdt.G/2026/PA.Cth',
+        '0118/Pdt.G/2026/PA.Cth',
+        '0042/Pdt.P/2026/PA.Cth',
+        '0214/Pdt.G/2026/PA.Cth',
+        '0229/Pdt.G/2026/PA.Cth',
+    );
+    $placeholders = implode(',', array_fill(0, count($sampleTitles), '%s'));
+    $deleted = (int) $wpdb->query($wpdb->prepare(
+        "DELETE FROM `{$table}` WHERE title IN ({$placeholders}) OR (record_type = 'statistik' AND subtitle = 'Rekapitulasi Bulanan Perkara' AND title IN ('Oktober 2026','September 2026','Agustus 2026'))",
+        ...$sampleTitles
+    ));
+    if ($deleted > 0 && function_exists('pa_home_page_cache_mark_stale')) {
+        pa_home_page_cache_mark_stale();
+    }
+    return $deleted;
 }
 
 function pa_portal_seed_sample_records(): void {

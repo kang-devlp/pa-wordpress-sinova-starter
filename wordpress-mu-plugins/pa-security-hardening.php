@@ -289,13 +289,17 @@ add_action('admin_init', static function () {
 // Layer 2: Database Content Guard (dinamis memakai domain site saat ini)
 add_filter('wp_insert_post_data', static function ($data) {
     if (!is_array($data)) return $data;
+    // Izinkan proses impor resmi WordPress/Joomla (FG Joomla to WordPress / WXR Importer) berjalan lancar
+    if (defined('WP_IMPORTING') && WP_IMPORTING) return $data;
     $combined = (string) ($data['post_title'] ?? '') . "\n" . (string) ($data['post_content'] ?? '');
-    if (preg_match('/\b(slot\s+gacor|judi\s+online|situs\s+toto|bandar\s+togel|rtp\s+live|daftar\s+slot|maxwin\s+hari\s+ini)\b/i', $combined)) {
+    // Hindari false-positive berita resmi PA (misal: "Perceraian Akibat Judi Online"); blokir hanya frasa promosi spam judol
+    if (preg_match('/\b(slot\s+gacor|situs\s+judi\s+online|situs\s+toto|bandar\s+togel|rtp\s+live|daftar\s+slot|maxwin\s+hari\s+ini|link\s+slot\s+gacor|agen\s+slot\s+terpercaya)\b/i', $combined)) {
         pa_starter_security_log('content-judol-blocked', (string) ($data['post_title'] ?? ''));
         wp_die('Penyimpanan dibatalkan oleh Anti-Judol Guard.', 'Blokir Keamanan', array('response' => 403));
     }
     $host = preg_quote((string) parse_url(home_url('/'), PHP_URL_HOST), '/');
-    if ($host !== '' && preg_match('/<[^>]+style=["\'][^"\']*(display\s*:\s*none|visibility\s*:\s*hidden|left\s*:\s*-\d{3,}px)[^"\']*["\'][^>]*>.*?<a\s+[^>]*href=["\']https?:\/\/(?!(?:[a-z0-9.-]*\.)?' . $host . '\b)/is', (string) ($data['post_content'] ?? ''))) {
+    // Batasi deteksi cloaking hanya di dalam blok tersembunyi yang sama (tanpa melewati tag penutup) agar tidak memblokir konten lama/Joomla
+    if ($host !== '' && preg_match('/<(div|span|p|section)\b[^>]*style=["\'][^"\']*(?:display\s*:\s*none|visibility\s*:\s*hidden|left\s*:\s*-\d{3,}px)[^"\']*["\'][^>]*>(?:(?!<\/\1>).){0,400}<a\s+[^>]*href=["\']https?:\/\/(?!(?:[a-z0-9.-]*\.)?(?:' . $host . '|mahkamahagung\.go\.id|badilag\.net|go\.id)\b)/is', (string) ($data['post_content'] ?? ''))) {
         pa_starter_security_log('content-cloaking-blocked', (string) ($data['post_title'] ?? ''));
         wp_die('Penyimpanan dibatalkan oleh Cloaking Guard.', 'Blokir Keamanan', array('response' => 403));
     }

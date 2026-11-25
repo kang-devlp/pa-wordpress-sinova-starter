@@ -2,12 +2,12 @@
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
  * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen (Edit & Hapus Massal), & Audit Keamanan + MFA di WP Admin.
- * Version: 2.3.1-starter
+ * Version: 2.3.2-starter
  */
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.3.1');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.3.2');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -26,6 +26,7 @@ function pa_sinova_get_settings(): array {
         'sipp_slide_url'           => '',
         'ecourt_url'               => 'https://ecourt.mahkamahagung.go.id/',
         'direktori_url'            => 'https://putusan3.mahkamahagung.go.id/',
+        'dirput_rss_url'           => '',
         'survey_url'               => 'https://survei.badilag.net/',
         'aco_url'                  => 'https://cctv.badilag.net/',
         'aco_logo_url'             => '',
@@ -406,6 +407,44 @@ function pa_sinova_get_custom_map(): array {
     return is_array($map) ? $map : array();
 }
 
+function pa_sinova_news_archive_url(): string {
+    $postsPageId = (int) get_option('page_for_posts', 0);
+    if ($postsPageId > 0 && get_post_status($postsPageId) === 'publish') {
+        $u = get_permalink($postsPageId);
+        if (is_string($u) && $u !== '') {
+            return $u;
+        }
+    }
+    return home_url('/?post_type=post');
+}
+
+// Notifikasi ramah di WP Admin saat Mode Adopsi otomatis aktif di situs lama atau saat tersedia pembaruan 1-Klik di GitHub
+add_action('admin_notices', static function () {
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    $autoAdopt = get_transient('pa_sinova_auto_adoption_notice');
+    if (is_array($autoAdopt)) {
+        $migUrl = admin_url('admin.php?page=pa-sinova-starter&tab=migration');
+        echo '<div class="notice notice-info is-dismissible"><p><strong>PA SINOVA Starter Kit — Mode Adopsi Aktif Otomatis:</strong> Terdeteksi website WordPress yang sudah berisi <strong>'
+            . (int) ($autoAdopt['posts'] ?? 0) . ' berita &amp; ' . (int) ($autoAdopt['pages'] ?? 0)
+            . ' halaman</strong>. Desain, menu, font, dan Elementor lama Anda otomatis dilindungi agar tidak tertimpa. Kelola atau beralih ke tampilan penuh di <a href="'
+            . esc_url($migUrl) . '"><strong>SINOVA Hub → Migrasi &amp; Adopsi</strong></a>.</p></div>';
+        delete_transient('pa_sinova_auto_adoption_notice');
+    }
+    $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+    if ($screen && in_array((string) $screen->id, array('dashboard', 'plugins'), true) && function_exists('pa_sinova_github_check_update')) {
+        $upd = pa_sinova_github_check_update(false);
+        if (!empty($upd['ok']) && !empty($upd['has_update']) && !empty($upd['latest'])) {
+            $secUrl = admin_url('admin.php?page=pa-sinova-starter&tab=security');
+            echo '<div class="notice notice-warning is-dismissible"><p><strong>Pembaruan PA SINOVA Starter Kit v'
+                . esc_html((string) $upd['latest']) . ' tersedia!</strong> (terpasang: v' . esc_html(PA_SINOVA_STARTER_VERSION)
+                . ') — Perbarui aman 1-klik tanpa menghapus berita/dokumen di <a href="' . esc_url($secUrl)
+                . '"><strong>SINOVA Hub → Keamanan &amp; Update</strong></a>.</p></div>';
+        }
+    }
+});
+
 /**
  * Cari halaman terbit baik di root maupun sebagai sub-halaman (nested slug) agar tidak menduplikasi halaman WP lama.
  */
@@ -479,7 +518,7 @@ function pa_sinova_static_seed_pages(): array {
             'title'   => 'Direktori Putusan Satker',
             'parent'  => 'Layanan Hukum',
             'code'    => 'W2.2',
-            'content' => '<h2>Direktori Putusan Mahkamah Agung RI</h2><p>[LENGKAPI tautan langsung halaman Direktori Putusan satker pada domain putusan3.mahkamahagung.go.id.]</p>',
+            'content' => '<h2>Direktori Putusan Mahkamah Agung RI</h2><p>Akses publikasi salinan putusan perkara satuan kerja pada Direktori Putusan Mahkamah Agung Republik Indonesia.</p>[pa_direktori_putusan limit="10"]',
         ),
         'prosedur-berperkara' => array(
             'title'   => 'Prosedur Berperkara',
@@ -1155,7 +1194,25 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
         'Layanan Publik, PPID & Kepatuhan' => 'Layanan Publik & Pengaduan',
     );
 
-    $upsertPage = static function (string $key, string $title, string $slug, string $content) use (&$seeded, &$createdCount): int {
+    $customMap = pa_sinova_get_custom_map();
+    $slugAliases = array(
+        'visi-dan-misi'          => array('visi-misi', 'visi-dan-misi-pengadilan'),
+        'tugas-pokok-dan-fungsi' => array('tupoksi', 'tugas-pokok-fungsi', 'tugas-dan-fungsi'),
+        'struktur-organisasi'    => array('struktur', 'bagan-struktur-organisasi'),
+        'alamat-dan-kontak'      => array('kontak', 'hubungi-kami', 'alamat-kontak'),
+        'wilayah-yurisdiksi'     => array('yurisdiksi', 'wilayah-hukum'),
+        'profil-pegawai'         => array('pegawai', 'profil-pejabat', 'daftar-pegawai'),
+    );
+
+    $upsertPage = static function (string $key, string $title, string $slug, string $content, string $code = '') use (&$seeded, &$createdCount, $customMap, $slugAliases, $preserve): int {
+        // Hormati pemetaan kustom situs lama agar Seeder tidak membuat halaman duplikat
+        if ($code !== '' && !empty($customMap[$code]['post_id'])) {
+            $mappedPid = (int) $customMap[$code]['post_id'];
+            if ($mappedPid > 0 && get_post_status($mappedPid) === 'publish') {
+                $seeded[$key] = $mappedPid;
+                return $mappedPid;
+            }
+        }
         $existingId = isset($seeded[$key]) ? (int) $seeded[$key] : 0;
         if ($existingId > 0 && get_post_status($existingId) === 'publish') {
             return $existingId;
@@ -1164,6 +1221,15 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
         if ($byPath instanceof WP_Post) {
             $seeded[$key] = (int) $byPath->ID;
             return (int) $byPath->ID;
+        }
+        if ($preserve && !empty($slugAliases[$slug])) {
+            foreach ($slugAliases[$slug] as $aliasSlug) {
+                $byAlias = pa_sinova_find_existing_page($aliasSlug);
+                if ($byAlias instanceof WP_Post) {
+                    $seeded[$key] = (int) $byAlias->ID;
+                    return (int) $byAlias->ID;
+                }
+            }
         }
         $newId = wp_insert_post(array(
             'post_type'    => 'page',
@@ -1181,7 +1247,7 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
     };
 
     foreach (pa_sinova_static_seed_pages() as $slug => $meta) {
-        $pid = $upsertPage('static:' . $slug, $meta['title'], $slug, $meta['content']);
+        $pid = $upsertPage('static:' . $slug, $meta['title'], $slug, $meta['content'], (string) ($meta['code'] ?? ''));
         if ($pid > 0) {
             $parentName = $meta['parent'];
             if (!isset($menuItemsPlan[$parentName])) {
@@ -1208,10 +1274,25 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
         }
     }
 
-    $menuItemsPlan['Berita & Publikasi'][] = array(
-        'title' => 'Berita & Artikel',
-        'url'   => home_url('/?post_type=post'),
-    );
+    // Siapkan halaman arsip Berita (/berita/) & hubungkan ke page_for_posts agar tautan "Berita & Artikel" selalu menampilkan daftar berita
+    $newsPageId = (int) get_option('page_for_posts', 0);
+    if (!$preserve && ($newsPageId <= 0 || get_post_status($newsPageId) !== 'publish')) {
+        $newsPageId = $upsertPage('static:berita', 'Berita & Artikel', 'berita', '');
+        if ($newsPageId > 0) {
+            update_option('page_for_posts', $newsPageId);
+        }
+    }
+    if ($newsPageId > 0 && get_post_status($newsPageId) === 'publish') {
+        $menuItemsPlan['Berita & Publikasi'][] = array(
+            'title'   => 'Berita & Artikel',
+            'post_id' => $newsPageId,
+        );
+    } else {
+        $menuItemsPlan['Berita & Publikasi'][] = array(
+            'title' => 'Berita & Artikel',
+            'url'   => pa_sinova_news_archive_url(),
+        );
+    }
 
     $menuCreated = 0;
 
@@ -1391,6 +1472,7 @@ function pa_sinova_home_block_catalog(): array {
         'directory'     => array('label' => 'Direktori Dokumen Publik', 'default_w' => 7, 'default_h' => 1, 'icon' => '📂'),
         'videos'        => array('label' => 'Galeri Video', 'default_w' => 6, 'default_h' => 1, 'icon' => '▶'),
         'greetings'     => array('label' => 'Ucapan & Belasungkawa', 'default_w' => 6, 'default_h' => 1, 'icon' => '💐'),
+        'dirput'        => array('label' => 'Direktori Putusan (MA RI)', 'default_w' => 12, 'default_h' => 1, 'icon' => '⚖'),
         'custom'        => array('label' => 'Konten Bebas / Sematan', 'default_w' => 6, 'default_h' => 1, 'icon' => '✦'),
     );
 }
@@ -1406,10 +1488,11 @@ function pa_sinova_default_home_blocks(): array {
         array('id' => 'blk_stats', 'type' => 'stats', 'title' => 'Statistik Perkara', 'x' => 8, 'y' => 3, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
         array('id' => 'blk_ann', 'type' => 'announcements', 'title' => 'Pengumuman & Panggilan Ghaib', 'x' => 1, 'y' => 4, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array('limit' => 5)),
         array('id' => 'blk_news', 'type' => 'news', 'title' => 'Berita Pelayanan & Inovasi Satker', 'x' => 6, 'y' => 4, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('count' => 3)),
-        array('id' => 'blk_welcome', 'type' => 'welcome', 'title' => 'Sambutan Pimpinan & Maklumat', 'x' => 1, 'y' => 5, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_zi', 'type' => 'zi', 'title' => 'Zona Integritas (6 Area)', 'x' => 1, 'y' => 6, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_survey', 'type' => 'survey', 'title' => 'Indeks Kepuasan & Integritas Pelayanan', 'x' => 1, 'y' => 7, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_directory', 'type' => 'directory', 'title' => 'Direktori Dokumen Publik', 'x' => 6, 'y' => 7, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_dirput', 'type' => 'dirput', 'title' => 'Direktori Putusan Terbaru', 'x' => 1, 'y' => 5, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('count' => 6)),
+        array('id' => 'blk_welcome', 'type' => 'welcome', 'title' => 'Sambutan Pimpinan & Maklumat', 'x' => 1, 'y' => 6, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_zi', 'type' => 'zi', 'title' => 'Zona Integritas (6 Area)', 'x' => 1, 'y' => 7, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_survey', 'type' => 'survey', 'title' => 'Indeks Kepuasan & Integritas Pelayanan', 'x' => 1, 'y' => 8, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_directory', 'type' => 'directory', 'title' => 'Direktori Dokumen Publik', 'x' => 6, 'y' => 8, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array()),
     );
 }
 
@@ -1861,7 +1944,7 @@ function pa_sinova_extract_links_from_post(int $postId, string $modSlug = '', in
         return array();
     }
 
-    $fallbackYear = ($defaultYear >= 2017 && $defaultYear <= 2027) ? $defaultYear : (int) wp_date('Y');
+    $fallbackYear = ($defaultYear >= 2015 && $defaultYear <= 2035) ? $defaultYear : (int) wp_date('Y');
     $modCfg       = ($modSlug !== '' && function_exists('pa_sinova_module_config')) ? pa_sinova_module_config($modSlug) : null;
     $subGroups    = ($modCfg && !empty($modCfg['sub_groups']) && is_array($modCfg['sub_groups'])) ? $modCfg['sub_groups'] : array('DOKUMEN');
     $fallbackSub  = trim($defaultSub) !== '' ? trim($defaultSub) : (string) $subGroups[0];
@@ -1870,6 +1953,45 @@ function pa_sinova_extract_links_from_post(int $postId, string $modSlug = '', in
     $defaultPer   = !empty($modPeriods) ? (string) array_key_first($modPeriods) : 'TAHUNAN';
 
     $content = (string) $post->post_content;
+    // Turut pindai tautan dari meta _elementor_data (tombol/widget/tabel Elementor pada WordPress lama)
+    $elRaw = get_post_meta($postId, '_elementor_data', true);
+    if (is_string($elRaw) && $elRaw !== '' && strpos($elRaw, 'http') !== false) {
+        $elDecoded = json_decode($elRaw, true);
+        if (is_array($elDecoded)) {
+            $elHtml = '';
+            $walkEl = static function ($node) use (&$walkEl, &$elHtml) {
+                if (!is_array($node)) {
+                    return;
+                }
+                if (isset($node['settings']) && is_array($node['settings'])) {
+                    $s = $node['settings'];
+                    if (!empty($s['editor']) && is_string($s['editor'])) {
+                        $elHtml .= "\n" . $s['editor'];
+                    }
+                    if (!empty($s['link']['url']) && is_string($s['link']['url'])) {
+                        $lbl = (string) ($s['text'] ?? ($s['title'] ?? ($s['title_text'] ?? 'Dokumen')));
+                        $elHtml .= "\n<a href=\"" . esc_attr($s['link']['url']) . '">' . esc_html($lbl) . '</a>';
+                    }
+                    if (!empty($s['tabs']) && is_array($s['tabs'])) {
+                        foreach ($s['tabs'] as $tb) {
+                            if (is_array($tb) && !empty($tb['tab_content'])) {
+                                $elHtml .= "\n" . (string) $tb['tab_content'];
+                            }
+                        }
+                    }
+                }
+                foreach ($node as $v) {
+                    if (is_array($v)) {
+                        $walkEl($v);
+                    }
+                }
+            };
+            $walkEl($elDecoded);
+            if ($elHtml !== '') {
+                $content .= "\n" . $elHtml;
+            }
+        }
+    }
     if (!preg_match_all('/<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)<\/a>/is', $content, $matches, PREG_OFFSET_CAPTURE)) {
         return array();
     }
@@ -1882,7 +2004,7 @@ function pa_sinova_extract_links_from_post(int $postId, string $modSlug = '', in
         'MEI' => '/\b(?:mei|may)\b/i',
         'JUN' => '/\bjun(?:i|e)?\b/i',
         'JUL' => '/\bjul(?:i|y)?\b/i',
-        'AGT' => '/\b(?:agt|ags|agustus|august|aug)\b/i',
+        'AGS' => '/\b(?:agt|ags|agustus|august|aug)\b/i',
         'SEP' => '/\bsep(?:t(?:ember)?)?\b/i',
         'OKT' => '/\b(?:okt|oct)(?:ober)?\b/i',
         'NOV' => '/\b(?:nov|nop)(?:ember)?\b/i',
@@ -1933,7 +2055,7 @@ function pa_sinova_extract_links_from_post(int $postId, string $modSlug = '', in
 
         $yr = $fallbackYear;
         foreach (array($anchorText, $urlPath, substr($nearText, -160)) as $src) {
-            if (preg_match('/(?<!\d)(201[7-9]|202[0-7])(?!\d)/', $src, $ym)) {
+            if (preg_match('/(?<!\d)(201[5-9]|202[0-9]|203[0-5])(?!\d)/', $src, $ym)) {
                 $yr = (int) $ym[1];
                 break;
             }
@@ -2496,6 +2618,8 @@ function pa_sinova_render_admin_page(): void {
 
             $rssMaCheck    = $validateRssUrl(wp_unslash((string) ($_POST['rss_ma_url'] ?? '')), (string) ($cur['rss_ma_url'] ?? ''));
             $rssBadCheck   = $validateRssUrl(wp_unslash((string) ($_POST['rss_badilag_url'] ?? '')), (string) ($cur['rss_badilag_url'] ?? ''));
+            $rssDirRaw     = trim(wp_unslash((string) ($_POST['dirput_rss_url'] ?? '')));
+            $rssDirCheck   = $rssDirRaw === '' ? array('url' => '', 'warn' => false) : $validateRssUrl($rssDirRaw, (string) ($cur['dirput_rss_url'] ?? ''));
             $sippSlideRaw  = wp_unslash((string) ($_POST['sipp_slide_url'] ?? ''));
             $sippSlideChk  = pa_sinova_sanitize_https_embed_url($sippSlideRaw);
             $sippSlideWarn = !$sippSlideChk['valid'];
@@ -2515,6 +2639,7 @@ function pa_sinova_render_admin_page(): void {
                 'sipp_slide_url'           => $sippSlideSave,
                 'ecourt_url'               => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
                 'direktori_url'            => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
+                'dirput_rss_url'           => $rssDirCheck['url'],
                 'survey_url'               => esc_url_raw(wp_unslash((string) ($_POST['survey_url'] ?? ''))),
                 'aco_url'                  => esc_url_raw(wp_unslash((string) ($_POST['aco_url'] ?? ($cur['aco_url'] ?? '')))),
                 'aco_logo_url'             => esc_url_raw(wp_unslash((string) ($_POST['aco_logo_url'] ?? ''))),
@@ -2543,11 +2668,14 @@ function pa_sinova_render_admin_page(): void {
                 $new['hmac_secret'] = bin2hex(random_bytes(32));
             }
             update_option('pa_sinova_starter_settings', $new, false);
+            if (($new['direktori_url'] ?? '') !== ($cur['direktori_url'] ?? '') || ($new['dirput_rss_url'] ?? '') !== ($cur['dirput_rss_url'] ?? '')) {
+                delete_option('pa_dirput_feed_cache');
+            }
             if (function_exists('pa_home_page_cache_mark_stale')) {
                 pa_home_page_cache_mark_stale();
             }
             $notice = 'Pengaturan Satker, Identitas Visual, Umpan RSS, & API HMAC berhasil disimpan.';
-            if ($rssMaCheck['warn'] || $rssBadCheck['warn']) {
+            if ($rssMaCheck['warn'] || $rssBadCheck['warn'] || $rssDirCheck['warn']) {
                 $notice .= ' Catatan: URL RSS non-HTTPS atau di luar domain resmi (.go.id) ditolak dan dikembalikan ke URL aman sebelumnya.';
             }
             if ($sippSlideWarn) {
@@ -2699,9 +2827,22 @@ function pa_sinova_render_admin_page(): void {
                 $feedData = pa_portal_refresh_official_feeds();
                 $maCnt    = count((array) ($feedData['ma'] ?? array()));
                 $bdCnt    = count((array) ($feedData['badilag'] ?? array()));
-                $notice   = "Sinkronisasi RSS resmi selesai: MA RI ({$maCnt} item) dan Ditjen Badilag ({$bdCnt} item).";
+                $dpCnt    = 0;
+                if (function_exists('pa_portal_refresh_dirput_feed')) {
+                    $dpData = pa_portal_refresh_dirput_feed();
+                    $dpCnt  = count((array) ($dpData['items'] ?? array()));
+                }
+                $notice   = "Sinkronisasi RSS resmi selesai: MA RI ({$maCnt} item), Ditjen Badilag ({$bdCnt} item), & Direktori Putusan ({$dpCnt} item).";
             } else {
                 $notice = 'Gagal: Modul umpan RSS belum dimuat.';
+            }
+        } elseif ($action === 'delete_sample_records' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            if (function_exists('pa_portal_delete_sample_records')) {
+                $delSample = pa_portal_delete_sample_records();
+                $notice = $delSample > 0
+                    ? "Berhasil menghapus {$delSample} entri data contoh (Ahmad Contoh / PA.Cth)."
+                    : 'Tidak ada data contoh tersisa untuk dihapus.';
             }
         } elseif ($action === 'add_record' && in_array('data', $allowedTabs, true)) {
             $activeTab = 'data';
@@ -3975,7 +4116,10 @@ function pa_sinova_render_admin_page(): void {
                                 </label>
                                 <span id="pa-rec-sel-info" style="font-size:12.5px;color:#475569;">0 item dipilih</span>
                             </div>
-                            <button type="submit" id="pa-bulk-rec-del-btn" class="button" style="color:#b91c1c;border-color:#fca5a5;" disabled>Hapus Terpilih (0)</button>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                <button type="button" id="pa-del-sample-rec-btn" class="button" style="color:#92400e;border-color:#fcd34d;background:#fffbeb;" title="Hapus cepat 12 entri contoh bawaan (Ahmad Contoh / PA.Cth)">Hapus Data Contoh</button>
+                                <button type="submit" id="pa-bulk-rec-del-btn" class="button" style="color:#b91c1c;border-color:#fca5a5;" disabled>Hapus Terpilih (0)</button>
+                            </div>
                         </div>
                         <table class="widefat striped">
                             <thead>
@@ -4016,8 +4160,21 @@ function pa_sinova_render_admin_page(): void {
                         <input type="hidden" name="pa_sinova_action" value="delete_record">
                         <input type="hidden" name="rec_id" id="pa-single-rec-del-id" value="0">
                     </form>
+                    <form method="post" id="pa-sample-rec-del-form" action="<?php echo esc_url($dataViewUrl); ?>" style="display:none;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="delete_sample_records">
+                    </form>
                     <script>
                         (function(){
+                            var sampleBtn = document.getElementById('pa-del-sample-rec-btn');
+                            var sampleFrm = document.getElementById('pa-sample-rec-del-form');
+                            if (sampleBtn && sampleFrm) {
+                                sampleBtn.addEventListener('click', function(){
+                                    if (confirm('Hapus seluruh entri data contoh bawaan (Ahmad Contoh, PA.Cth, dll.)? Data asli satker yang Anda input sendiri tidak akan terhapus.')) {
+                                        sampleFrm.submit();
+                                    }
+                                });
+                            }
                             var bulkForm = document.getElementById('pa-bulk-rec-form');
                             var checkAllTop = document.getElementById('pa-rec-check-all');
                             var checkAllTh = document.getElementById('pa-rec-th-check-all');
@@ -4452,9 +4609,9 @@ function pa_sinova_render_admin_page(): void {
                         document.getElementById('pa-ed-skm').value  = globals.home_survey_skm || '';
                         document.getElementById('pa-ed-spak').value = globals.home_survey_spak || '';
                         document.getElementById('pa-ed-spkp').value = globals.home_survey_spkp || '';
-                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings') {
+                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings' || b.type === 'dirput') {
                         document.getElementById('pa-ed-sec-count').hidden = false;
-                        document.getElementById('pa-ed-count').value = b.config.count || b.config.limit || (b.type === 'news' ? 3 : 4);
+                        document.getElementById('pa-ed-count').value = b.config.count || b.config.limit || (b.type === 'dirput' ? 6 : (b.type === 'news' ? 3 : 4));
                     } else if (b.type === 'custom') {
                         document.getElementById('pa-ed-sec-custom').hidden = false;
                         document.getElementById('pa-ed-embed').value = b.config.embed_url || '';
@@ -4495,7 +4652,7 @@ function pa_sinova_render_admin_page(): void {
                         globals.home_survey_skm    = document.getElementById('pa-ed-skm').value.trim();
                         globals.home_survey_spak   = document.getElementById('pa-ed-spak').value.trim();
                         globals.home_survey_spkp   = document.getElementById('pa-ed-spkp').value.trim();
-                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings') {
+                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings' || b.type === 'dirput') {
                         var cnt = clamp(parseInt(document.getElementById('pa-ed-count').value, 10) || 3, 1, 12);
                         b.config.count = cnt;
                         b.config.limit = cnt;
@@ -4726,7 +4883,17 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>URL SIPP</th><td><input type="url" name="sipp_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_url']); ?>"></td></tr>
                             <tr><th>URL Slide Jadwal Sidang SIPP (Beranda)</th><td><input type="url" name="sipp_slide_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_slide_url'] ?? ''); ?>" placeholder="https://sipp.pa-satker.go.id/Slide_sidang"><br><small style="color:#64748b;">Opsional (HTTPS): cukup tempel tautan <code>Slide_sidang</code> SIPP satker agar tampil otomatis sebagai panel jadwal sidang elegan di Beranda dan otomatis diizinkan pada header CSP <code>frame-src</code> (dapat juga ditaruh di halaman lain dengan shortcode <code>[pa_sinova_sipp_slide]</code>).</small></td></tr>
                             <tr><th>URL e-Court</th><td><input type="url" name="ecourt_url" class="regular-text" value="<?php echo esc_attr($cfg['ecourt_url']); ?>"></td></tr>
-                            <tr><th>URL Direktori Putusan</th><td><input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>"></td></tr>
+                            <tr><th>URL Direktori Putusan Satker</th><td>
+                                <input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>" placeholder="https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-semarang.html">
+                                <?php
+                                $dirputPrev = function_exists('pa_portal_dirput_resolve_urls') ? pa_portal_dirput_resolve_urls() : array();
+                                ?>
+                                <br><small style="color:#64748b;">Tempel URL profil/direktori satker di <code>putusan3.mahkamahagung.go.id</code> (contoh: <code>.../pengadilan/profil/pengadilan/pa-semarang.html</code>). RSS Putusan satker otomatis terdeteksi<?php if (!empty($dirputPrev['rss_url'])) : ?>: <code><?php echo esc_html((string) $dirputPrev['rss_url']); ?></code><?php endif; ?> dan tampil di Beranda / shortcode <code>[pa_direktori_putusan]</code>.</small>
+                            </td></tr>
+                            <tr><th>RSS Direktori Putusan (Opsional)</th><td>
+                                <input type="url" name="dirput_rss_url" class="regular-text" value="<?php echo esc_attr($cfg['dirput_rss_url'] ?? ''); ?>" placeholder="Kosongkan untuk otomatis dari URL Direktori Putusan di atas">
+                                <br><small style="color:#64748b;">Biarkan kosong agar otomatis menggunakan <code>https://putusan3.mahkamahagung.go.id/rss/pengadilan/&lt;kode-satker&gt;.html</code>.</small>
+                            </td></tr>
                             <tr><th>URL Survei Badilag</th><td><input type="url" name="survey_url" class="regular-text" value="<?php echo esc_attr($cfg['survey_url']); ?>"></td></tr>
                             <tr><th>URL CCTV Online (ACO)</th><td><input type="url" name="aco_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" placeholder="https://cctv.badilag.net/"><br><small style="color:#64748b;">Tautan Access CCTV Online Badilag / ruang PTSP Satker (kosongkan untuk menyembunyikan tautan &amp; lencana ACO).</small></td></tr>
                             <tr><th>Logo CCTV ACO (Opsional)</th><td><input type="url" name="aco_logo_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_logo_url'] ?? ''); ?>" placeholder="Kosongkan untuk memakai animasi CCTV ACO bawaan"><br><small style="color:#64748b;">Biarkan kosong untuk memakai gambar GIF CCTV ACO lokal bawaan (<code>assets/cctv-aco.gif</code>), atau isi URL gambar Media Library satker sendiri.</small></td></tr>

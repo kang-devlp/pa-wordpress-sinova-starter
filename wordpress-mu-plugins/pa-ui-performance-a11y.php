@@ -8,8 +8,13 @@
 defined('ABSPATH') || exit;
 
 // 1. Satukan Webfont menjadi 'Inter' tunggal + Hapus Bloat Emoji/Dashicons/Resource Hints + Optimasi CWV
-add_filter('astra_google_fonts', '__return_empty_array', 999);
-add_filter('elementor/frontend/print_google_fonts', '__return_false', 999);
+// (Pada Mode Adopsi situs lama, font & Dashicons tema/Elementor eksisting tetap dipertahankan utuh)
+add_filter('astra_google_fonts', static function ($fonts) {
+    return (function_exists('pa_sinova_is_adoption_mode') && pa_sinova_is_adoption_mode()) ? $fonts : array();
+}, 999);
+add_filter('elementor/frontend/print_google_fonts', static function ($print) {
+    return (function_exists('pa_sinova_is_adoption_mode') && pa_sinova_is_adoption_mode()) ? $print : false;
+}, 999);
 
 add_action('init', static function () {
     if (is_admin()) {
@@ -33,7 +38,7 @@ add_filter('wp_resource_hints', static function ($urls, $relationType) {
 }, 10, 2);
 
 add_action('wp_enqueue_scripts', static function () {
-    if (!is_admin() && !is_user_logged_in()) {
+    if (!is_admin() && !is_user_logged_in() && (!function_exists('pa_sinova_is_adoption_mode') || !pa_sinova_is_adoption_mode())) {
         wp_deregister_style('dashicons');
     }
 }, 100);
@@ -648,6 +653,14 @@ function pa_sinova_render_home_block_item(array $blk, array $cfg): string {
         return do_shortcode('[pa_ucapan_board limit="' . $cnt . '" title="' . esc_attr($title ?: 'Ucapan & Belasungkawa') . '"]');
     }
 
+    if ($type === 'dirput') {
+        $cnt   = !empty($bCfg['count']) ? (int) $bCfg['count'] : (!empty($bCfg['limit']) ? (int) $bCfg['limit'] : 6);
+        $ovUrl = !empty($bCfg['embed_url']) ? (string) $bCfg['embed_url'] : '';
+        return function_exists('pa_portal_render_dirput_widget')
+            ? pa_portal_render_dirput_widget($title ?: 'Direktori Putusan Terbaru', $cnt, $ovUrl)
+            : '';
+    }
+
     if ($type === 'custom') {
         $embedUrl = '';
         if (!empty($bCfg['embed_url']) && function_exists('pa_sinova_sanitize_https_embed_url')) {
@@ -791,7 +804,7 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
                 <h2 class="pa-starter-heading" style="text-align:left;">BERITA TERKINI SATKER <span class="pa-hint-i" aria-hidden="true">i</span></h2>
                 <p class="pa-starter-sub" style="text-align:left;margin-bottom:0;">Liputan Kegiatan, Inovasi, dan Publikasi Berita Satuan Kerja</p>
             </div>
-            <a class="pa-news-all" href="<?php echo esc_url(home_url('/?post_type=post')); ?>" data-pa-tip="Lihat seluruh arsip berita satuan kerja.">Semua Berita →</a>
+            <a class="pa-news-all" href="<?php echo esc_url(function_exists('pa_sinova_news_archive_url') ? pa_sinova_news_archive_url() : home_url('/?post_type=post')); ?>" data-pa-tip="Lihat seluruh arsip berita satuan kerja.">Semua Berita →</a>
         </div>
         <div class="pa-news-grid">
             <?php foreach ($posts as $p) :
@@ -913,12 +926,16 @@ add_action('wp_head', static function () {
     --pa-green-deep: #022c22;
     --pa-gold: <?php echo esc_html($goldHex); ?>;
     --pa-gold-light: <?php echo esc_html($goldLight); ?>;
+<?php if (!pa_sinova_is_adoption_mode()) : ?>
     --e-global-typography-primary-font-family: 'Inter', system-ui, -apple-system, sans-serif;
     --e-global-typography-secondary-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+<?php endif; ?>
 }
+<?php if (!pa_sinova_is_adoption_mode()) : ?>
 body, button, input, select, textarea {
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
+<?php endif; ?>
 .screen-reader-text {
     position: absolute;
     width: 1px;
@@ -956,11 +973,13 @@ html[data-pa-theme="dark"] :focus-visible {
     font-weight: 700;
 }
 .pa-emergency-bar a { color: #fef08a; text-decoration: underline; margin-left: 8px; }
+<?php if (!pa_sinova_is_adoption_mode()) : ?>
 .pa-scroll-reveal, .elementor-invisible {
     opacity: 1 !important;
     visibility: visible !important;
     animation: none !important;
 }
+<?php endif; ?>
 
 <?php if (!pa_sinova_is_adoption_mode()) : ?>
 body.pa-sinova-block-shell .wp-site-blocks > header.wp-block-template-part,
@@ -3296,6 +3315,222 @@ html[data-pa-theme="dark"] .pa-cmdk-item strong { color: #E5C158; }
 html[data-pa-theme="dark"] .pa-feed-item > a:hover .pa-feed-title { color: #6ee7b7; }
 html[data-pa-theme="dark"] .pa-ops-badge { background: rgba(110, 231, 183, 0.14); color: #6ee7b7; }
 html[data-pa-theme="dark"] .pa-cmdk-badge { background: rgba(229, 193, 88, 0.2); color: #fcd34d; }
+
+/* Direktori Putusan Satker (MA RI) */
+.pa-dirput-card {
+    background: var(--pa-surface, #ffffff);
+    border: 1px solid #d5e6dc;
+    border-top: 4px solid var(--pa-green, #056e4f);
+    border-radius: 16px;
+    padding: 20px 22px;
+    box-shadow: 0 8px 24px rgba(2, 44, 34, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.pa-dirput-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e6efe9;
+}
+.pa-dirput-kicker {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--pa-green, #056e4f);
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 999px;
+    padding: 3px 10px;
+    margin-bottom: 6px;
+}
+.pa-dirput-head h3 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.25;
+    color: #022c22;
+    font-weight: 800;
+}
+.pa-dirput-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.pa-dirput-btn-ghost,
+.pa-dirput-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 7px 13px;
+    border-radius: 999px;
+    text-decoration: none;
+    transition: transform .15s ease, background .15s ease;
+}
+.pa-dirput-btn-ghost {
+    color: var(--pa-green-dark, #043927);
+    background: #f0f9f4;
+    border: 1px solid #b7dfd0;
+}
+.pa-dirput-btn-ghost:hover { background: #dff4ea; transform: translateY(-1px); }
+.pa-dirput-btn-primary {
+    color: #ffffff;
+    background: linear-gradient(135deg, #056e4f, #043927);
+    border: 1px solid #043927;
+}
+.pa-dirput-btn-primary:hover { background: #022c22; color: #E5C158; transform: translateY(-1px); }
+.pa-dirput-search {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.pa-dirput-search input[type="search"] {
+    flex: 1 1 220px;
+    padding: 9px 14px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    font-size: 13.5px;
+    background: #f8fafc;
+    color: #0f172a;
+}
+.pa-dirput-search input[type="search"]:focus {
+    background: #ffffff;
+    border-color: var(--pa-green, #056e4f);
+}
+.pa-dirput-search button {
+    padding: 9px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--pa-gold, #C9A227);
+    background: var(--pa-gold, #C9A227);
+    color: #022c22;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+}
+.pa-dirput-search button:hover { filter: brightness(0.95); }
+.pa-dirput-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+}
+.pa-hg-narrow .pa-dirput-list { grid-template-columns: 1fr; }
+.pa-dirput-item {
+    border: 1px solid #e2ece6;
+    border-radius: 12px;
+    background: #f8fcfa;
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.pa-dirput-item:hover {
+    border-color: var(--pa-green, #056e4f);
+    box-shadow: 0 6px 16px rgba(5, 110, 79, 0.10);
+    transform: translateY(-2px);
+}
+.pa-dirput-item > a {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px;
+    height: 100%;
+    text-decoration: none;
+    color: inherit;
+}
+.pa-dirput-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.pa-dirput-badge {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #043927;
+    color: #E5C158;
+}
+.pa-dirput-date {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #64748b;
+}
+.pa-dirput-title {
+    font-size: 14px;
+    line-height: 1.4;
+    color: #0f172a;
+    font-weight: 700;
+}
+.pa-dirput-ex {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #475569;
+}
+.pa-dirput-cta {
+    margin-top: auto;
+    padding-top: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--pa-green, #056e4f);
+}
+.pa-dirput-fallback {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f0f9f4 0%, #fefce8 100%);
+    border: 1px dashed #93c5ab;
+}
+.pa-dirput-fb-icon {
+    flex: 0 0 42px;
+    height: 42px;
+    border-radius: 11px;
+    background: #043927;
+    color: #E5C158;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+.pa-dirput-fb-body strong { display: block; font-size: 15px; color: #022c22; margin-bottom: 4px; }
+.pa-dirput-fb-body p { margin: 0 0 10px; font-size: 13px; color: #334155; line-height: 1.55; }
+.pa-dirput-fb-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.pa-dirput-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #a7d7c5;
+    color: #043927;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+}
+.pa-dirput-chip:hover { background: #056e4f; color: #ffffff; border-color: #056e4f; }
+html[data-pa-theme="dark"] .pa-dirput-card { background: #13221a; border-color: #284738; color: #e6f4ee; }
+html[data-pa-theme="dark"] .pa-dirput-head { border-color: #254032; }
+html[data-pa-theme="dark"] .pa-dirput-head h3,
+html[data-pa-theme="dark"] .pa-dirput-title,
+html[data-pa-theme="dark"] .pa-dirput-fb-body strong { color: #f0fdf4; }
+html[data-pa-theme="dark"] .pa-dirput-kicker { background: rgba(110, 231, 183, 0.14); border-color: #2e5b47; color: #6ee7b7; }
+html[data-pa-theme="dark"] .pa-dirput-item { background: #182a20; border-color: #2c4c3b; }
+html[data-pa-theme="dark"] .pa-dirput-ex,
+html[data-pa-theme="dark"] .pa-dirput-date,
+html[data-pa-theme="dark"] .pa-dirput-fb-body p { color: #cbd5e1; }
+html[data-pa-theme="dark"] .pa-dirput-cta { color: #E5C158; }
+html[data-pa-theme="dark"] .pa-dirput-search input[type="search"] { background: #0f1c15; border-color: #2e523f; color: #f0fdf4; }
+html[data-pa-theme="dark"] .pa-dirput-fallback { background: #182a20; border-color: #355a47; }
+html[data-pa-theme="dark"] .pa-dirput-chip { background: #0f1c15; border-color: #355a47; color: #6ee7b7; }
+html[data-pa-theme="dark"] .pa-dirput-btn-ghost { background: #182a20; border-color: #355a47; color: #e6f4ee; }
 </style>
     <?php
 }, 90);
@@ -4160,6 +4395,58 @@ add_action('wp_footer', static function () {
                 }
                 paintList('pa-feed-list-ma', d.ma);
                 paintList('pa-feed-list-badilag', d.badilag);
+            }).catch(function(){});
+    }
+
+    // Hydrate Direktori Putusan Satker RSS via DOM API (Trusted Types Safe)
+    var dirputSecs = document.querySelectorAll('.pa-dirput-card[data-pa-dirput-hydrate="1"]');
+    if(dirputSecs.length && window.fetch){
+        fetch(<?php echo wp_json_encode(rest_url('pa-portal/v1/dirput')); ?>, { credentials: 'same-origin' })
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(d){
+                if(!d || !Array.isArray(d.items) || !d.items.length) return;
+                dirputSecs.forEach(function(sec){
+                    var box = sec.querySelector('[data-pa-dirput-list]');
+                    if(!box) return;
+                    var lim = parseInt(sec.getAttribute('data-pa-dirput-limit') || '6', 10) || 6;
+                    var frag = document.createDocumentFragment();
+                    d.items.slice(0, lim).forEach(function(it){
+                        var art = document.createElement('article');
+                        art.className = 'pa-dirput-item';
+                        var a = document.createElement('a');
+                        a.setAttribute('href', safeHref(it.link));
+                        a.setAttribute('target', '_blank');
+                        a.setAttribute('rel', 'noopener noreferrer');
+                        var top = document.createElement('div');
+                        top.className = 'pa-dirput-item-top';
+                        var bdg = document.createElement('span');
+                        bdg.className = 'pa-dirput-badge';
+                        bdg.textContent = 'PUTUSAN';
+                        var dt = document.createElement('span');
+                        dt.className = 'pa-dirput-date';
+                        dt.textContent = it.date_label || 'Putusan';
+                        top.appendChild(bdg);
+                        top.appendChild(dt);
+                        var ttl = document.createElement('strong');
+                        ttl.className = 'pa-dirput-title';
+                        ttl.textContent = it.title || '';
+                        a.appendChild(top);
+                        a.appendChild(ttl);
+                        if(it.excerpt){
+                            var ex = document.createElement('p');
+                            ex.className = 'pa-dirput-ex';
+                            ex.textContent = it.excerpt;
+                            a.appendChild(ex);
+                        }
+                        var cta = document.createElement('span');
+                        cta.className = 'pa-dirput-cta';
+                        cta.textContent = 'Lihat Salinan & Detail ↗';
+                        a.appendChild(cta);
+                        art.appendChild(a);
+                        frag.appendChild(art);
+                    });
+                    box.replaceChildren(frag);
+                });
             }).catch(function(){});
     }
 
