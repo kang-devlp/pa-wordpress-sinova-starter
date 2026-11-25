@@ -1,10 +1,10 @@
 {
-  "version": "2.3.0",
-  "released_at": "2026-11-24",
+  "version": "2.3.1",
+  "released_at": "2026-11-25",
   "requires_php": "8.1",
   "requires_wp": "6.2",
   "tested_wp": "7.0",
   "repo": "kang-devlp/pa-wordpress-sinova-starter",
   "download_url": "https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip",
-  "changelog": "v2.3.0: Editor Grid Bebas 12 Kolom Drag & Resize (13 jenis blok termasuk Konten Bebas/Sematan), Sidebar Panel Admin Modern, tombol Bersihkan Cache & Rollback Pembaruan, Slider Foto, Galeri Video, Ucapan & Belasungkawa, Wilayah Yurisdiksi, Profil Pegawai Detail, dan API Push Jadwal Sidang SIPP (HMAC-SHA256)."
+  "changelog": "v2.3.1: Perbaikan kritis aktivasi plugin ZIP ('The plugin does not have a valid header.') saat klik Activate Plugin langsung setelah Upload Plugin di WP Admin, penyesuaian updater 1-klik mode plugin, serta kejelasan panduan instalasi awal di XAMPP/hosting."
 }

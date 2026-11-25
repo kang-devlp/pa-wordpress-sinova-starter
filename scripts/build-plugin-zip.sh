@@ -12,6 +12,11 @@ mkdir -p "$PKG_DIR/wordpress-mu-plugins/assets" "$PKG_DIR/wordpress-templates" "
 
 cp "$ROOT_DIR/wordpress-plugin-wrapper/pa-sinova-starter.php" "$PKG_DIR/pa-sinova-starter.php"
 cp "$ROOT_DIR/wordpress-mu-plugins/"*.php "$PKG_DIR/wordpress-mu-plugins/"
+# Cegah bug WordPress Plugin_Upgrader::plugin_info() ("The plugin does not have a valid header."):
+# hanya pa-sinova-starter.php di root ZIP yang boleh memiliki header "Plugin Name:".
+for f in "$PKG_DIR/wordpress-mu-plugins/"*.php; do
+  sed 's/^\([[:space:]]*\*[[:space:]]*\)Plugin Name:/\1Module Name:/' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 cp "$ROOT_DIR/wordpress-mu-plugins/assets/cctv-aco.gif" "$PKG_DIR/wordpress-mu-plugins/assets/"
 cp "$ROOT_DIR/wordpress-templates/beranda-blocks-starter.html" "$PKG_DIR/wordpress-templates/"
 cp "$ROOT_DIR/version.json" "$ROOT_DIR/LICENSE" "$ROOT_DIR/README.md" "$PKG_DIR/"

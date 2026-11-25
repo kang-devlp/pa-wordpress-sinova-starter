@@ -2,12 +2,12 @@
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
  * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen (Edit & Hapus Massal), & Audit Keamanan + MFA di WP Admin.
- * Version: 2.3.0-starter
+ * Version: 2.3.1-starter
  */
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.3.0');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.3.1');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -1697,6 +1697,10 @@ function pa_sinova_github_apply_update(): array {
         if ($ext === 'php') {
             if (strlen($body) < 500 || strpos(ltrim($body), '<?php') !== 0) {
                 return array('ok' => false, 'message' => 'Gagal validasi integritas berkas PHP ' . basename($remoteRel) . '. Pembaruan dibatalkan.');
+            }
+            // Pada mode plugin standar, hilangkan header "Plugin Name:" di modul dalam agar tidak bentrok dengan pa-sinova-starter.php
+            if (defined('PA_SINOVA_RUNTIME_MODE') && PA_SINOVA_RUNTIME_MODE === 'plugin' && strpos($remoteRel, 'wordpress-mu-plugins/') === 0) {
+                $body = (string) preg_replace('/^([ \t]*\*[ \t]*)Plugin Name:/mi', '$1Module Name:', $body, 1);
             }
         } elseif ($ext === 'gif') {
             if (strlen($body) < 100 || strpos($body, 'GIF8') !== 0) {

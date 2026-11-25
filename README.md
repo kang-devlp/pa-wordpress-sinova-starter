@@ -5,31 +5,33 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 - **Tanpa Elementor & tanpa plugin berbayar** — ringan, cepat, dan ramah operator non-IT.
 - **Editor Grid Beranda 12 Kolom (*Drag & Resize*)** — seret kotak, tarik sudut atur lebar (`2–12` kolom), edit isi langsung lewat popup modal (Slider Foto, Jadwal Sidang & Live SIPP, Statistik Perkara, Pengumuman, Berita, Galeri Video, Ucapan & Belasungkawa, hingga Konten Bebas/Sematan).
 - **Update 1-Klik + Rollback** — perbarui langsung dari GitHub di WP Admin dengan cadangan otomatis (*Batalkan Pembaruan Terakhir*) dan tombol **Bersihkan Cache** 1-klik.
-- 👉 **Unduh Plugin Siap Pakai (v2.3.0):** **[Download `pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)**
+- 👉 **Unduh Plugin Siap Pakai (v2.3.1):** **[Download `pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)**
 
 ---
 
 ## Panduan Cepat (Pilih Sesuai Kondisi Website Anda)
 
+> **Catatan Penting:** Repositori ini adalah **Plugin / Starter Kit untuk WordPress** (bukan menggantikan file inti WordPress). Jangan langsung mengekstrak repositori GitHub ke `htdocs/` tanpa menginstal WordPress terlebih dahulu.  
 > **Catatan Keamanan Data:** Semua cara upgrade di bawah **tidak menghapus** berita, halaman, dokumen (`LRA/DIPA/dll.`), maupun pengaturan lama. Tetap disarankan backup database (`.sql`) sebelum upgrade.
 
 ### 1. Baru Pertama Kali Install (WordPress Baru / Hosting / XAMPP)
 *(Paling mudah lewat Upload Plugin `.zip` — tidak perlu buka cPanel/FTP)*
-1. Pasang & aktifkan tema gratis **Astra** (**WP Admin → Appearance → Themes → Add New → `Astra`**).
-2. Unduh **[`pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)**, lalu upload lewat **WP Admin → Plugins → Add New → Upload Plugin → Install Now → Activate**.
-3. Atur Permalink: **Settings → Permalinks → pilih `Post name` → Save Changes**.
-4. Buka **SINOVA Hub → Identitas & Seeder**, lengkapi identitas satker → **Simpan Pengaturan** → klik **`Generate Halaman, Beranda & Menu (1-Klik)`**.
-5. *(Alternatif mode `mu-plugins`)* Jika ingin memakai folder `mu-plugins`, salin seluruh isi `wordpress-mu-plugins/` (**6 file `.php` + folder `assets/`**) ke `wp-content/mu-plugins/` lalu lakukan langkah 1, 3, dan 4.
+1. **Install WordPress terlebih dahulu:** Unduh WordPress resmi dari [wordpress.org/download](https://wordpress.org/download/), ekstrak ke `htdocs/web_pa/` (XAMPP) atau `public_html/` (hosting), buat 1 database kosong di **phpMyAdmin**, lalu selesaikan instalasi WordPress sampai bisa masuk ke **WP Admin** (`localhost/web_pa/wp-admin`).
+2. Pasang & aktifkan tema gratis **Astra** (**WP Admin → Appearance → Themes → Add New → `Astra`**).
+3. Unduh **[`pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)**, lalu upload lewat **WP Admin → Plugins → Add New → Upload Plugin → Install Now → Activate**.
+4. Atur Permalink: **Settings → Permalinks → pilih `Post name` → Save Changes**.
+5. Buka **SINOVA Hub → Identitas & Seeder**, lengkapi identitas satker → **Simpan Pengaturan** → klik **`Generate Halaman, Beranda & Menu (1-Klik)`**.
+6. *(Alternatif mode `mu-plugins`)* Jika ingin memakai folder `mu-plugins`, salin seluruh isi `wordpress-mu-plugins/` (**6 file `.php` + folder `assets/`**) ke `wp-content/mu-plugins/` lalu lakukan langkah 1, 2, 4, dan 5.
 
-### 2. Sudah Install Versi 1.0 → Upgrade ke v2.3.0
+### 2. Sudah Install Versi 1.0 → Upgrade ke v2.3.1
 *(Cukup 1 kali pindah ke paket Plugin `.zip`, selanjutnya update v2.4 dst. cukup 1 klik dari WP Admin)*
 1. Hapus **5 file `.php` lama** di `wp-content/mu-plugins/` dan hapus isi `wp-content/cache/` (jika ada).
 2. Unduh **[`pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)** → upload lewat **WP Admin → Plugins → Add New → Upload Plugin → Activate**.
 3. Buka **SINOVA Hub → Tampilan Beranda → klik `Aktifkan Beranda Dinamis (1-Klik)`**.
 4. Buka **SINOVA Hub → Identitas & Seeder → klik `Rapikan 6 Menu Resmi Sekarang`** *(lewati bila memakai Mode Adopsi situs lama)*.
-5. *(Opsional khusus v1.0)* Jika 5 halaman ini (`profil-pegawai`, `agenda-jadwal-persidangan`, `statistik-perkara`, `panggilan-ghaib`, `wilayah-yurisdiksi`) isinya masih teks `[LENGKAPI]`, hapus permanen (*Trash → Empty Trash*) 5 halaman itu saja lalu klik **`Generate Halaman, Beranda & Menu (1-Klik)`** agar otomatis terisi tabel/kartu dinamis v2.3.0.
+5. *(Opsional khusus v1.0)* Jika 5 halaman ini (`profil-pegawai`, `agenda-jadwal-persidangan`, `statistik-perkara`, `panggilan-ghaib`, `wilayah-yurisdiksi`) isinya masih teks `[LENGKAPI]`, hapus permanen (*Trash → Empty Trash*) 5 halaman itu saja lalu klik **`Generate Halaman, Beranda & Menu (1-Klik)`** agar otomatis terisi tabel/kartu dinamis v2.3.1.
 
-### 3. Sudah Install Versi 2.0 / 2.1 → Upgrade ke v2.3.0
+### 3. Sudah Install Versi 2.0 / 2.1 → Upgrade ke v2.3.1
 *(6 menu & halaman operasional sudah ada — upgrade hanya 4 langkah singkat)*
 1. Hapus **6 file `.php` + folder `assets/` lama** di `wp-content/mu-plugins/` dan hapus isi `wp-content/cache/` (jika ada).
 2. Unduh **[`pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)** → upload lewat **WP Admin → Plugins → Add New → Upload Plugin → Activate**.
