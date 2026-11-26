@@ -1157,22 +1157,573 @@ function pa_portal_fetch_sipp_hearings_today(): array {
     return $out;
 }
 
+// ============================================================================
+// 2B. AUTO-SYNC JADWAL SIDANG DARI URL PUBLIK SIPP WEB (list_jadwal_sidang)
+// ============================================================================
+
+function pa_portal_sipp_resolve_schedule_urls(string $overrideUrl = ''): array {
+    $cfg    = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $rawUrl = trim($overrideUrl !== '' ? $overrideUrl : (string) ($cfg['sipp_url'] ?? ''));
+    if ($rawUrl === '') {
+        return array(
+            'valid'       => false,
+            'base_url'    => '',
+            'primary_url' => '',
+            'candidates'  => array(),
+            'reason'      => 'URL SIPP Satker belum diisi di menu Identitas & Seeder.',
+        );
+    }
+
+    $parts  = parse_url($rawUrl);
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    $host   = strtolower((string) ($parts['host'] ?? ''));
+    if (!in_array($scheme, array('http', 'https'), true) || $host === '') {
+        return array(
+            'valid'       => false,
+            'base_url'    => '',
+            'primary_url' => '',
+            'candidates'  => array(),
+            'reason'      => 'Format URL SIPP tidak valid. Gunakan format https://sipp.pa-satker.go.id/.',
+        );
+    }
+    if (stripos($host, 'pa-contoh') !== false || stripos($host, 'example.') !== false) {
+        return array(
+            'valid'       => false,
+            'base_url'    => $scheme . '://' . $host,
+            'primary_url' => $scheme . '://' . $host . '/list_jadwal_sidang',
+            'candidates'  => array(),
+            'reason'      => 'URL SIPP masih memakai contoh (pa-contoh.go.id). Lengkapi URL SIPP resmi satker di Identitas & Seeder.',
+        );
+    }
+
+    $port     = !empty($parts['port']) ? ':' . (int) $parts['port'] : '';
+    $path     = trim((string) ($parts['path'] ?? ''), '/');
+    $basePath = '';
+    if ($path !== '') {
+        $cleanPath = preg_replace('#/(?:index\.php/)?(?:list_jadwal_sidang|jadwal_sidang|list_perkara|Slide_sidang|slide_sidang)(?:/.*)?$#i', '', '/' . $path);
+        $cleanPath = preg_replace('#^/(?:index\.php/)?(?:list_jadwal_sidang|jadwal_sidang|list_perkara|Slide_sidang|slide_sidang)(?:/.*)?$#i', '', (string) $cleanPath);
+        $basePath  = rtrim((string) $cleanPath, '/');
+    }
+    $origin = $scheme . '://' . $host . $port . $basePath;
+
+    $candidates = array();
+    if (preg_match('#(?:list_jadwal_sidang|jadwal_sidang)#i', $rawUrl)) {
+        $candidates[] = $rawUrl;
+    }
+    $candidates[] = $origin . '/list_jadwal_sidang';
+    $candidates[] = $origin . '/jadwal_sidang';
+    $candidates[] = $origin . '/index.php/list_jadwal_sidang';
+    $candidates   = array_values(array_unique($candidates));
+
+    return array(
+        'valid'       => true,
+        'base_url'    => $origin,
+        'primary_url' => $candidates[0],
+        'candidates'  => $candidates,
+        'reason'      => '',
+    );
+}
+
+function pa_portal_parse_id_schedule_date(string $raw): string {
+    $clean = trim(preg_replace('/\s+/', ' ', $raw));
+    if ($clean === '') {
+        return wp_date('Y-m-d');
+    }
+    if (preg_match('/\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/', $clean, $m)) {
+        return sprintf('%04d-%02d-%02d', (int) $m[1], (int) $m[2], (int) $m[3]);
+    }
+    if (preg_match('/\b(\d{1,2})[-\/.](\d{1,2})[-\/.](20\d{2})\b/', $clean, $m)) {
+        return sprintf('%04d-%02d-%02d', (int) $m[3], (int) $m[2], (int) $m[1]);
+    }
+    $months = array(
+        'jan' => 1, 'januari' => 1, 'january' => 1,
+        'feb' => 2, 'februari' => 2, 'february' => 2,
+        'mar' => 3, 'maret' => 3, 'march' => 3,
+        'apr' => 4, 'april' => 4,
+        'mei' => 5, 'may' => 5,
+        'jun' => 6, 'juni' => 6, 'june' => 6,
+        'jul' => 7, 'juli' => 7, 'july' => 7,
+        'agu' => 8, 'agt' => 8, 'agustus' => 8, 'aug' => 8, 'august' => 8,
+        'sep' => 9, 'sept' => 9, 'september' => 9,
+        'okt' => 10, 'oktober' => 10, 'oct' => 10, 'october' => 10,
+        'nov' => 11, 'nop' => 11, 'november' => 11,
+        'des' => 12, 'desember' => 12, 'dec' => 12, 'december' => 12,
+    );
+    if (preg_match('/\b(\d{1,2})\s+([A-Za-z]{3,10})\.?\s+(20\d{2})\b/', $clean, $m)) {
+        $monKey = strtolower($m[2]);
+        if (isset($months[$monKey])) {
+            return sprintf('%04d-%02d-%02d', (int) $m[3], $months[$monKey], (int) $m[1]);
+        }
+    }
+    return wp_date('Y-m-d');
+}
+
+function pa_portal_parse_sipp_web_html(string $html, string $baseUrl = '', int $limit = 120): array {
+    $raw = trim($html);
+    if ($raw === '') {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Respons HTML dari SIPP Web kosong.');
+    }
+
+    // Deteksi halus halaman tantangan Cloudflare / WAF (tidak mencoba melewati proteksi).
+    $isChallenge = (
+        stripos($raw, 'cf-browser-verification') !== false ||
+        stripos($raw, 'challenges.cloudflare.com') !== false ||
+        stripos($raw, '__cf_chl_') !== false ||
+        (stripos($raw, '<title>Just a moment') !== false && stripos($raw, 'nomor perkara') === false) ||
+        (stripos($raw, 'Attention Required! | Cloudflare') !== false && stripos($raw, 'nomor perkara') === false)
+    );
+    if ($isChallenge) {
+        return array(
+            'status'  => 'blocked',
+            'items'   => array(),
+            'message' => 'SIPP Web dilindungi verifikasi Cloudflare/WAF terhadap akses server hosting. Gunakan Push API SIPP atau Input Manual (fallback).',
+        );
+    }
+
+    if (!class_exists('DOMDocument')) {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Ekstensi PHP DOMDocument tidak aktif di server.');
+    }
+
+    $prevErr = libxml_use_internal_errors(true);
+    $dom     = new DOMDocument();
+    $loaded  = @$dom->loadHTML('<?xml encoding="utf-8" ?>' . $raw, LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR);
+    libxml_clear_errors();
+    libxml_use_internal_errors($prevErr);
+
+    if (!$loaded) {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Gagal membaca struktur HTML SIPP Web.');
+    }
+
+    $xpath  = new DOMXPath($dom);
+    $tables = $xpath->query('//table');
+    if (!$tables || $tables->length === 0) {
+        return array(
+            'status'  => 'error',
+            'items'   => array(),
+            'message' => 'Tabel jadwal sidang tidak ditemukan pada halaman SIPP Web (kemungkinan dirender via JavaScript/AJAX atau halaman berbeda).',
+        );
+    }
+
+    $items          = array();
+    $seen           = array();
+    $foundSchedule  = false;
+    $emptyConfirmed = false;
+    $baseParts      = $baseUrl !== '' ? parse_url($baseUrl) : array();
+    $origin         = (!empty($baseParts['scheme']) && !empty($baseParts['host']))
+        ? $baseParts['scheme'] . '://' . $baseParts['host'] . (!empty($baseParts['port']) ? ':' . $baseParts['port'] : '')
+        : '';
+
+    foreach ($tables as $tbl) {
+        $rows = $xpath->query('.//tr', $tbl);
+        if (!$rows || $rows->length === 0) {
+            continue;
+        }
+
+        $colMap    = array();
+        $headerIdx = -1;
+        for ($ri = 0; $ri < min(3, $rows->length); $ri++) {
+            $cells = $xpath->query('./th|./td', $rows->item($ri));
+            if (!$cells || $cells->length < 3) {
+                continue;
+            }
+            $tmpMap = array();
+            for ($ci = 0; $ci < $cells->length; $ci++) {
+                $hTxt = strtolower(trim(preg_replace('/\s+/', ' ', (string) $cells->item($ci)->textContent)));
+                if (preg_match('/nomor\s*perkara|no\.?\s*perkara/', $hTxt)) {
+                    $tmpMap['nomor'] = $ci;
+                } elseif (preg_match('/tanggal|tgl\.?\s*sidang/', $hTxt)) {
+                    $tmpMap['tanggal'] = $ci;
+                } elseif (preg_match('/\bjam\b|waktu|pukul/', $hTxt)) {
+                    $tmpMap['jam'] = $ci;
+                } elseif (preg_match('/ruang|ruangan/', $hTxt)) {
+                    $tmpMap['ruang'] = $ci;
+                } elseif (preg_match('/agenda|acara|tahapan/', $hTxt)) {
+                    $tmpMap['agenda'] = $ci;
+                } elseif (preg_match('/keliling/', $hTxt)) {
+                    $tmpMap['keliling'] = $ci;
+                }
+            }
+            if (isset($tmpMap['nomor']) && (isset($tmpMap['agenda']) || isset($tmpMap['ruang']) || isset($tmpMap['tanggal']))) {
+                $colMap    = $tmpMap;
+                $headerIdx = $ri;
+                $foundSchedule = true;
+                break;
+            }
+        }
+
+        $startRow = ($headerIdx >= 0) ? ($headerIdx + 1) : 0;
+        for ($ri = $startRow; $ri < $rows->length; $ri++) {
+            $tr    = $rows->item($ri);
+            $cells = $xpath->query('./td', $tr);
+            if (!$cells || $cells->length === 0) {
+                continue;
+            }
+            if ($cells->length === 1) {
+                $onlyTxt = strtolower(trim(preg_replace('/\s+/', ' ', (string) $cells->item(0)->textContent)));
+                if ($foundSchedule && preg_match('/tidak ada|kosong|belum ada|tidak ditemukan|no data/', $onlyTxt)) {
+                    $emptyConfirmed = true;
+                }
+                continue;
+            }
+
+            $vals = array();
+            for ($ci = 0; $ci < $cells->length; $ci++) {
+                $vals[$ci] = trim(preg_replace('/\s+/', ' ', (string) $cells->item($ci)->textContent));
+            }
+
+            $nomor   = '';
+            $tanggal = '';
+            $jam     = '';
+            $ruang   = '';
+            $agenda  = '';
+            $kelil   = '';
+
+            if (!empty($colMap)) {
+                $nomor   = (string) ($vals[$colMap['nomor'] ?? -1] ?? '');
+                $tanggal = (string) ($vals[$colMap['tanggal'] ?? -1] ?? '');
+                $jam     = (string) ($vals[$colMap['jam'] ?? -1] ?? '');
+                $ruang   = (string) ($vals[$colMap['ruang'] ?? -1] ?? '');
+                $agenda  = (string) ($vals[$colMap['agenda'] ?? -1] ?? '');
+                $kelil   = (string) ($vals[$colMap['keliling'] ?? -1] ?? '');
+            } else {
+                // Fallback deteksi pola nomor perkara SIPP standar (mis. 123/Pdt.G/2026/PA.Smdg).
+                $nIdx = -1;
+                foreach ($vals as $ci => $v) {
+                    if (preg_match('/\b\d{1,5}\/[A-Za-z.]+\/20\d{2}\/[A-Za-z0-9._-]+\b/', $v)) {
+                        $nIdx  = $ci;
+                        $nomor = $v;
+                        break;
+                    }
+                }
+                if ($nIdx < 0) {
+                    continue;
+                }
+                $foundSchedule = true;
+                if ($nIdx > 0) {
+                    $tanggal = (string) ($vals[$nIdx - 1] ?? '');
+                }
+                $after = array_slice($vals, $nIdx + 1);
+                foreach ($after as $av) {
+                    $up = strtoupper($av);
+                    if ($up === 'YA' || $up === 'TIDAK') {
+                        $kelil = $up;
+                    } elseif ($jam === '' && preg_match('/^\d{1,2}[:.]\d{2}(?:\s*WIB|WITA|WIT)?$/i', $av)) {
+                        $jam = $av;
+                    } elseif ($ruang === '' && preg_match('/ruang|sidang\s*\d|utama|mediasi|aula/i', $av)) {
+                        $ruang = $av;
+                    } elseif ($agenda === '' && $av !== '' && !preg_match('/^(?:detil|detail|lihat)$/i', $av)) {
+                        $agenda = $av;
+                    }
+                }
+            }
+
+            $nomor = sanitize_text_field($nomor);
+            if ($nomor === '' || strlen($nomor) < 5) {
+                continue;
+            }
+            if (preg_match('/^(?:no\.?|nomor\s*perkara)$/i', $nomor)) {
+                continue;
+            }
+
+            $eventDate = pa_portal_parse_id_schedule_date($tanggal);
+            if ($jam === '' && preg_match('/\b(\d{1,2}[:.]\d{2})\b/', $tanggal . ' ' . $agenda, $jm)) {
+                $jam = $jm[1] . ' WIB';
+            }
+            $jam = sanitize_text_field($jam !== '' ? $jam : '09.00 WIB');
+            if ($jam !== '' && stripos($jam, 'WI') === false && preg_match('/\d{1,2}[:.]\d{2}/', $jam)) {
+                $jam .= ' WIB';
+            }
+
+            $agenda = sanitize_text_field($agenda !== '' ? $agenda : 'Persidangan');
+            if (strtoupper(trim($kelil)) === 'YA' && stripos($agenda, 'keliling') === false) {
+                $agenda .= ' · Sidang Keliling';
+            }
+            $ruang = sanitize_text_field($ruang !== '' ? $ruang : 'Ruang Sidang');
+
+            // Ambil tautan detil perkara bila tersedia pada baris.
+            $detailUrl = '';
+            $links     = $xpath->query('.//a[@href]', $tr);
+            if ($links && $links->length > 0) {
+                $href = trim((string) $links->item($links->length - 1)->getAttribute('href'));
+                if ($href !== '' && stripos($href, 'javascript:') !== 0 && $href !== '#') {
+                    if (preg_match('#^https?://#i', $href)) {
+                        $detailUrl = esc_url_raw($href);
+                    } elseif (strpos($href, '/') === 0 && $origin !== '') {
+                        $detailUrl = esc_url_raw($origin . $href);
+                    } elseif ($baseUrl !== '') {
+                        $detailUrl = esc_url_raw(rtrim($baseUrl, '/') . '/' . ltrim($href, '/'));
+                    }
+                }
+            }
+
+            $dedupKey = strtolower($nomor . '|' . $eventDate . '|' . $agenda);
+            if (isset($seen[$dedupKey])) {
+                continue;
+            }
+            $seen[$dedupKey] = true;
+
+            $items[] = array(
+                'title'      => $nomor,
+                'subtitle'   => $agenda,
+                'category'   => $ruang,
+                'event_date' => $eventDate,
+                'jam'        => $jam,
+                'detail_url' => $detailUrl,
+            );
+            if (count($items) >= $limit) {
+                break 2;
+            }
+        }
+    }
+
+    if (!empty($items)) {
+        return array(
+            'status'  => 'ok',
+            'items'   => $items,
+            'message' => 'Berhasil membaca ' . count($items) . ' agenda sidang dari SIPP Web.',
+        );
+    }
+
+    if ($foundSchedule || $emptyConfirmed) {
+        return array(
+            'status'  => 'empty',
+            'items'   => array(),
+            'message' => 'SIPP Web terhubung, namun saat ini belum ada agenda sidang terjadwal pada tabel publik.',
+        );
+    }
+
+    return array(
+        'status'  => 'error',
+        'items'   => array(),
+        'message' => 'Halaman SIPP Web terbuka tetapi tabel jadwal sidang tidak dikenali (kemungkinan dimuat via AJAX atau tema kustom). Gunakan Push API SIPP atau Input Manual.',
+    );
+}
+
+function pa_portal_get_sipp_web_sync_status(): array {
+    $st = get_option('pa_sipp_web_sync_status', array());
+    return is_array($st) ? $st : array();
+}
+
+function pa_portal_sync_sipp_web_schedule(bool $manual = false, string $overrideUrl = ''): array {
+    $resolved = pa_portal_sipp_resolve_schedule_urls($overrideUrl);
+    $nowLabel = wp_date('d-m-Y H:i') . ' WIB';
+
+    if (empty($resolved['valid'])) {
+        $payload = array(
+            'status'     => 'unconfigured',
+            'count'      => 0,
+            'source_url' => (string) ($resolved['primary_url'] ?? ''),
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => (string) ($resolved['reason'] ?? 'URL SIPP Satker belum diatur.'),
+        );
+        update_option('pa_sipp_web_sync_status', $payload, false);
+        set_transient('pa_sipp_web_sync_fresh', 1, 1800);
+        return $payload;
+    }
+
+    $lastError  = '';
+    $lastUrl    = (string) $resolved['primary_url'];
+    $parsedBest = null;
+
+    foreach ((array) $resolved['candidates'] as $candUrl) {
+        $lastUrl = (string) $candUrl;
+        $resp    = pa_portal_ssrf_safe_get($lastUrl, array('go.id', 'mahkamahagung.go.id'), 10);
+        if (empty($resp['ok'])) {
+            $err = (string) ($resp['error'] ?? 'Gagal menghubungi SIPP Web.');
+            if (preg_match('/HTTP\s*(403|503|429)/', $err)) {
+                $lastError = "Akses ke {$lastUrl} ditolak ({$err} — kemungkinan proteksi Cloudflare atau firewall IP server SIPP).";
+            } else {
+                $lastError = "Tidak dapat mengakses {$lastUrl} ({$err}).";
+            }
+            continue;
+        }
+
+        $parsed = pa_portal_parse_sipp_web_html((string) $resp['body'], (string) $resolved['base_url'], 120);
+        if (($parsed['status'] ?? '') === 'ok') {
+            $parsedBest = $parsed;
+            break;
+        }
+        if (($parsed['status'] ?? '') === 'blocked') {
+            $parsedBest = $parsed;
+            break;
+        }
+        if (($parsed['status'] ?? '') === 'empty' && $parsedBest === null) {
+            $parsedBest = $parsed;
+        } else {
+            $lastError = (string) ($parsed['message'] ?? $lastError);
+        }
+    }
+
+    if ($parsedBest !== null && ($parsedBest['status'] ?? '') === 'ok') {
+        pa_portal_records_ensure_table();
+        global $wpdb;
+        $rTable = pa_portal_records_table();
+        $nowSql = current_time('mysql');
+
+        // Ganti hanya entri hasil Auto-Sync SIPP Web & data contoh bawaan (PA.Cth); entri manual/Push SIPP tetap aman.
+        $wpdb->query(
+            "DELETE FROM `{$rTable}` WHERE record_type = 'jadwal' AND (meta_json LIKE '%\"source\":\"sipp_web\"%' OR title LIKE '%/PA.Cth%')"
+        );
+
+        $inserted = 0;
+        $sort     = 1;
+        foreach ((array) $parsedBest['items'] as $it) {
+            $meta = array(
+                'jam'    => (string) ($it['jam'] ?? '09.00 WIB'),
+                'source' => 'sipp_web',
+            );
+            if (!empty($it['detail_url'])) {
+                $meta['detail_url'] = (string) $it['detail_url'];
+            }
+            $ok = $wpdb->insert($rTable, array(
+                'record_type' => 'jadwal',
+                'title'       => (string) $it['title'],
+                'subtitle'    => (string) $it['subtitle'],
+                'category'    => (string) $it['category'],
+                'event_date'  => (string) $it['event_date'],
+                'meta_json'   => wp_json_encode($meta) ?: '{}',
+                'sort_order'  => $sort++,
+                'status'      => 'published',
+                'updated_at'  => $nowSql,
+            ));
+            if ($ok) {
+                $inserted++;
+            }
+        }
+
+        delete_transient('pa_sipp_hearings_today');
+        if (function_exists('pa_home_page_cache_mark_stale')) {
+            pa_home_page_cache_mark_stale();
+        }
+
+        $payload = array(
+            'status'     => 'ok',
+            'count'      => $inserted,
+            'source_url' => $lastUrl,
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => "Berhasil menyinkronkan {$inserted} jadwal sidang otomatis dari SIPP Web.",
+        );
+        update_option('pa_sipp_web_sync_status', $payload, false);
+        set_transient('pa_sipp_web_sync_fresh', 1, 1800);
+        return $payload;
+    }
+
+    if ($parsedBest !== null && in_array((string) ($parsedBest['status'] ?? ''), array('empty', 'blocked'), true)) {
+        $payload = array(
+            'status'     => (string) $parsedBest['status'],
+            'count'      => 0,
+            'source_url' => $lastUrl,
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => (string) $parsedBest['message'],
+        );
+        update_option('pa_sipp_web_sync_status', $payload, false);
+        set_transient('pa_sipp_web_sync_fresh', 1, 1800);
+        return $payload;
+    }
+
+    $payload = array(
+        'status'     => 'error',
+        'count'      => 0,
+        'source_url' => $lastUrl,
+        'synced_at'  => $nowLabel,
+        'timestamp'  => time(),
+        'message'    => $lastError !== '' ? $lastError : 'Gagal menarik jadwal sidang dari SIPP Web. Pastikan URL SIPP dapat diakses server hosting atau gunakan Input Manual (fallback).',
+    );
+    update_option('pa_sipp_web_sync_status', $payload, false);
+    set_transient('pa_sipp_web_sync_fresh', 1, $manual ? 300 : 1800);
+    return $payload;
+}
+
+add_filter('cron_schedules', static function ($schedules) {
+    if (!is_array($schedules)) {
+        $schedules = array();
+    }
+    if (!isset($schedules['pa_every_30min'])) {
+        $schedules['pa_every_30min'] = array(
+            'interval' => 1800,
+            'display'  => 'Setiap 30 Menit (PA SINOVA SIPP Auto-Sync)',
+        );
+    }
+    return $schedules;
+});
+
+add_action('pa_sipp_web_cron_sync', static function () {
+    $cfg = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    if (($cfg['sipp_web_autosync'] ?? '1') === '0') {
+        return;
+    }
+    pa_portal_sync_sipp_web_schedule(false);
+});
+
+function pa_portal_maybe_schedule_sipp_web_sync(): void {
+    $cfg = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    if (($cfg['sipp_web_autosync'] ?? '1') === '0') {
+        $next = wp_next_scheduled('pa_sipp_web_cron_sync');
+        if ($next) {
+            wp_unschedule_event($next, 'pa_sipp_web_cron_sync');
+        }
+        return;
+    }
+    $resolved = pa_portal_sipp_resolve_schedule_urls();
+    if (empty($resolved['valid'])) {
+        return;
+    }
+    if (!wp_next_scheduled('pa_sipp_web_cron_sync')) {
+        wp_schedule_event(time() + 120, 'pa_every_30min', 'pa_sipp_web_cron_sync');
+    }
+    if (!get_transient('pa_sipp_web_sync_fresh') && !wp_next_scheduled('pa_sipp_web_single_sync')) {
+        wp_schedule_single_event(time() + 5, 'pa_sipp_web_single_sync');
+    }
+}
+add_action('pa_sipp_web_single_sync', static function () {
+    $cfg = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    if (($cfg['sipp_web_autosync'] ?? '1') !== '0') {
+        pa_portal_sync_sipp_web_schedule(false);
+    }
+});
+add_action('init', static function () {
+    if (!wp_doing_ajax()) {
+        pa_portal_maybe_schedule_sipp_web_sync();
+    }
+}, 30);
+
 add_shortcode('pa_jadwal_sidang', static function () {
+    pa_portal_maybe_schedule_sipp_web_sync();
     $cfg      = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $sippUrl  = trim((string) ($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'));
     $sippRows = pa_portal_fetch_sipp_hearings_today();
     $source   = !empty($sippRows) ? 'Koneksi Read-Only SIPP' : 'Data Jadwal Portal';
 
     if (empty($sippRows)) {
+        $hasSippWeb  = false;
+        $hasSippPush = false;
         foreach (pa_portal_get_records('jadwal', 100) as $r) {
             $meta = json_decode((string) ($r['meta_json'] ?? ''), true);
+            if (!is_array($meta)) {
+                $meta = array();
+            }
+            $src = (string) ($meta['source'] ?? '');
+            if ($src === 'sipp_web') {
+                $hasSippWeb = true;
+            } elseif ($src === 'sipp_push') {
+                $hasSippPush = true;
+            }
             $sippRows[] = array(
                 'title'      => (string) $r['title'],
                 'subtitle'   => (string) $r['subtitle'],
                 'category'   => (string) $r['category'],
                 'event_date' => (string) ($r['event_date'] ?? wp_date('Y-m-d')),
                 'jam'        => (string) ($meta['jam'] ?? '09.00 WIB'),
+                'detail_url' => (string) ($meta['detail_url'] ?? ''),
             );
+        }
+        if ($hasSippWeb) {
+            $source = 'Auto-Sync SIPP Web';
+        } elseif ($hasSippPush) {
+            $source = 'Push Otomatis SIPP';
         }
     }
 
@@ -1200,11 +1751,19 @@ add_shortcode('pa_jadwal_sidang', static function () {
                 <tbody>
                     <?php if (empty($sippRows)) : ?>
                         <tr><td colspan="5">Belum ada jadwal persidangan terjadwal.</td></tr>
-                    <?php else : foreach ($sippRows as $row) : ?>
+                    <?php else : foreach ($sippRows as $row) :
+                        $detU = esc_url_raw((string) ($row['detail_url'] ?? ''), array('http', 'https'));
+                    ?>
                         <tr>
                             <td><?php echo esc_html($row['event_date'] ?: wp_date('Y-m-d')); ?></td>
                             <td><strong><?php echo esc_html($row['jam']); ?></strong></td>
-                            <td><strong><?php echo esc_html($row['title']); ?></strong></td>
+                            <td>
+                                <?php if ($detU !== '') : ?>
+                                    <a href="<?php echo esc_url($detU); ?>" target="_blank" rel="noopener noreferrer"><strong><?php echo esc_html($row['title']); ?></strong> ↗</a>
+                                <?php else : ?>
+                                    <strong><?php echo esc_html($row['title']); ?></strong>
+                                <?php endif; ?>
+                            </td>
                             <td><?php echo esc_html($row['subtitle']); ?></td>
                             <td><?php echo esc_html($row['category']); ?></td>
                         </tr>
@@ -1442,7 +2001,7 @@ function pa_portal_render_sipp_tracker(string $title = 'Penelusuran Perkara Cepa
             <div class="pa-st-links">
                 <?php if ($sippBase !== '') : ?>
                     <a class="pa-st-pill" href="<?php echo esc_url($sippBase . '/list_perkara'); ?>" target="_blank" rel="noopener noreferrer">Daftar Perkara SIPP ↗</a>
-                    <a class="pa-st-pill" href="<?php echo esc_url($sippBase . '/jadwal_sidang'); ?>" target="_blank" rel="noopener noreferrer">Jadwal Sidang SIPP ↗</a>
+                    <a class="pa-st-pill" href="<?php echo esc_url($sippBase . '/list_jadwal_sidang'); ?>" target="_blank" rel="noopener noreferrer">Jadwal Sidang SIPP ↗</a>
                 <?php endif; ?>
                 <a class="pa-st-pill" href="<?php echo esc_url($ecourtU); ?>" target="_blank" rel="noopener noreferrer">e-Court ↗</a>
                 <?php if (!$compact) : ?>

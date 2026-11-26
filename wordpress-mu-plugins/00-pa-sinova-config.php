@@ -24,6 +24,7 @@ function pa_sinova_get_settings(): array {
         'leader_name'              => 'Ketua Pengadilan Agama',
         'leader_welcome'           => 'Selamat datang di portal resmi Pengadilan Agama. Melalui website ini kami menyajikan informasi layanan peradilan, transparansi keuangan, laporan kinerja, dan dokumen pembangunan Zona Integritas secara terbuka kepada seluruh masyarakat pencari keadilan.',
         'sipp_url'                 => 'https://sipp.pa-contoh.go.id/',
+        'sipp_web_autosync'        => '1',
         'sipp_slide_url'           => '',
         'ecourt_url'               => 'https://ecourt.mahkamahagung.go.id/',
         'direktori_url'            => 'https://putusan3.mahkamahagung.go.id/',
@@ -943,10 +944,16 @@ function pa_sinova_wp_compliance_report(): array {
                     if ($recCnt > 0) {
                         $status   = 'lengkap';
                         $pts      = 10;
-                        $sippPush = ($recType === 'jadwal') ? (string) get_option('pa_sipp_last_push_at', '') : '';
-                        $note     = ($sippPush !== '')
-                            ? "Dikirim otomatis dari SIPP ({$recCnt} entri · terakhir {$sippPush})."
-                            : "Halaman & data terstruktur aktif ({$recCnt} entri terpublikasi).";
+                        $sippPush    = ($recType === 'jadwal') ? (string) get_option('pa_sipp_last_push_at', '') : '';
+                        $sippWebStat = ($recType === 'jadwal' && function_exists('pa_portal_get_sipp_web_sync_status')) ? pa_portal_get_sipp_web_sync_status() : array();
+                        $sippWebOk   = (($sippWebStat['status'] ?? '') === 'ok' && !empty($sippWebStat['synced_at']));
+                        if ($sippWebOk) {
+                            $note = "Auto-Sync SIPP Web aktif ({$recCnt} entri · terakhir {$sippWebStat['synced_at']}).";
+                        } elseif ($sippPush !== '') {
+                            $note = "Dikirim otomatis dari SIPP ({$recCnt} entri · terakhir {$sippPush}).";
+                        } else {
+                            $note = "Halaman & data terstruktur aktif ({$recCnt} entri terpublikasi).";
+                        }
                     } else {
                         $status = 'perhatian';
                         $pts    = 5;
@@ -2923,6 +2930,7 @@ function pa_sinova_render_admin_page(): void {
                 'social_whatsapp'          => esc_url_raw(wp_unslash((string) ($_POST['social_whatsapp'] ?? ''))),
                 'maps_url'                 => esc_url_raw(wp_unslash((string) ($_POST['maps_url'] ?? ''))),
                 'sipp_url'                 => esc_url_raw(wp_unslash((string) ($_POST['sipp_url'] ?? ''))),
+                'sipp_web_autosync'        => isset($_POST['sipp_web_autosync']) ? (!empty($_POST['sipp_web_autosync']) ? '1' : '0') : ((string) ($cur['sipp_web_autosync'] ?? '1')),
                 'sipp_slide_url'           => $sippSlideSave,
                 'ecourt_url'               => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
                 'direktori_url'            => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
@@ -2968,6 +2976,13 @@ function pa_sinova_render_admin_page(): void {
             update_option('pa_sinova_starter_settings', $new, false);
             if (($new['direktori_url'] ?? '') !== ($cur['direktori_url'] ?? '') || ($new['dirput_rss_url'] ?? '') !== ($cur['dirput_rss_url'] ?? '')) {
                 delete_option('pa_dirput_feed_cache');
+            }
+            if (($new['sipp_url'] ?? '') !== ($cur['sipp_url'] ?? '')) {
+                delete_transient('pa_sipp_web_sync_fresh');
+                delete_option('pa_sipp_web_sync_status');
+                if (function_exists('pa_portal_maybe_schedule_sipp_web_sync')) {
+                    pa_portal_maybe_schedule_sipp_web_sync();
+                }
             }
             pa_sinova_sync_direktori_putusan_page((string) ($new['direktori_url'] ?? ''));
             pa_sinova_purge_html_cache_files();
@@ -3148,6 +3163,34 @@ function pa_sinova_render_admin_page(): void {
             } else {
                 $notice = 'Gagal: Modul umpan RSS belum dimuat.';
             }
+        } elseif ($action === 'sync_sipp_web' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            if (isset($_POST['sipp_web_autosync_present'])) {
+                $curCfg = pa_sinova_get_settings();
+                $curCfg['sipp_web_autosync'] = !empty($_POST['sipp_web_autosync']) ? '1' : '0';
+                update_option('pa_sinova_starter_settings', $curCfg, false);
+                if (function_exists('pa_portal_maybe_schedule_sipp_web_sync')) {
+                    pa_portal_maybe_schedule_sipp_web_sync();
+                }
+            }
+            if (function_exists('pa_portal_sync_sipp_web_schedule')) {
+                $syncRes = pa_portal_sync_sipp_web_schedule(true);
+                $notice  = (string) ($syncRes['message'] ?? 'Sinkronisasi SIPP Web selesai.');
+            } else {
+                $notice = 'Gagal: Modul Auto-Sync SIPP Web belum dimuat.';
+            }
+        } elseif ($action === 'save_sipp_autosync' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            $curCfg    = pa_sinova_get_settings();
+            $enabled   = !empty($_POST['sipp_web_autosync']) ? '1' : '0';
+            $curCfg['sipp_web_autosync'] = $enabled;
+            update_option('pa_sinova_starter_settings', $curCfg, false);
+            if (function_exists('pa_portal_maybe_schedule_sipp_web_sync')) {
+                pa_portal_maybe_schedule_sipp_web_sync();
+            }
+            $notice = $enabled === '1'
+                ? 'Auto-Sync Jadwal Sidang SIPP Web via WP-Cron (tiap 30 menit) berhasil diaktifkan.'
+                : 'Auto-Sync Jadwal Sidang SIPP Web via WP-Cron dinonaktifkan.';
         } elseif ($action === 'delete_sample_records' && in_array('data', $allowedTabs, true)) {
             $activeTab = 'data';
             if (function_exists('pa_portal_delete_sample_records')) {
@@ -4448,20 +4491,114 @@ function pa_sinova_render_admin_page(): void {
                 </form>
             </div>
 
+            <?php
+            $isJadwalSection = ($filterRecType === 'jadwal' || ($filterRecType === 'all' && $formRecType === 'jadwal' && !$isEditingRec));
+            $sippResolved    = function_exists('pa_portal_sipp_resolve_schedule_urls') ? pa_portal_sipp_resolve_schedule_urls() : array('valid' => false, 'primary_url' => '', 'reason' => '');
+            $sippWebStatus   = function_exists('pa_portal_get_sipp_web_sync_status') ? pa_portal_get_sipp_web_sync_status() : array();
+            $sippAutoOn      = (($cfg['sipp_web_autosync'] ?? '1') !== '0');
+            $nextSippCron    = wp_next_scheduled('pa_sipp_web_cron_sync');
+            $sippStCode      = (string) ($sippWebStatus['status'] ?? '');
+            $sippBadgeBg     = '#f1f5f9';
+            $sippBadgeClr    = '#334155';
+            $sippBadgeTxt    = $sippAutoOn ? 'WP-Cron 30 Menit Aktif' : 'Auto-Sync Nonaktif';
+            if ($sippStCode === 'ok') {
+                $sippBadgeBg  = '#ecfdf5';
+                $sippBadgeClr = '#043927';
+                $sippBadgeTxt = 'Sinkron: ' . (int) ($sippWebStatus['count'] ?? 0) . ' jadwal';
+            } elseif ($sippStCode === 'empty') {
+                $sippBadgeBg  = '#eff6ff';
+                $sippBadgeClr = '#1e40af';
+                $sippBadgeTxt = 'Terhubung · 0 jadwal hari ini';
+            } elseif ($sippStCode === 'blocked' || $sippStCode === 'error') {
+                $sippBadgeBg  = '#fef2f2';
+                $sippBadgeClr = '#991b1b';
+                $sippBadgeTxt = 'Perlu Cek Akses Hosting';
+            } elseif (empty($sippResolved['valid'])) {
+                $sippBadgeBg  = '#fffbeb';
+                $sippBadgeClr = '#92400e';
+                $sippBadgeTxt = 'URL SIPP Belum Diatur';
+            }
+            ?>
             <div class="pa-adm-cols-2">
-                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingRec ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-                        <h2 style="margin:0;color:#056e4f;">
-                            <?php echo $isEditingRec ? 'Edit Entri' : 'Tambah Entri'; ?>
-                            <span class="pa-adm-tip" tabindex="0" data-tip="Entri langsung tampil di halaman terkait dan blok Beranda 12 kolom. Untuk sinkronisasi SIPP otomatis gunakan endpoint POST /wp-json/pa-sinova/v1/sipp/push-hearings (HMAC-SHA256)." aria-label="Info entri">i</span>
-                        </h2>
-                        <?php if ($sippLastPush !== '' && $formRecType === 'jadwal') : ?>
-                            <span style="background:#ecfdf5;color:#043927;border:1px solid #86efac;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;">Push SIPP: <?php echo esc_html($sippLastPush); ?></span>
-                        <?php endif; ?>
-                        <?php if ($isEditingRec) : ?>
-                            <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Edit #<?php echo esc_html((string) $editRec['id']); ?></span>
-                        <?php endif; ?>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <?php if ($isJadwalSection) : ?>
+                    <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                            <h2 style="margin:0;color:#056e4f;">
+                                Auto-Sync Jadwal Sidang (SIPP Web)
+                                <span class="pa-adm-tip" tabindex="0" data-tip="Menarik jadwal sidang otomatis dari URL publik SIPP Web (list_jadwal_sidang) setiap 30 menit via WP-Cron. Jika server SIPP memblokir akses hosting, satker tetap bisa memakai Push API HMAC (scripts/sipp-push-example.php) atau Input Manual (fallback) di bawah." aria-label="Info Auto-Sync SIPP Web">i</span>
+                            </h2>
+                            <span style="background:<?php echo esc_attr($sippBadgeBg); ?>;color:<?php echo esc_attr($sippBadgeClr); ?>;border:1px solid #cbd5e1;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;"><?php echo esc_html($sippBadgeTxt); ?></span>
+                        </div>
+
+                        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;line-height:1.55;color:#334155;">
+                            <div>
+                                <strong>Target URL SIPP Web:</strong>
+                                <?php if (!empty($sippResolved['valid'])) : ?>
+                                    <a href="<?php echo esc_url((string) $sippResolved['primary_url']); ?>" target="_blank" rel="noopener noreferrer" style="word-break:break-all;"><?php echo esc_html((string) $sippResolved['primary_url']); ?> ↗</a>
+                                <?php else : ?>
+                                    <span style="color:#92400e;"><?php echo esc_html((string) ($sippResolved['reason'] ?: 'Belum diatur')); ?></span>
+                                <?php endif; ?>
+                                · <a href="<?php echo esc_url($tabBaseUrl . 'settings'); ?>">Ubah URL SIPP →</a>
+                            </div>
+                            <?php if (!empty($sippWebStatus['synced_at'])) : ?>
+                                <div style="margin-top:4px;color:#475569;">
+                                    <strong>Status Terakhir (<?php echo esc_html((string) $sippWebStatus['synced_at']); ?>):</strong>
+                                    <?php echo esc_html((string) ($sippWebStatus['message'] ?? '')); ?>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($sippLastPush !== '') : ?>
+                                <div style="margin-top:4px;color:#043927;">
+                                    <strong>Push API SIPP (HMAC):</strong> terakhir diterima <?php echo esc_html($sippLastPush); ?>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($nextSippCron) : ?>
+                                <div style="margin-top:4px;color:#64748b;">
+                                    Jadwal WP-Cron berikutnya: <?php echo esc_html(wp_date('d-m-Y H:i', (int) $nextSippCron)); ?> WIB
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <form method="post" action="<?php echo esc_url($dataViewUrl); ?>">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="sipp_web_autosync_present" value="1">
+                            <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;font-weight:600;color:#0f172a;cursor:pointer;">
+                                <input type="checkbox" name="sipp_web_autosync" value="1" <?php checked($sippAutoOn); ?>>
+                                Aktifkan Auto-Sync berkala lewat WP-Cron (setiap 30 menit)
+                            </label>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                                <button type="submit" name="pa_sinova_action" value="sync_sipp_web" class="button button-primary">Sinkronkan dari SIPP Web</button>
+                                <button type="submit" name="pa_sinova_action" value="save_sipp_autosync" class="button button-secondary">Simpan Jadwal Cron</button>
+                            </div>
+                        </form>
+                        <p style="margin:10px 0 0;font-size:12px;color:#64748b;line-height:1.5;">
+                            Operator cukup mengisi <strong>URL SIPP</strong> di <em>Identitas &amp; Seeder</em>. Catatan: tarik otomatis bergantung apakah SIPP Web satker dapat diakses langsung oleh server hosting (tanpa proteksi Cloudflare/blokir IP).
+                        </p>
                     </div>
+                    <?php endif; ?>
+
+                    <?php if ($isJadwalSection) : ?>
+                    <details style="background:#fff;border:1px solid #cbd5e1;border-top:3px solid <?php echo $isEditingRec ? '#056e4f' : '#94a3b8'; ?>;border-radius:10px;padding:14px 18px;" <?php echo $isEditingRec ? 'open' : ''; ?>>
+                        <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <div>
+                                <strong style="color:#0f172a;font-size:14.5px;"><?php echo $isEditingRec ? 'Edit Entri Manual Jadwal Sidang' : 'Input Manual Jadwal Sidang (Cadangan / Fallback)'; ?></strong>
+                                <div style="font-size:12px;color:#64748b;margin-top:2px;">Khusus <em>fallback</em> jika Auto-Sync SIPP Web atau Push SIPP tidak tersedia/terblokir. Bila jadwal sudah sinkron otomatis, bagian ini tidak perlu diisi.</div>
+                            </div>
+                            <span style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;"><?php echo $isEditingRec ? ('Edit #' . esc_html((string) $editRec['id'])) : 'Opsional ▾'; ?></span>
+                        </summary>
+                        <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0;">
+                    <?php else : ?>
+                    <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingRec ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                            <h2 style="margin:0;color:#056e4f;">
+                                <?php echo $isEditingRec ? 'Edit Entri' : 'Tambah Entri'; ?>
+                                <span class="pa-adm-tip" tabindex="0" data-tip="Entri langsung tampil di halaman terkait dan blok Beranda 12 kolom. Untuk sinkronisasi SIPP otomatis gunakan Auto-Sync SIPP Web atau endpoint POST /wp-json/pa-sinova/v1/sipp/push-hearings (HMAC-SHA256)." aria-label="Info entri">i</span>
+                            </h2>
+                            <?php if ($isEditingRec) : ?>
+                                <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Edit #<?php echo esc_html((string) $editRec['id']); ?></span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                     <form method="post" action="<?php echo esc_url($dataViewUrl); ?>">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="<?php echo $isEditingRec ? 'update_record' : 'add_record'; ?>">
@@ -4522,6 +4659,12 @@ function pa_sinova_render_admin_page(): void {
                             syncLabels();
                         })();
                     </script>
+                    <?php if ($isJadwalSection) : ?>
+                        </div>
+                    </details>
+                    <?php else : ?>
+                    </div>
+                    <?php endif; ?>
                 </div>
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;">
@@ -4566,11 +4709,23 @@ function pa_sinova_render_admin_page(): void {
                                     $recRowId    = (int) ($rr['id'] ?? 0);
                                     $recIsEdit   = ($isEditingRec && (int) $editRec['id'] === $recRowId);
                                     $recEditUrl  = add_query_arg('edit_rec', $recRowId, $dataViewUrl);
+                                    $rrMeta      = !empty($rr['meta_json']) ? json_decode((string) $rr['meta_json'], true) : array();
+                                    $rrSrcTag    = '';
+                                    if (($rr['record_type'] ?? '') === 'jadwal') {
+                                        $srcKey = is_array($rrMeta) ? (string) ($rrMeta['source'] ?? '') : '';
+                                        if ($srcKey === 'sipp_web') {
+                                            $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#e0f2fe;color:#0369a1;font-size:10.5px;font-weight:700;">SIPP Web</span>';
+                                        } elseif ($srcKey === 'sipp_push') {
+                                            $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#ecfdf5;color:#043927;font-size:10.5px;font-weight:700;">Push SIPP</span>';
+                                        } else {
+                                            $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:10.5px;font-weight:600;">Manual</span>';
+                                        }
+                                    }
                                 ?>
                                     <tr style="<?php echo $recIsEdit ? 'background:#f0fdf4;' : ''; ?>">
                                         <td><input type="checkbox" class="pa-rec-chk" name="rec_ids[]" value="<?php echo esc_attr((string) $recRowId); ?>" aria-label="Pilih <?php echo esc_attr((string) $rr['title']); ?>"></td>
                                         <td><code><?php echo esc_html((string) $rr['record_type']); ?></code></td>
-                                        <td><strong><?php echo esc_html((string) $rr['title']); ?></strong><br><small style="color:#64748b;"><?php echo esc_html((string) $rr['subtitle'] . (!empty($rr['category']) ? ' · ' . $rr['category'] : '')); ?></small></td>
+                                        <td><strong><?php echo esc_html((string) $rr['title']); ?></strong><?php echo $rrSrcTag; ?><br><small style="color:#64748b;"><?php echo esc_html((string) $rr['subtitle'] . (!empty($rr['category']) ? ' · ' . $rr['category'] : '')); ?></small></td>
                                         <td><?php echo esc_html((string) ($rr['event_date'] ?: '-')); ?></td>
                                         <td>
                                             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
@@ -5555,7 +5710,7 @@ function pa_sinova_render_admin_page(): void {
                                 <input type="text" name="leader_motto" class="regular-text" value="<?php echo esc_attr($cfg['leader_motto'] ?? 'Melayani dengan Integritas, Profesionalitas, dan Transparansi'); ?>" placeholder="Motto singkat pimpinan (opsional)">
                             </td></tr>
                             <tr><th>Sambutan Pimpinan</th><td><textarea name="leader_welcome" rows="3" class="large-text"><?php echo esc_textarea($cfg['leader_welcome']); ?></textarea></td></tr>
-                            <tr><th>URL SIPP</th><td><input type="url" name="sipp_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_url']); ?>"></td></tr>
+                            <tr><th>URL SIPP <?php echo pa_sinova_info_tip('Alamat SIPP Web publik satker (misal https://sipp.pa-sumedang.go.id/). Otomatis dipakai untuk tombol Penelusuran Perkara & Auto-Sync Jadwal Sidang (/list_jadwal_sidang) via WP-Cron.', 'Info URL SIPP'); ?></th><td><input type="url" name="sipp_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_url']); ?>" placeholder="https://sipp.pa-sumedang.go.id/"></td></tr>
                             <tr><th>URL Slide Jadwal Sidang SIPP <?php echo pa_sinova_info_tip('Tempel tautan Slide_sidang SIPP satker (HTTPS) untuk tampil sebagai panel jadwal sidang live di Beranda & izin frame-src otomatis.', 'Info slide SIPP'); ?></th><td><input type="url" name="sipp_slide_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_slide_url'] ?? ''); ?>" placeholder="https://sipp.pa-sumedang.go.id/Slide_sidang"></td></tr>
                             <tr><th>URL e-Court</th><td><input type="url" name="ecourt_url" class="regular-text" value="<?php echo esc_attr($cfg['ecourt_url']); ?>"></td></tr>
                             <tr><th>URL Direktori Putusan Satker <?php echo pa_sinova_info_tip('Tempel URL profil/direktori satker di putusan3.mahkamahagung.go.id, misal https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-sumedang.html. Halaman /direktori-putusan/ dan pencarian Beranda menyesuaikan otomatis.', 'Info URL Direktori Putusan'); ?></th><td>

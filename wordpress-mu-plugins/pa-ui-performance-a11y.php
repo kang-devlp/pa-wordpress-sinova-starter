@@ -309,6 +309,9 @@ function pa_sinova_render_schedule_dashboard(array $atts = array()): string {
         $activeTab = $hasSipp ? 'sipp' : 'agenda';
     }
 
+    if (function_exists('pa_portal_maybe_schedule_sipp_web_sync')) {
+        pa_portal_maybe_schedule_sipp_web_sync();
+    }
     $sippRows = function_exists('pa_portal_fetch_sipp_hearings_today') ? pa_portal_fetch_sipp_hearings_today() : array();
     $isLiveDb = !empty($sippRows);
     $hearings = $isLiveDb ? $sippRows : (function_exists('pa_portal_get_records') ? pa_portal_get_records('jadwal', 6) : array());
