@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - UI Portal Resmi PA, Pencarian, Statistik Pengunjung, Sidebar Halaman Dalam & Aksesibilitas Lengkap
  * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, bebas istilah internal di tampilan publik, kotak pencarian header, statistik pengunjung privasi ter-hash, sidebar & breadcrumb halaman dalam, serta dock disabilitas dengan Pembaca Suara Bahasa Indonesia.
- * Version: 2.3.0-starter
+ * Version: 2.3.1-starter
  */
 
 defined('ABSPATH') || exit;
@@ -2699,6 +2699,7 @@ html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 
     object-fit: contain;
     pointer-events: none;
 }
+.pa-aco-float-img[hidden] { display: none !important; }
 .pa-aco-float-static {
     display: none;
     align-items: center;
@@ -2708,6 +2709,7 @@ html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 
     font: 800 11px/1 'Inter', system-ui, sans-serif;
     letter-spacing: 0.03em;
 }
+.pa-aco-float-static.is-fallback { display: inline-flex; }
 @media (max-width: 640px) {
     #pa-aco-float { bottom: 70px; padding: 4px 2px 4px 6px; }
     .pa-aco-float-img { width: 46px; height: 41px; }
@@ -3717,19 +3719,36 @@ add_action('wp_footer', static function () {
     $acoUrlRaw  = trim((string) ($cfg['aco_url'] ?? 'https://cctv.badilag.net/'));
     $acoFloatOn = (string) ($cfg['aco_float_enabled'] ?? '1') !== '0';
     if (!pa_sinova_is_adoption_mode() && $acoUrlRaw !== '' && $acoFloatOn) :
-        $acoImgUrl = trim((string) ($cfg['aco_logo_url'] ?? ''));
+        $acoImgUrl     = trim((string) ($cfg['aco_logo_url'] ?? ''));
+        $acoFallback   = wp_make_link_relative(add_query_arg('pa_aco_asset', '1', home_url('/')));
         if ($acoImgUrl === '') {
             if (defined('PA_SINOVA_ASSETS_DIR') && defined('PA_SINOVA_ASSETS_URL') && file_exists(PA_SINOVA_ASSETS_DIR . '/cctv-aco.gif')) {
                 $acoImgUrl = rtrim((string) PA_SINOVA_ASSETS_URL, '/') . '/cctv-aco.gif';
+            } elseif (file_exists(__DIR__ . '/assets/cctv-aco.gif')) {
+                if (defined('WPMU_PLUGIN_DIR') && defined('WPMU_PLUGIN_URL') && realpath(__DIR__) === realpath(WPMU_PLUGIN_DIR)) {
+                    $acoImgUrl = rtrim((string) WPMU_PLUGIN_URL, '/') . '/assets/cctv-aco.gif';
+                } elseif (defined('WP_PLUGIN_DIR') && defined('WP_PLUGIN_URL') && strpos((string) wp_normalize_path(__DIR__), (string) wp_normalize_path(WP_PLUGIN_DIR)) === 0) {
+                    $relDir    = ltrim(substr((string) wp_normalize_path(__DIR__), strlen((string) wp_normalize_path(WP_PLUGIN_DIR))), '/');
+                    $acoImgUrl = rtrim((string) WP_PLUGIN_URL, '/') . '/' . $relDir . '/assets/cctv-aco.gif';
+                } else {
+                    $acoImgUrl = content_url('/mu-plugins/assets/cctv-aco.gif');
+                }
             } elseif (defined('WPMU_PLUGIN_DIR') && defined('WPMU_PLUGIN_URL') && file_exists(WPMU_PLUGIN_DIR . '/assets/cctv-aco.gif')) {
-                $acoImgUrl = WPMU_PLUGIN_URL . '/assets/cctv-aco.gif';
+                $acoImgUrl = rtrim((string) WPMU_PLUGIN_URL, '/') . '/assets/cctv-aco.gif';
+            } elseif (defined('WP_PLUGIN_DIR') && defined('WP_PLUGIN_URL') && file_exists(WP_PLUGIN_DIR . '/pa-sinova-starter/wordpress-mu-plugins/assets/cctv-aco.gif')) {
+                $acoImgUrl = rtrim((string) WP_PLUGIN_URL, '/') . '/pa-sinova-starter/wordpress-mu-plugins/assets/cctv-aco.gif';
             } else {
-                $acoImgUrl = content_url('/mu-plugins/assets/cctv-aco.gif');
+                $acoImgUrl = $acoFallback;
+            }
+            $homeHost = strtolower((string) parse_url(home_url('/'), PHP_URL_HOST));
+            $imgHost  = strtolower((string) parse_url($acoImgUrl, PHP_URL_HOST));
+            if ($imgHost === '' || ($homeHost !== '' && $imgHost === $homeHost)) {
+                $acoImgUrl = wp_make_link_relative($acoImgUrl);
             }
         }
 ?>
 <a id="pa-aco-float" class="pa-aco-float" href="<?php echo esc_url($acoUrlRaw); ?>" target="_blank" rel="noopener noreferrer" aria-label="Buka Access CCTV Online (ACO) Ditjen Badilag" data-pa-tip="Access CCTV Online (ACO) · Klik untuk memantau">
-    <img class="pa-aco-float-img" src="<?php echo esc_url($acoImgUrl); ?>" alt="ACO Access CCTV Online" width="56" height="50" loading="lazy" decoding="async">
+    <img class="pa-aco-float-img" src="<?php echo esc_url($acoImgUrl); ?>" data-aco-fallback="<?php echo esc_attr($acoFallback); ?>" alt="ACO Access CCTV Online" width="56" height="50" decoding="async">
     <span class="pa-aco-float-static" aria-hidden="true">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
         <span>ACO</span>
@@ -4690,6 +4709,26 @@ add_action('wp_footer', static function () {
             });
         });
     });
+
+    var acoImg = document.querySelector('#pa-aco-float .pa-aco-float-img');
+    var acoStatic = document.querySelector('#pa-aco-float .pa-aco-float-static');
+    if(acoImg){
+        var acoTriedFallback = false;
+        var handleAcoImgErr = function(){
+            var fb = acoImg.getAttribute('data-aco-fallback') || '';
+            if(!acoTriedFallback && fb && acoImg.getAttribute('src') !== fb){
+                acoTriedFallback = true;
+                acoImg.setAttribute('src', fb);
+                return;
+            }
+            acoImg.setAttribute('hidden', '');
+            if(acoStatic) acoStatic.classList.add('is-fallback');
+        };
+        acoImg.addEventListener('error', handleAcoImgErr);
+        if(acoImg.complete && acoImg.naturalWidth === 0){
+            handleAcoImgErr();
+        }
+    }
 
     document.addEventListener('keydown', function(e){
         if((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')){

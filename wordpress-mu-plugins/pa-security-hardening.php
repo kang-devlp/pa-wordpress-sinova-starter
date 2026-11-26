@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - Security Hardening, Anti-Judol WAF, Rate Limiter, TOTP MFA & Hidden Login
  * Description: Pengamanan berlapis portal Pengadilan Agama: Brute-Force Rate Limiter, TOTP MFA RFC 6238 bawaan, idle timeout 60 menit, kebijakan password kuat, Hidden Login URL 404, OWASP Headers, proteksi folder .htaccess, Anti-Judol WAF, & CAPTCHA login.
- * Version: 1.4.0-starter
+ * Version: 2.3.1-starter
  */
 
 defined('ABSPATH') || exit;
@@ -193,6 +193,53 @@ add_action('wp_loaded', static function () {
         }
         echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#043927"/><path d="M32 8L52 15V31C52 44 43.2 53.2 32 57C20.8 53.2 12 44 12 31V15L32 8Z" fill="#056e4f" stroke="#E5C158" stroke-width="3"/><path d="M32 18V43M21 25H43M21 25L17 34H25L21 25ZM43 25L39 34H47L43 25ZM26 43H38" stroke="#E5C158" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>';
         exit;
+    }
+
+    if ($path === 'pa-aco-cctv.gif' || !empty($_GET['pa_aco_asset'])) {
+        $candidates = array();
+        if (defined('PA_SINOVA_ASSETS_DIR')) {
+            $candidates[] = rtrim((string) PA_SINOVA_ASSETS_DIR, '/\\') . '/cctv-aco.gif';
+        }
+        $candidates[] = __DIR__ . '/assets/cctv-aco.gif';
+        if (defined('WPMU_PLUGIN_DIR')) {
+            $candidates[] = rtrim((string) WPMU_PLUGIN_DIR, '/\\') . '/assets/cctv-aco.gif';
+        }
+        if (defined('WP_PLUGIN_DIR')) {
+            $candidates[] = rtrim((string) WP_PLUGIN_DIR, '/\\') . '/pa-sinova-starter/wordpress-mu-plugins/assets/cctv-aco.gif';
+        }
+        $gifPath = '';
+        foreach ($candidates as $cand) {
+            if (is_file($cand) && is_readable($cand)) {
+                $gifPath = $cand;
+                break;
+            }
+        }
+        if ($gifPath !== '') {
+            $mtime = (int) (@filemtime($gifPath) ?: time());
+            $size  = (int) (@filesize($gifPath) ?: 0);
+            $etag  = '"' . md5($mtime . ':' . $size) . '"';
+            if (!headers_sent()) {
+                if (function_exists('pa_starter_emit_security_headers')) {
+                    pa_starter_emit_security_headers(false);
+                }
+                header('Content-Type: image/gif');
+                header('Cache-Control: public, max-age=604800');
+                header('ETag: ' . $etag);
+            }
+            $ifNoneMatch = trim((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
+            if ($ifNoneMatch !== '' && strpos($ifNoneMatch, $etag) !== false) {
+                status_header(304);
+                exit;
+            }
+            if (!headers_sent()) {
+                status_header(200);
+                if ($size > 0) {
+                    header('Content-Length: ' . $size);
+                }
+            }
+            @readfile($gifPath);
+            exit;
+        }
     }
 }, 0);
 
