@@ -48,17 +48,25 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 
 ## Pratinjau Tampilan
 
-| Beranda Mode Terang & CCTV ACO | Beranda Mode Gelap (Dark Mode) |
+| Hero Split Modern, Foto Gedung & Strip KPI (v2.5.0) | Penelusuran SIPP, Inovasi Satker & Berita |
+|---|---|
+| ![Hero Split Modern & KPI](docs/screenshots/beranda-hero-kpi.png) | ![Penelusuran SIPP, Inovasi & Berita](docs/screenshots/beranda-fitur-v25.png) |
+
+| Beranda Lengkap Mode Terang (v2.5.0) | Beranda Lengkap Mode Gelap (Dark Mode) |
 |---|---|
 | ![Beranda Mode Terang](docs/screenshots/beranda-light.png) | ![Beranda Mode Gelap](docs/screenshots/beranda-dark.png) |
 
-| Arsip Dokumen Publik (LRA, DIPA, dll.) | Dashboard Kepatuhan 35 Kriteria |
+| Direktori Putusan Hybrid & Cari Perkara | Arsip Dokumen Publik (LRA, DIPA, dll.) |
 |---|---|
-| ![Arsip Dokumen Publik](docs/screenshots/modul-sinova.png) | ![Dashboard 35 Kriteria](docs/screenshots/admin-dashboard-35.png) |
+| ![Direktori Putusan Hybrid](docs/screenshots/direktori-putusan.png) | ![Arsip Dokumen Publik](docs/screenshots/modul-sinova.png) |
 
-| Migrasi & Adopsi Situs Lama | Keamanan MFA & Sembunyikan Login |
+| Dashboard Kepatuhan 35 Kriteria | Migrasi & Adopsi Situs Lama |
 |---|---|
-| ![Migrasi Situs Lama](docs/screenshots/admin-migrasi-adopsi.png) | ![Keamanan & Login](docs/screenshots/admin-keamanan-login.png) |
+| ![Dashboard 35 Kriteria](docs/screenshots/admin-dashboard-35.png) | ![Migrasi & Adopsi Situs Lama](docs/screenshots/admin-migrasi-adopsi.png) |
+
+| Keamanan MFA & Sembunyikan Login | |
+|---|---|
+| ![Keamanan & Login](docs/screenshots/admin-keamanan-login.png) | |
 
 ---
 
