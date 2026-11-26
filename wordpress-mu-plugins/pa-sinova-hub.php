@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - Document Hub & HMAC Sync API
  * Description: Penyimpanan dokumen terstruktur 23 modul SINOVA (Rumah s.d. 2027), Shortcode SSR Hijau Gelap–Gold SK 2722/2026, serta REST API HMAC-SHA256 untuk sinkronisasi dengan portal internal (Portal Internal Laravel).
- * Version: 2.3.0-starter
+ * Version: 2.4.1-starter
  */
 
 defined('ABSPATH') || exit;
@@ -886,12 +886,12 @@ add_shortcode('pa_sinova_docs', static function ($atts) {
         .pa-sinova-slot-wrap:has(.pa-doc-preview-trigger) .pa-sinova-btn{padding-right:84px}
         .pa-sinova-btn.is-filled{background:#f4faf7;border:1.5px solid #056e4f;color:#043927}
         .pa-sinova-btn.is-filled:hover{background:#056e4f;border-color:#C9A227;color:#fff;transform:translateY(-2px)}
-        .pa-sinova-btn.is-filled .pa-sinova-btn-month{font-weight:800;font-size:13.5px}
-        .pa-sinova-btn.is-filled .pa-sinova-btn-meta{font-size:11px;font-weight:700;color:#6e5204;margin-top:2px}
+        .pa-sinova-btn.is-filled .pa-sinova-btn-month{font-weight:800;font-size:13.5px;overflow-wrap:anywhere;max-width:100%}
+        .pa-sinova-btn.is-filled .pa-sinova-btn-meta{font-size:11px;font-weight:700;color:#6e5204;margin-top:2px;overflow-wrap:anywhere;max-width:100%}
         .pa-sinova-btn.is-filled:hover .pa-sinova-btn-meta{color:#E5C158}
         .pa-sinova-btn.is-empty{background:#f8fafc;border:1px dashed #cbd5e1;color:#475569}
-        .pa-sinova-btn.is-empty .pa-sinova-btn-month{font-weight:700;font-size:13px}
-        .pa-sinova-btn.is-empty .pa-sinova-btn-meta{font-size:10.5px;color:#475569;margin-top:2px}
+        .pa-sinova-btn.is-empty .pa-sinova-btn-month{font-weight:700;font-size:13px;overflow-wrap:anywhere;max-width:100%}
+        .pa-sinova-btn.is-empty .pa-sinova-btn-meta{font-size:10.5px;color:#475569;margin-top:2px;overflow-wrap:anywhere;max-width:100%}
         .pa-sinova-archive-wrap{margin-top:24px;padding:18px 20px;border-radius:14px;background:#f7fbf8;border:1px solid #d5e6dc}
         .pa-sinova-archive-heading{margin:0 0 12px;color:#056e4f;font-size:1.05rem;font-weight:800}
         .pa-sinova-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}

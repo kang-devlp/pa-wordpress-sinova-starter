@@ -2,12 +2,12 @@
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
  * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen (Edit & Hapus Massal), & Audit Keamanan + MFA di WP Admin.
- * Version: 2.4.0-starter
+ * Version: 2.4.1-starter
  */
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.4.0');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.4.1');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -15,6 +15,7 @@ function pa_sinova_get_settings(): array {
     $defaults = array(
         'satker_name'              => get_bloginfo('name') ?: 'Pengadilan Agama Contoh Kelas I-A',
         'logo_url'                 => '',
+        'favicon_url'              => '',
         'preserve_existing_design' => '0',
         'address'                  => 'Jl. Keadilan Raya No. 1, Kota Contoh',
         'phone'                    => '(000) 123-4567 · WA PTSP 0811-0000-0000',
@@ -2814,6 +2815,7 @@ function pa_sinova_render_admin_page(): void {
             $new = array_merge($cur, array(
                 'satker_name'              => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
                 'logo_url'                 => esc_url_raw(wp_unslash((string) ($_POST['logo_url'] ?? ''))),
+                'favicon_url'              => esc_url_raw(wp_unslash((string) ($_POST['favicon_url'] ?? ''))),
                 'preserve_existing_design' => isset($_POST['preserve_existing_design']) ? (!empty($_POST['preserve_existing_design']) ? '1' : '0') : ((string) ($cur['preserve_existing_design'] ?? '0')),
                 'address'                  => sanitize_text_field(wp_unslash((string) ($_POST['address'] ?? $cur['address']))),
                 'phone'                    => sanitize_text_field(wp_unslash((string) ($_POST['phone'] ?? $cur['phone']))),
@@ -2869,9 +2871,7 @@ function pa_sinova_render_admin_page(): void {
                 delete_option('pa_dirput_feed_cache');
             }
             pa_sinova_sync_direktori_putusan_page((string) ($new['direktori_url'] ?? ''));
-            if (function_exists('pa_home_page_cache_mark_stale')) {
-                pa_home_page_cache_mark_stale();
-            }
+            pa_sinova_purge_html_cache_files();
             $notice = 'Pengaturan Satker, Identitas Visual, Umpan RSS, & API HMAC berhasil disimpan.';
             if ($rssMaCheck['warn'] || $rssBadCheck['warn'] || $rssDirCheck['warn']) {
                 $notice .= ' Catatan: URL RSS non-HTTPS atau di luar domain resmi (.go.id) ditolak dan dikembalikan ke URL aman sebelumnya.';
@@ -3561,7 +3561,12 @@ function pa_sinova_render_admin_page(): void {
         @media(max-width:960px){.pa-adm-shell{grid-template-columns:1fr}}
         .pa-adm-side{background:linear-gradient(180deg,#033022 0%,#04422f 100%);color:#e6f4ee;padding:16px 12px;display:flex;flex-direction:column;gap:12px}
         .pa-adm-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 12px;border-bottom:1px solid rgba(255,255,255,.12)}
-        .pa-adm-emblem{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#C9A227,#E5C158);color:#022c22;font-weight:900;font-size:13px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+        .pa-adm-emblem{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#C9A227,#E5C158);color:#022c22;font-weight:900;font-size:13px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+        .pa-adm-emblem.has-logo{background:#fff;padding:2px;box-sizing:border-box}
+        .pa-adm-emblem img{width:100%;height:100%;object-fit:contain;display:block}
+        .pa-adm-cols-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:20px;align-items:start}
+        .pa-adm-cols-set{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,0.9fr);gap:20px;align-items:start}
+        @media(max-width:1080px){.pa-adm-cols-2,.pa-adm-cols-set{grid-template-columns:1fr}}
         .pa-adm-brand strong{display:block;font-size:13px;line-height:1.25;color:#fff}
         .pa-adm-brand span{display:block;font-size:11px;color:#a7f3d0}
         .pa-adm-grp-lbl{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#86efac;opacity:.75;padding:6px 10px 3px}
@@ -3642,7 +3647,12 @@ function pa_sinova_render_admin_page(): void {
     <div class="pa-adm-shell">
         <aside class="pa-adm-side" aria-label="Navigasi Panel Admin SINOVA">
             <div class="pa-adm-brand">
-                <span class="pa-adm-emblem">PA</span>
+                <?php $admLogo = trim((string) ($cfg['logo_url'] ?? '')); ?>
+                <span class="pa-adm-emblem<?php echo $admLogo !== '' ? ' has-logo' : ''; ?>">
+                    <?php if ($admLogo !== '') : ?>
+                        <img src="<?php echo esc_url($admLogo); ?>" alt="Logo Satker">
+                    <?php else : ?>PA<?php endif; ?>
+                </span>
                 <div>
                     <strong><?php echo esc_html(function_exists('mb_substr') ? mb_substr($satkerLbl, 0, 26, 'UTF-8') : substr($satkerLbl, 0, 26)); ?></strong>
                     <span>Panel Admin v<?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?></span>
@@ -4000,7 +4010,7 @@ function pa_sinova_render_admin_page(): void {
                 $docYears = $wpdb->get_col("SELECT DISTINCT year FROM `{$table}` ORDER BY year DESC");
             }
         ?>
-            <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start;">
+            <div class="pa-adm-cols-2">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingDoc ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
                         <h2 style="margin:0;color:#056e4f;">
@@ -4312,7 +4322,7 @@ function pa_sinova_render_admin_page(): void {
                 </form>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start;">
+            <div class="pa-adm-cols-2">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingRec ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
                         <h2 style="margin:0;color:#056e4f;">
@@ -5288,6 +5298,9 @@ function pa_sinova_render_admin_page(): void {
             $seededCount  = is_array($seededOption) ? count($seededOption) : 0;
             $dirputPrev   = function_exists('pa_portal_dirput_resolve_urls') ? pa_portal_dirput_resolve_urls() : array();
             $acoLogoNow   = trim((string) ($cfg['aco_logo_url'] ?? ''));
+            $logoNow      = trim((string) ($cfg['logo_url'] ?? ''));
+            $faviconNow   = trim((string) ($cfg['favicon_url'] ?? ''));
+            $favPrevSrc   = $faviconNow !== '' ? $faviconNow : ($logoNow !== '' ? $logoNow : wp_make_link_relative(home_url('/favicon.svg')));
         ?>
             <?php if ($isAdoption) : ?>
                 <div class="notice notice-info inline" style="margin:0 0 16px;padding:10px 14px;">
@@ -5295,7 +5308,7 @@ function pa_sinova_render_admin_page(): void {
                     · <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>">Kelola</a>
                 </div>
             <?php endif; ?>
-            <div style="display:grid;grid-template-columns:1.45fr 0.9fr;gap:20px;align-items:start;">
+            <div class="pa-adm-cols-set">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
                     <h2 style="margin-top:0;color:#056e4f;">Identitas Satker, Tampilan &amp; API</h2>
                     <form method="post">
@@ -5304,10 +5317,18 @@ function pa_sinova_render_admin_page(): void {
                         <input type="hidden" name="preserve_existing_design" value="<?php echo $isAdoption ? '1' : '0'; ?>">
                         <table class="form-table">
                             <tr><th>Nama Satker</th><td><input type="text" name="satker_name" class="regular-text" value="<?php echo esc_attr($cfg['satker_name']); ?>"></td></tr>
-                            <tr><th>URL Logo Resmi</th><td>
-                                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                                    <input type="url" id="pa-set-logo-url" name="logo_url" class="regular-text" value="<?php echo esc_attr($cfg['logo_url'] ?? ''); ?>" placeholder="https://.../logo-pa.png">
-                                    <button type="button" class="button pa-media-pick-btn" data-target="pa-set-logo-url">Pilih Media</button>
+                            <tr><th>URL Logo Resmi <?php echo pa_sinova_info_tip('Tampil di Header situs (desktop & mobile), Footer, Sidebar Admin SINOVA, pratinjau tautan WhatsApp/OG, serta fallback otomatis Favicon jika Favicon kosong.', 'Info Logo Resmi'); ?></th><td>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <span class="pa-media-preview"><img id="pa-set-logo-preview" src="<?php echo esc_url($logoNow !== '' ? $logoNow : wp_make_link_relative(home_url('/favicon.svg'))); ?>" alt="Pratinjau Logo"></span>
+                                    <input type="url" id="pa-set-logo-url" name="logo_url" class="regular-text" value="<?php echo esc_attr($logoNow); ?>" placeholder="https://.../logo-pa.png">
+                                    <button type="button" class="button pa-media-pick-btn" data-target="pa-set-logo-url" data-preview="pa-set-logo-preview">Pilih Media</button>
+                                </div>
+                            </td></tr>
+                            <tr><th>Favicon Website (Ikon Tab Browser) <?php echo pa_sinova_info_tip('Ikon kecil yang tampil di tab browser di atas kolom URL & bookmark. Disarankan PNG/SVG/ICO persegi (64x64 atau 512x512 px). Kosongkan untuk otomatis mengikuti Logo Resmi atau ikon bawaan.', 'Info Favicon'); ?></th><td>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <span class="pa-media-preview" style="width:36px;height:36px;"><img id="pa-set-favicon-preview" src="<?php echo esc_url($favPrevSrc); ?>" alt="Pratinjau Favicon"></span>
+                                    <input type="url" id="pa-set-favicon-url" name="favicon_url" class="regular-text" value="<?php echo esc_attr($faviconNow); ?>" placeholder="Kosongkan untuk ikuti Logo / ikon bawaan">
+                                    <button type="button" class="button pa-media-pick-btn" data-target="pa-set-favicon-url" data-preview="pa-set-favicon-preview">Pilih / Upload Favicon</button>
                                 </div>
                             </td></tr>
                             <tr><th>Palet Aksen Visual</th><td>
@@ -5719,6 +5740,20 @@ function pa_sinova_render_admin_page(): void {
                     var prv = pid ? document.getElementById(pid) : null;
                     if (prv) prv.src = url;
                 });
+            });
+            [
+                { inp: 'pa-set-logo-url', prv: 'pa-set-logo-preview' },
+                { inp: 'pa-set-favicon-url', prv: 'pa-set-favicon-preview' },
+                { inp: 'pa-set-aco-logo', prv: 'pa-set-aco-preview' }
+            ].forEach(function(pair){
+                var el = document.getElementById(pair.inp);
+                var pv = document.getElementById(pair.prv);
+                if (el && pv) {
+                    el.addEventListener('input', function(){
+                        var v = (el.value || '').trim();
+                        if (/^(\/(?!\/)|https?:\/\/)/i.test(v)) pv.src = v;
+                    });
+                }
             });
         })();
     </script>

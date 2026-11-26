@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - UI Portal Resmi PA, Pencarian, Statistik Pengunjung, Sidebar Halaman Dalam & Aksesibilitas Lengkap
  * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, bebas istilah internal di tampilan publik, kotak pencarian header, statistik pengunjung privasi ter-hash, sidebar & breadcrumb halaman dalam, serta dock disabilitas dengan Pembaca Suara Bahasa Indonesia.
- * Version: 2.4.0-starter
+ * Version: 2.4.1-starter
  */
 
 defined('ABSPATH') || exit;
@@ -1008,6 +1008,7 @@ add_action('astra_render_header_column', static function ($row, $section) {
         return;
     }
     $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $satker  = trim((string) ($cfg['satker_name'] ?? '')) ?: (get_bloginfo('name') ?: 'Pengadilan Agama');
     $logoUrl = trim((string) ($cfg['logo_url'] ?? ''));
     ?>
     <button type="button" id="pa-cmdk-open" class="pa-unified-search-btn" aria-haspopup="dialog" aria-label="Cari layanan, dokumen, dan berita">
@@ -1018,7 +1019,9 @@ add_action('astra_render_header_column', static function ($row, $section) {
         <kbd class="pa-us-kbd">Ctrl K</kbd>
     </button>
     <?php if ($logoUrl !== '') : ?>
-        <img src="<?php echo esc_url($logoUrl); ?>" alt="Logo Pengadilan" class="pa-header-custom-logo" width="44" height="44" fetchpriority="high" decoding="async">
+        <a class="pa-header-custom-logo-link" href="<?php echo esc_url(home_url('/')); ?>" aria-label="<?php echo esc_attr($satker); ?>">
+            <img src="<?php echo esc_url($logoUrl); ?>" alt="Logo <?php echo esc_attr($satker); ?>" class="pa-header-custom-logo" height="46" fetchpriority="high" decoding="async">
+        </a>
     <?php endif;
 }, 20, 2);
 
@@ -1246,11 +1249,22 @@ body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-le
 body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-left .ast-builder-layout-element[data-section="title_tagline"] {
     order: 1;
 }
-body.pa-sinova-classic-shell #ast-desktop-header .pa-header-custom-logo {
+body.pa-sinova-classic-shell #ast-desktop-header .pa-header-custom-logo-link {
     order: 0;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    text-decoration: none !important;
+}
+body.pa-sinova-classic-shell #ast-desktop-header .pa-header-custom-logo,
+.pa-header-custom-logo {
+    display: block;
+    height: 46px;
+    width: auto;
+    max-width: 180px;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.96);
-    padding: 4px;
+    padding: 4px 6px;
     box-shadow: 0 4px 12px rgba(2, 44, 34, 0.18);
     object-fit: contain;
 }
@@ -1306,8 +1320,9 @@ body.pa-sinova-classic-shell #ast-desktop-header .pa-unified-search-btn:focus-vi
     color: #E5C158;
     font: 700 11px/1 monospace;
 }
-.ast-mobile-header-wrap .pa-unified-search-btn,
-.ast-mobile-header-wrap .pa-header-custom-logo { display: none !important; }
+.ast-mobile-header-wrap .pa-unified-search-btn { display: none !important; }
+.ast-mobile-header-wrap .pa-header-custom-logo-link { display: inline-flex; align-items: center; flex-shrink: 0; margin-right: 8px; }
+.ast-mobile-header-wrap .pa-header-custom-logo { height: 34px; max-width: 120px; padding: 3px; border-radius: 8px; }
 
 body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-right {
     width: 100% !important;
@@ -1830,6 +1845,7 @@ body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa
 .pa-shell-masthead { background: linear-gradient(125deg, #033022 0%, #05583f 54%, #066c4e 100%); color: #fff; padding: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.09); }
 .pa-shell-brand { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #fff; }
 .pa-shell-emblem { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%); color: #022c22; font-weight: 900; font-size: 17px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pa-shell-logo-img { height: 48px; width: auto; max-width: 160px; border-radius: 10px; background: rgba(255, 255, 255, 0.96); padding: 4px 6px; object-fit: contain; flex-shrink: 0; box-shadow: 0 4px 12px rgba(2, 44, 34, 0.2); }
 .pa-shell-brand-title { margin: 0; font-size: clamp(1.05rem, 2vw, 1.4rem); font-weight: 800; color: #fff; line-height: 1.2; }
 .pa-shell-brand-sub { margin: 2px 0 0; font-size: 12.5px; color: #d1fae5; }
 .pa-shell-badge { padding: 6px 12px; border-radius: 999px; background: rgba(201, 162, 39, 0.16); border: 1px solid #C9A227; color: #E5C158; font-size: 12px; font-weight: 700; }
@@ -2023,8 +2039,8 @@ html[data-pa-theme="dark"] .pa-ticker-link { color: #E5C158 !important; }
 .pa-hs-dot.is-active { width: 22px; border-radius: 999px; background: #E5C158; }
 
 .pa-grid-panel { background: var(--pa-surface, #ffffff); border: 1.5px solid #d5e6dc; border-top: 4px solid var(--pa-gold, #C9A227); border-radius: 18px; padding: 18px 20px; box-shadow: 0 10px 26px -14px rgba(2, 44, 34, 0.16); text-align: left; display: flex; flex-direction: column; gap: 14px; }
-.pa-gp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid #e6f0eb; padding-bottom: 10px; }
-.pa-gp-title { margin: 0 !important; font-size: 16px !important; font-weight: 800 !important; color: #043927 !important; }
+.pa-gp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid #e6f0eb; padding-bottom: 10px; }
+.pa-gp-title { margin: 0 !important; font-size: 16px !important; font-weight: 800 !important; color: #043927 !important; min-width: 0; overflow-wrap: anywhere; }
 .pa-gp-more { font-size: 12px; font-weight: 700; color: #056e4f !important; text-decoration: none; white-space: nowrap; }
 .pa-gp-more:hover { text-decoration: underline; }
 .pa-stats-mini-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -2243,6 +2259,7 @@ html[data-pa-theme="dark"] .pa-ann-tab.is-active { background: #C9A227; border-c
 }
 .pa-sched-item-top {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
@@ -2582,14 +2599,15 @@ html[data-pa-theme="dark"] .pa-dirput-scope { color: #cbd5e1; }
 .pa-split-section { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: stretch; }
 @media (max-width: 880px) { .pa-split-section { grid-template-columns: 1fr; } }
 .pa-starter-survey { padding: 18px; border-radius: 16px; background: linear-gradient(155deg, #065f46 0%, #044e3a 52%, #022c22 100%); border: 1.5px solid #C9A227; color: #fff; text-align: left; display: flex; flex-direction: column; justify-content: space-between; }
-.pa-starter-survey .survey-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 10.5px; font-weight: 800; }
+.pa-starter-survey .survey-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 10.5px; font-weight: 800; }
 .pa-starter-survey .survey-pill { padding: 3px 9px; border-radius: 999px; background: rgba(229, 193, 88, 0.18); border: 1px solid #C9A227; color: #E5C158; }
 .pa-starter-survey .survey-period-badge { padding: 3px 9px; border-radius: 999px; background: #d1fae5; color: #022c22; }
 .pa-starter-survey h3 { margin: 0 0 10px; color: #fff; font-size: 16.5px; font-weight: 800; }
 .pa-starter-survey .survey-slide { display: none; }
 .pa-starter-survey .survey-slide.is-active { display: block; }
 .pa-starter-survey .survey-cards { display: flex; flex-direction: column; gap: 8px; }
-.pa-starter-survey .survey-card { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); color: #fff !important; text-decoration: none !important; font-size: 12px; }
+.pa-starter-survey .survey-card { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); color: #fff !important; text-decoration: none !important; font-size: 12px; }
+.pa-starter-survey .survey-card b { white-space: nowrap; }
 .pa-starter-survey a.survey-card:hover { background: rgba(201, 162, 39, 0.22); border-color: #E5C158; }
 .pa-starter-survey .survey-dots { display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
 .pa-starter-survey .survey-dot { padding: 5px 11px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.28); background: transparent; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
@@ -2903,6 +2921,8 @@ html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 
     box-shadow: -3px 6px 18px rgba(2, 44, 34, 0.14);
     text-decoration: none !important;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 #pa-aco-float.pa-aco-pos-middle_right { top: 50%; bottom: auto; transform: translateY(-50%); }
@@ -2949,8 +2969,6 @@ html[data-pa-theme="dark"] #pa-aco-float {
 }
 @media (prefers-reduced-motion: reduce) {
     .pa-hero-banner::before, .pa-hero-banner::after, .pa-hero-content { transform: none !important; transition: none !important; }
-    #pa-aco-float.pa-aco-is-gif .pa-aco-float-img { display: none !important; }
-    #pa-aco-float.pa-aco-is-gif .pa-aco-float-static { display: inline-flex; }
     * { scroll-behavior: auto !important; }
 }
 @media print {
@@ -2963,6 +2981,9 @@ html[data-pa-theme="dark"] #pa-aco-float {
 @media (max-width: 900px) { .pa-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 540px) { .pa-footer-grid { grid-template-columns: 1fr; } }
 .pa-footer-col h4 { margin: 0 0 10px; color: #E5C158; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
+.pa-footer-brand-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.pa-footer-brand-head h4 { margin: 0; }
+.pa-footer-logo-img { height: 38px; width: auto; max-width: 110px; border-radius: 8px; background: rgba(255, 255, 255, 0.96); padding: 3px 5px; object-fit: contain; flex-shrink: 0; }
 .pa-footer-col p { margin: 0 0 8px; line-height: 1.55; color: #e2e8f0; font-size: 12.5px; }
 .pa-footer-col ul { list-style: none; margin: 0; padding: 0; }
 .pa-footer-col li { margin-bottom: 6px; }
@@ -3113,8 +3134,8 @@ html[data-pa-nomotion="1"] *::after {
     transition: none !important;
     scroll-behavior: auto !important;
 }
-html[data-pa-nomotion="1"] .pa-aco-float-img { display: none !important; }
-html[data-pa-nomotion="1"] .pa-aco-float-static { display: inline-flex; }
+html[data-pa-nomotion="1"] #pa-aco-float.pa-aco-is-gif .pa-aco-float-img { display: none !important; }
+html[data-pa-nomotion="1"] #pa-aco-float.pa-aco-is-gif .pa-aco-float-static { display: inline-flex; }
 .pa-feeds-section, .pa-news-section, .pa-split-section, .pa-shell-footer {
     content-visibility: auto;
     contain-intrinsic-size: auto 360px;
@@ -3401,41 +3422,52 @@ html[data-pa-theme="dark"] .pa-cmdk-foot kbd { background: #182a20; border-color
 .pa-feed-item { border-bottom: 1px solid var(--pa-border, #e6f0eb); }
 .pa-feed-item:last-child { border-bottom: 0; }
 .pa-feed-item > a {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 2px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 2px;
     text-decoration: none !important;
     color: inherit;
     text-align: left;
 }
+.pa-feed-content {
+    flex: 1 1 0%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+}
 .pa-feed-date {
+    display: inline-block;
     font-size: 10.5px;
     font-weight: 700;
+    line-height: 1.25;
     color: #92400e;
     background: #fef9e7;
     border: 1px solid #f3dfa0;
     border-radius: 6px;
-    padding: 2px 6px;
+    padding: 2px 7px;
     white-space: nowrap;
-    min-width: 48px;
-    text-align: center;
+    flex-shrink: 0;
 }
 .pa-feed-title {
+    width: 100%;
     font-size: 12.5px;
     font-weight: 600;
-    line-height: 1.35;
+    line-height: 1.38;
     color: var(--pa-text, #0f172a);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    overflow-wrap: anywhere;
     text-align: left;
     transition: color 0.15s ease;
 }
 .pa-feed-item > a:hover .pa-feed-title { color: #056e4f; text-decoration: underline; }
-.pa-feed-ext { font-size: 12px; font-weight: 800; color: #C9A227; justify-self: end; }
+.pa-feed-ext { font-size: 12px; font-weight: 800; color: #C9A227; flex-shrink: 0; align-self: center; margin-left: auto; }
+.pa-ann-compact .pa-feed-list { max-height: none; overflow-y: visible; padding: 4px 2px; }
 .pa-feed-empty { padding: 12px 4px; font-size: 12.5px; color: var(--pa-muted, #64748b); }
 
 /* Modul Data Operasional Terstruktur (Pegawai, Sidang, Ghaib, Statistik) */
@@ -3477,6 +3509,7 @@ html[data-pa-theme="dark"] .pa-cmdk-foot kbd { background: #182a20; border-color
     justify-content: center;
     flex-shrink: 0;
 }
+.pa-pegawai-info { flex: 1 1 0%; min-width: 0; overflow-wrap: anywhere; }
 .pa-pegawai-cat { font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: #b45309; letter-spacing: 0.04em; }
 .pa-pegawai-info h3 { margin: 3px 0 4px; font-size: 14.5px; line-height: 1.3; }
 .pa-pegawai-role { margin: 0; font-size: 12.5px; color: var(--pa-muted, #475569); }
@@ -3692,6 +3725,7 @@ html[data-pa-theme="dark"] .pa-cmdk-badge { background: rgba(229, 193, 88, 0.2);
 }
 .pa-dirput-item-top {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
@@ -3715,6 +3749,7 @@ html[data-pa-theme="dark"] .pa-cmdk-badge { background: rgba(229, 193, 88, 0.2);
     line-height: 1.4;
     color: #0f172a;
     font-weight: 700;
+    overflow-wrap: anywhere;
 }
 .pa-dirput-ex {
     margin: 0;
@@ -3854,11 +3889,16 @@ add_action('wp_body_open', static function () {
             }
         }
     }
+    $logoUrl = trim((string) ($cfg['logo_url'] ?? ''));
     ?>
 <header class="pa-shell-masthead" role="banner">
     <div class="pa-shell-inner">
         <a class="pa-shell-brand" href="<?php echo esc_url(home_url('/')); ?>">
-            <span class="pa-shell-emblem">PA</span>
+            <?php if ($logoUrl !== '') : ?>
+                <img class="pa-shell-logo-img" src="<?php echo esc_url($logoUrl); ?>" alt="Logo <?php echo esc_attr($satker); ?>" fetchpriority="high" decoding="async">
+            <?php else : ?>
+                <span class="pa-shell-emblem">PA</span>
+            <?php endif; ?>
             <div>
                 <p class="pa-shell-brand-title"><?php echo esc_html($satker); ?></p>
                 <p class="pa-shell-brand-sub"><?php echo esc_html($tagline); ?></p>
@@ -3904,15 +3944,23 @@ add_action('wp_footer', static function () {
     if (is_admin()) {
         return;
     }
-    $cfg    = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
-    $satker = $cfg['satker_name'] ?? (get_bloginfo('name') ?: 'Pengadilan Agama');
-    $vStats = pa_starter_get_visitor_stats();
+    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $satker  = $cfg['satker_name'] ?? (get_bloginfo('name') ?: 'Pengadilan Agama');
+    $logoUrl = trim((string) ($cfg['logo_url'] ?? ''));
+    $vStats  = pa_starter_get_visitor_stats();
     if (!pa_sinova_is_adoption_mode()) :
     ?>
 <footer class="pa-shell-footer" role="contentinfo">
     <div class="pa-footer-grid">
         <div class="pa-footer-col">
-            <h4><?php echo esc_html($satker); ?></h4>
+            <?php if ($logoUrl !== '') : ?>
+                <div class="pa-footer-brand-head">
+                    <img class="pa-footer-logo-img" src="<?php echo esc_url($logoUrl); ?>" alt="Logo <?php echo esc_attr($satker); ?>" loading="lazy" decoding="async">
+                    <h4><?php echo esc_html($satker); ?></h4>
+                </div>
+            <?php else : ?>
+                <h4><?php echo esc_html($satker); ?></h4>
+            <?php endif; ?>
             <p><?php echo esc_html($cfg['address'] ?? 'Jl. Keadilan Raya No. 1'); ?></p>
             <p><strong>Telp / PTSP:</strong> <?php echo esc_html($cfg['phone'] ?? '-'); ?></p>
             <p><strong>Email:</strong> <?php echo esc_html($cfg['email'] ?? '-'); ?></p>
@@ -3957,7 +4005,7 @@ add_action('wp_footer', static function () {
         </div>
     </div>
 <?php
-    $starterVer    = defined('PA_SINOVA_STARTER_VERSION') ? (string) PA_SINOVA_STARTER_VERSION : '2.4.0';
+    $starterVer    = defined('PA_SINOVA_STARTER_VERSION') ? (string) PA_SINOVA_STARTER_VERSION : '2.4.1';
     $starterRepo   = defined('PA_SINOVA_GITHUB_REPO') ? ('https://github.com/' . ltrim((string) PA_SINOVA_GITHUB_REPO, '/')) : 'https://github.com/kang-devlp/pa-wordpress-sinova-starter';
     $creditMain    = trim((string) ($cfg['footer_credit_text'] ?? 'Pengadilan Agama Devlpr Community')) ?: 'Pengadilan Agama Devlpr Community';
     $creditSuffix  = trim((string) ($cfg['footer_credit_suffix'] ?? 'Portal Keterbukaan Informasi Publik'));
@@ -4686,16 +4734,19 @@ add_action('wp_footer', static function () {
                         a.setAttribute('target', '_blank');
                         a.setAttribute('rel', 'noopener noreferrer');
                         if(it.title) a.setAttribute('title', it.title);
+                        var contentSpan = document.createElement('span');
+                        contentSpan.className = 'pa-feed-content';
                         if(it.date_label){
                             var dt = document.createElement('span');
                             dt.className = 'pa-feed-date';
                             dt.textContent = String(it.date_label).replace(/\s+\d{4}$/, '').trim();
-                            a.appendChild(dt);
+                            contentSpan.appendChild(dt);
                         }
                         var ttl = document.createElement('span');
                         ttl.className = 'pa-feed-title';
                         ttl.textContent = it.title || '';
-                        a.appendChild(ttl);
+                        contentSpan.appendChild(ttl);
+                        a.appendChild(contentSpan);
                         var ext = document.createElement('span');
                         ext.className = 'pa-feed-ext';
                         ext.setAttribute('aria-hidden', 'true');

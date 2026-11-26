@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA Starter - Official RSS Feeds (MA RI & Badilag), Data Operasional, Quick Search & SEO JSON-LD
  * Description: Mengambil dan menayangkan pengumuman resmi Mahkamah Agung RI & Ditjen Badilag via RSS (SWR cache + SSRF guard), tabel & shortcode terstruktur Pegawai/Jadwal Sidang/Panggilan Ghaib/Statistik Perkara, REST API Pencarian Kilat Ctrl+K, serta Open Graph & JSON-LD GovernmentOrganization.
- * Version: 2.4.0-starter
+ * Version: 2.4.1-starter
  */
 
 defined('ABSPATH') || exit;
@@ -451,8 +451,10 @@ add_shortcode('pa_official_announcements', static function ($atts) {
             $html .= '<li class="pa-feed-item">'
                 . '<a href="' . esc_url((string) $it['link']) . '"' . $attr . ' title="' . esc_attr($title) . '">'
                 . $thumbHtml
+                . '<span class="pa-feed-content">'
                 . $dt
                 . '<span class="pa-feed-title">' . esc_html($title) . '</span>'
+                . '</span>'
                 . '<span class="pa-feed-ext" aria-hidden="true">' . $arr . '</span>'
                 . '</a>'
                 . '</li>';
@@ -1328,8 +1330,10 @@ function pa_portal_render_announcements_compact(string $heading = 'Pengumuman & 
                                         <span class="pa-feed-thumb pa-feed-thumb-ph" aria-hidden="true">📣</span>
                                     <?php endif; ?>
                                 <?php endif; ?>
-                                <?php if ($date !== '') : ?><span class="pa-feed-date"><?php echo esc_html($date); ?></span><?php endif; ?>
-                                <span class="pa-feed-title"><?php echo esc_html($title); ?></span>
+                                <span class="pa-feed-content">
+                                    <?php if ($date !== '') : ?><span class="pa-feed-date"><?php echo esc_html($date); ?></span><?php endif; ?>
+                                    <span class="pa-feed-title"><?php echo esc_html($title); ?></span>
+                                </span>
                             </a>
                         </li>
                     <?php endforeach; endif; ?>
@@ -1566,6 +1570,70 @@ add_action('rest_api_init', static function () {
 // 4. ENTERPRISE SEO: META DESCRIPTION, MANIFEST, FAVICON, OPEN GRAPH + JSON-LD
 // ============================================================================
 
+function pa_sinova_guess_icon_mime(string $url): string {
+    $path = strtolower((string) parse_url($url, PHP_URL_PATH));
+    if (preg_match('/\.svg$/', $path)) {
+        return 'image/svg+xml';
+    }
+    if (preg_match('/\.ico$/', $path)) {
+        return 'image/x-icon';
+    }
+    if (preg_match('/\.webp$/', $path)) {
+        return 'image/webp';
+    }
+    if (preg_match('/\.jpe?g$/', $path)) {
+        return 'image/jpeg';
+    }
+    if (preg_match('/\.gif$/', $path)) {
+        return 'image/gif';
+    }
+    return 'image/png';
+}
+
+function pa_sinova_resolve_favicon_meta(): array {
+    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $favUrl  = trim((string) ($cfg['favicon_url'] ?? ''));
+    $logoUrl = trim((string) ($cfg['logo_url'] ?? ''));
+    if ($favUrl !== '') {
+        return array('url' => $favUrl, 'mime' => pa_sinova_guess_icon_mime($favUrl), 'is_custom' => true);
+    }
+    if (function_exists('has_site_icon') && has_site_icon()) {
+        return array('url' => '', 'mime' => '', 'is_custom' => false);
+    }
+    if ($logoUrl !== '') {
+        return array('url' => $logoUrl, 'mime' => pa_sinova_guess_icon_mime($logoUrl), 'is_custom' => false);
+    }
+    return array('url' => home_url('/favicon.svg'), 'mime' => 'image/svg+xml', 'is_custom' => false);
+}
+
+function pa_sinova_emit_favicon_tags(array $fav): void {
+    if (empty($fav['url'])) {
+        return;
+    }
+    $url  = esc_url((string) $fav['url']);
+    $mime = esc_attr((string) ($fav['mime'] ?: 'image/png'));
+    echo '<link rel="icon" href="' . $url . '" type="' . $mime . '">' . "\n";
+    echo '<link rel="shortcut icon" href="' . $url . '" type="' . $mime . '">' . "\n";
+    echo '<link rel="apple-touch-icon" href="' . $url . '">' . "\n";
+}
+
+add_action('wp_head', static function () {
+    $fav = pa_sinova_resolve_favicon_meta();
+    if (!empty($fav['is_custom'])) {
+        remove_action('wp_head', 'wp_site_icon', 99);
+    }
+}, 1);
+
+add_action('admin_head', static function () {
+    $fav = pa_sinova_resolve_favicon_meta();
+    if (!empty($fav['is_custom'])) {
+        remove_action('admin_head', 'wp_site_icon', 99);
+    }
+    if (!empty($fav['url'])) {
+        pa_sinova_emit_favicon_tags($fav);
+    }
+}, 20);
+
 add_action('wp_head', static function () {
     if (is_admin() || (defined('PA_SERVING_CUSTOM_LOGIN') && PA_SERVING_CUSTOM_LOGIN)) {
         return;
@@ -1604,9 +1672,7 @@ add_action('wp_head', static function () {
     echo '<meta name="theme-color" content="#043927" media="(prefers-color-scheme: light)">' . "\n";
     echo '<meta name="theme-color" content="#0b141a" media="(prefers-color-scheme: dark)">' . "\n";
     echo '<link rel="manifest" href="' . esc_url(home_url('/manifest.webmanifest')) . '">' . "\n";
-    if (!function_exists('has_site_icon') || !has_site_icon()) {
-        echo '<link rel="icon" href="' . esc_url(home_url('/favicon.svg')) . '" type="image/svg+xml">' . "\n";
-    }
+    pa_sinova_emit_favicon_tags(pa_sinova_resolve_favicon_meta());
 
     $seoPluginActive = defined('WPSEO_VERSION') || defined('RANK_MATH_VERSION');
     if (!$seoPluginActive) {

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - Security Hardening, Anti-Judol WAF, Rate Limiter, TOTP MFA & Hidden Login
  * Description: Pengamanan berlapis portal Pengadilan Agama: Brute-Force Rate Limiter, TOTP MFA RFC 6238 bawaan, idle timeout 60 menit, kebijakan password kuat, Hidden Login URL 404, OWASP Headers, proteksi folder .htaccess, Anti-Judol WAF, & CAPTCHA login.
- * Version: 2.3.1-starter
+ * Version: 2.4.1-starter
  */
 
 defined('ABSPATH') || exit;
@@ -160,6 +160,16 @@ add_action('wp_loaded', static function () {
             header('Cache-Control: public, max-age=86400');
         }
         $satker = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'Pengadilan Agama');
+        $cfg    = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+        $iconSrc = trim((string) ($cfg['favicon_url'] ?? ''));
+        if ($iconSrc === '') {
+            $iconSrc = trim((string) ($cfg['logo_url'] ?? ''));
+        }
+        if ($iconSrc === '') {
+            $iconSrc = home_url('/favicon.svg');
+        }
+        $iconType  = function_exists('pa_sinova_guess_icon_mime') ? pa_sinova_guess_icon_mime($iconSrc) : (preg_match('/\.svg(?:$|\?)/i', $iconSrc) ? 'image/svg+xml' : 'image/png');
+        $iconSizes = ($iconType === 'image/svg+xml') ? 'any' : '512x512';
         echo wp_json_encode(array(
             'name'             => $satker,
             'short_name'       => mb_substr($satker, 0, 28, 'UTF-8'),
@@ -172,9 +182,9 @@ add_action('wp_loaded', static function () {
             'background_color' => '#f4faf7',
             'icons'            => array(
                 array(
-                    'src'     => home_url('/favicon.svg'),
-                    'sizes'   => 'any',
-                    'type'    => 'image/svg+xml',
+                    'src'     => $iconSrc,
+                    'sizes'   => $iconSizes,
+                    'type'    => $iconType,
                     'purpose' => 'any maskable',
                 ),
             ),
