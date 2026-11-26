@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - UI Portal Resmi PA, Pencarian, Statistik Pengunjung, Sidebar Halaman Dalam & Aksesibilitas Lengkap
  * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, bebas istilah internal di tampilan publik, kotak pencarian header, statistik pengunjung privasi ter-hash, sidebar & breadcrumb halaman dalam, serta dock disabilitas dengan Pembaca Suara Bahasa Indonesia.
- * Version: 2.3.1-starter
+ * Version: 2.3.4-starter
  */
 
 defined('ABSPATH') || exit;
@@ -2744,7 +2744,29 @@ html[data-pa-theme="dark"] #pa-aco-float {
 .pa-footer-vis-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
 .pa-footer-vis-row:last-child { margin-bottom: 0; }
 .pa-footer-vis-row strong { color: #E5C158; font-variant-numeric: tabular-nums; }
-.pa-shell-footer-bottom { max-width: 1180px; margin: 0 auto; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.14); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; }
+.pa-shell-footer-bottom { max-width: 1180px; margin: 0 auto; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.14); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; font-size: 12px; }
+.pa-footer-credit-wrap { position: relative; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+.pa-shell-footer .pa-footer-credit-trigger { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #d1fae5; text-decoration: none; line-height: 1.5; border-radius: 6px; transition: color 0.16s ease; }
+.pa-shell-footer .pa-footer-credit-trigger:hover,
+.pa-shell-footer .pa-footer-credit-trigger:focus-visible { color: #E5C158; text-decoration: none; }
+.pa-shell-footer .pa-footer-credit-trigger:focus-visible { outline: 2px solid #E5C158; outline-offset: 3px; }
+.pa-footer-ver-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: rgba(229, 193, 88, 0.14); border: 1px solid rgba(229, 193, 88, 0.42); color: #E5C158; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+.pa-footer-credit-popover { position: absolute; left: 0; bottom: 100%; padding-bottom: 10px; width: max-content; max-width: min(370px, calc(100vw - 32px)); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(6px); transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease; z-index: 9999; }
+.pa-footer-credit-wrap:hover .pa-footer-credit-popover,
+.pa-footer-credit-wrap:focus-within .pa-footer-credit-popover { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.pa-footer-credit-wrap.is-dismissed .pa-footer-credit-popover { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+.pa-footer-credit-card { position: relative; background: #012119; color: #ecfdf5; border: 1px solid #C9A227; border-radius: 12px; padding: 11px 14px; box-shadow: 0 14px 30px rgba(0, 0, 0, 0.36); text-align: left; line-height: 1.45; }
+.pa-footer-credit-card::after { content: ''; position: absolute; left: 22px; top: 100%; border-width: 6px 6px 0; border-style: solid; border-color: #C9A227 transparent transparent; }
+.pa-footer-credit-main { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12.5px; color: #ffffff; font-weight: 600; }
+.pa-footer-credit-main strong { color: #E5C158; font-weight: 800; }
+.pa-heart-ico { color: #fb7185; flex-shrink: 0; display: inline-block; vertical-align: middle; filter: drop-shadow(0 0 6px rgba(251, 113, 133, 0.45)); animation: paHeartBeat 1.8s ease-in-out infinite; }
+@keyframes paHeartBeat { 0%, 100% { transform: scale(1); } 18% { transform: scale(1.18); } 34% { transform: scale(0.98); } 50% { transform: scale(1.14); } }
+.pa-footer-credit-sub { margin-top: 4px; font-size: 11px; color: #a7f3d0; }
+.pa-footer-credit-meta { margin-top: 7px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.12); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11px; color: #cbd5e1; }
+.pa-footer-pop-ver { display: inline-block; padding: 1px 7px; border-radius: 999px; background: rgba(201, 162, 39, 0.22); border: 1px solid rgba(229, 193, 88, 0.45); color: #fde68a; font-weight: 700; }
+html[data-pa-nomotion="1"] .pa-heart-ico,
+html[data-pa-nomotion="1"] .pa-footer-credit-popover { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .pa-heart-ico { animation: none; } .pa-footer-credit-popover { transition: none; } }
 .pa-shell-render-pill { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(229, 193, 88, 0.16); border: 1px solid rgba(229, 193, 88, 0.45); color: #E5C158; font-size: 12px; font-weight: 700; }
 
 /* Dark Mode & Kontras Tinggi (Astra + Block Theme) */
@@ -3709,8 +3731,32 @@ add_action('wp_footer', static function () {
             </div>
         </div>
     </div>
+<?php
+    $starterVer = defined('PA_SINOVA_STARTER_VERSION') ? (string) PA_SINOVA_STARTER_VERSION : '2.3.4';
+    $starterRepo = defined('PA_SINOVA_GITHUB_REPO') ? ('https://github.com/' . ltrim((string) PA_SINOVA_GITHUB_REPO, '/')) : 'https://github.com/kang-devlp/pa-wordpress-sinova-starter';
+    ?>
     <div class="pa-shell-footer-bottom">
-        <span>&copy; <?php echo esc_html((string) wp_date('Y')); ?> <?php echo esc_html($satker); ?> · Portal Resmi Keterbukaan Informasi Publik</span>
+        <div class="pa-footer-credit-wrap">
+            <a class="pa-footer-credit-trigger" href="<?php echo esc_url($starterRepo); ?>" target="_blank" rel="noopener noreferrer" aria-describedby="pa-footer-credit-card">
+                <span>&copy; <?php echo esc_html((string) wp_date('Y')); ?> Pengadilan Agama Devlp Community &middot; Portal Keterbukaan Informasi Publik</span>
+                <span class="pa-footer-ver-badge">v<?php echo esc_html($starterVer); ?></span>
+            </a>
+            <div class="pa-footer-credit-popover" id="pa-footer-credit-card" role="tooltip">
+                <div class="pa-footer-credit-card">
+                    <div class="pa-footer-credit-main">
+                        <span>Developed with</span>
+                        <svg class="pa-heart-ico" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        <span>by</span>
+                        <strong>Pengadilan Agama Devlp Community</strong>
+                    </div>
+                    <div class="pa-footer-credit-sub">Kolaborasi Penggiat IT Peradilan Agama &middot; PA WordPress SINOVA Starter Kit</div>
+                    <div class="pa-footer-credit-meta">
+                        <span class="pa-footer-pop-ver">Versi <?php echo esc_html($starterVer); ?></span>
+                        <span>Satker: <?php echo esc_html($satker); ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
         <span class="pa-shell-render-pill">Rendering : <?php echo esc_html(timer_stop(0, 3)); ?> detik.</span>
     </div>
 </footer>
@@ -4730,13 +4776,25 @@ add_action('wp_footer', static function () {
         }
     }
 
+    var footerCredit = document.querySelector('.pa-footer-credit-wrap');
+    if(footerCredit){
+        footerCredit.addEventListener('mouseleave', function(){ footerCredit.classList.remove('is-dismissed'); });
+        footerCredit.addEventListener('focusout', function(e){
+            if(!footerCredit.contains(e.relatedTarget)) footerCredit.classList.remove('is-dismissed');
+        });
+    }
+
     document.addEventListener('keydown', function(e){
         if((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')){
             e.preventDefault();
             if(cmdDlg && cmdDlg.open) cmdDlg.close(); else openCmd();
-        } else if(e.key === 'Escape' && a11yPanel && !a11yPanel.hasAttribute('hidden')){
-            setA11yOpen(false);
-            if(a11yToggle) a11yToggle.focus();
+        } else if(e.key === 'Escape'){
+            if(a11yPanel && !a11yPanel.hasAttribute('hidden')){
+                setA11yOpen(false);
+                if(a11yToggle) a11yToggle.focus();
+            } else if(footerCredit && (footerCredit.matches(':hover') || footerCredit.contains(document.activeElement))){
+                footerCredit.classList.add('is-dismissed');
+            }
         }
     });
 })();

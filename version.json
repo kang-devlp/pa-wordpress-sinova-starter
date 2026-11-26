@@ -1,10 +1,10 @@
 {
-  "version": "2.3.3",
+  "version": "2.3.4",
   "released_at": "2026-11-26",
   "requires_php": "8.1",
   "requires_wp": "6.2",
   "tested_wp": "7.0",
   "repo": "kang-devlp/pa-wordpress-sinova-starter",
   "download_url": "https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip",
-  "changelog": "v2.3.3: Perbaikan ikon/logo CCTV ACO agar selalu tampil di semua konfigurasi (URL relatif same-origin, endpoint PHP fallback /?pa_aco_asset=1 & /pa-aco-cctv.gif, fallback ikon vektor otomatis, serta auto-purge cache HTML saat aktivasi/upgrade plugin) di atas seluruh fitur v2.3.2."
+  "changelog": "v2.3.4: Pembaruan kredit footer menjadi Pengadilan Agama Devlp Community disertai hover card copyright 'Developed with love', badge versi Starter Kit, dan metadata satker."
 }
