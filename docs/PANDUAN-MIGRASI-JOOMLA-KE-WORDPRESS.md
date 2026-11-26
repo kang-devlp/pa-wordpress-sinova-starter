@@ -32,9 +32,9 @@ Banyak website satuan kerja Pengadilan Agama yang awalnya dibangun di atas CMS J
 
 ```mermaid
 flowchart TD
-    A["1. Website Joomla Lama (Online)"] -->|Backup SQL & Folder images/| B["2. Lingkungan Staging / Lokal (Laragon/XAMPP)"]
-    B -->|Impor via FG Joomla to WordPress| C["3. WordPress Siap Konten (Berita & Media Terbawa)"]
-    C -->|Salin mu-plugins + Aktifkan Mode Adopsi| D["4. PA SINOVA Starter Aktif (Menu & Konten Aman)"]
+    A["1. Website Joomla / WP Lama"] -->|Backup SQL & Folder images/ atau Ekspor XML| B["2. Lingkungan Staging / Lokal (Laragon/XAMPP)"]
+    B -->|Impor via FG Joomla / WP Importer + Media| C["3. WordPress Siap Konten (Pos, Laman & Foto Terbawa)"]
+    C -->|Upload pa-sinova-starter.zip atau salin mu-plugins| D["4. PA SINOVA v2.5.0 Aktif (Pilih Tampilan Baru vs Adopsi)"]
     D -->|Audit 35 Kriteria & Redirect 301| E["5. Cut-Over ke Domain Resmi .go.id"]
 ```
 
@@ -104,12 +104,14 @@ Buka menu **Tools → Import → Joomla (FG)** di WP Admin, lalu isi data beriku
 Gulir ke bawah pada bagian **Behavior**:
 * **Import into WordPress:**
   * Centang **Posts** (Berita) dan **Categories** (Kategori).
-  * *Tips:* Untuk **Pages**, jika Anda ingin memakai halaman profil dan layanan resmi bawaan SINOVA SK 2722/2026, Anda boleh **tidak mencentang Pages** agar halaman statis lama tidak menumpuk. Namun jika ada halaman khusus yang ingin disimpan, centang Pages.
-* **Media:**
-  * Centang **Import images** (Impor gambar).
+  * *Tips:* Untuk **Pages** (Laman), jika ada halaman statis penting dari Joomla yang ingin dipertahankan, silakan centang **Pages**. Namun bila Anda ingin memakai struktur 23+ laman resmi bawaan SINOVA SK 2722/2026 tanpa duplikasi, Anda dapat membiarkannya tidak tercentang (atau merapikannya setelah impor).
+* **Media & Foto Berita:**
+  * Centang **Import images** / **Import media** agar seluruh file foto di artikel disalin ke Media Library (`wp-content/uploads/`).
+  * Pada opsi **Featured image**, pilih **Intro image** atau **First image of the post** agar setiap berita langsung punya thumbnail *Featured Image* WordPress.
   * Centang **Keep original upload dates** (Pertahankan tanggal terbit asli).
-  * Pilih ukuran thumbnail default.
+  * *Catatan sinkronisasi otomatis PA SINOVA v2.5.0:* Seandainya ada berita hasil migrasi yang belum memiliki *Featured Image* (hanya berisi `<img src="...">` di isi artikel), fungsi `pa_portal_extract_post_thumb()` otomatis mengambil foto pertama di isi berita tersebut untuk kartu berita Beranda, pengumuman, dan widget portal (termasuk mengubah path relatif `/images/...` melalui `home_url()`).
 * **Time out limit:** Ubah ke `120` atau `300` detik bila server Anda memiliki spesifikasi standar.
+* *Catatan Firewall:* Filter Anti-Judol PA SINOVA otomatis nonaktif selama proses impor (`WP_IMPORTING`), sehingga impor ribuan berita/halaman lama tidak akan terblokir *false-positive*.
 
 ### 2.5. Eksekusi Impor
 1. Klik tombol biru: **"Import content from Joomla to WordPress"**.
@@ -129,45 +131,53 @@ Setelah konten Joomla berhasil menjadi postingan WordPress, saatnya menerapkan *
 2. Pilih opsi **Post name** (`/%postname%/`).
 3. Klik **Save Changes**. Hal ini memastikan URL berita ramah mesin pencari (SEO) dan sesuai standar SINOVA.
 
-### 3.2. Salin Berkas Starter Kit
-Salin seluruh 6 berkas PHP dan folder `assets/` dari paket starter kit:
-```text
-wordpress-mu-plugins/
-├── 00-pa-sinova-config.php
-├── pa-sinova-hub.php
-├── pa-official-feeds-and-data.php
-├── pa-home-page-cache.php
-├── pa-security-hardening.php
-├── pa-ui-performance-a11y.php
-└── assets/                     <-- JANGAN LUPA SALIN FOLDER ASSETS INI
-```
-Tempelkan (*paste*) ke direktori:
-```text
-wp-content/mu-plugins/
-```
-*(Jika folder `mu-plugins` belum ada di dalam `wp-content/`, buat folder baru dengan nama tersebut).*
+### 3.2. Pasang PA SINOVA Starter Kit v2.5.0
+Pilih **salah satu** metode pemasangan berikut:
+
+* **Metode A — Upload ZIP 1-Klik (Disarankan):**
+  1. Buka **WP Admin → Plugins → Add New Plugin → Upload Plugin**.
+  2. Pilih berkas `dist/pa-sinova-starter.zip`, lalu klik **Install Now → Activate Plugin**.
+  3. Seluruh 6 modul inti PHP, `assets/cctv-aco.gif`, dan 5 gambar dummy SVG otomatis terpasang sekaligus mendukung pembaruan 1-klik dari GitHub.
+* **Metode B — Salin Manual ke `wp-content/mu-plugins/`:**
+  Salin seluruh 6 berkas PHP dan folder `assets/` dari folder `wordpress-mu-plugins/` paket rilis:
+  ```text
+  wp-content/mu-plugins/
+  ├── 00-pa-sinova-config.php
+  ├── pa-sinova-hub.php
+  ├── pa-official-feeds-and-data.php
+  ├── pa-home-page-cache.php
+  ├── pa-security-hardening.php
+  ├── pa-ui-performance-a11y.php
+  └── assets/                     <-- JANGAN LUPA (isi: cctv-aco.gif + dummy-*.svg)
+  ```
 
 ---
 
-### 3.3. ⚠️ Langkah Kunci: Aktifkan "Mode Adopsi Situs Lama"
+### 3.3. ⚠️ Pilih Mode Setelah Aktivasi (Tampilan Baru v2.5.0 vs Adopsi Situs Lama)
 
-> [!CAUTION]
-> **JANGAN LANGSUNG MENJALANKAN SEEDER STANDAR TANPA MODE ADOPSI!**  
-> Menjalankan seeder standar tanpa mode adopsi akan membuat menu navigasi baru dan berisiko mengganti pengaturan halaman Beranda Anda.
+Saat Anda mengaktifkan `pa-sinova-starter.zip` pada WordPress yang sudah berisi konten (> 2 postingan berita, > 3 laman, atau terdeteksi Elementor/Divi/WPBakery), sistem otomatis menyalakan **Mode Adopsi Situs Lama** (`preserve_existing_design` + CSP `compat`) demi keamanan agar menu dan beranda eksisting tidak tertimpa mendadak.
 
-Lakukan langkah pengamanan berikut:
+Pilih skenario yang sesuai dengan kondisi satker Anda:
 
-1. Buka **WP Admin → SINOVA Hub**.
-2. Klik tab **"Migrasi & Adopsi"** (di samping tab Pengaturan Satker).
-3. Beri tanda centang pada opsi:
-   ☑ **"Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)"**
-4. Klik tombol **"Simpan Mode & Jalankan Seeder Aman"**.
+#### Skenario A — Dari Joomla (atau WP Baru) dan Ingin Memakai Tampilan Modern PA SINOVA v2.5.0
+Berita dan halaman yang sudah diimpor **tetap aman** dan **tidak dihapus** oleh seeder SINOVA.
+1. Buka **WP Admin → SINOVA Hub → tab Migrasi & Adopsi**.
+2. **Hapus tanda centang** pada *"Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)"*, lalu simpan.
+3. Jalankan **Generate Halaman, Beranda & Menu (1-Klik)**.
+4. Hasilnya:
+   * ✅ Seluruh postingan berita & foto hasil migrasi Joomla tetap utuh dan otomatis tampil di grid Berita Terkini & Pengumuman Beranda.
+   * ✅ Halaman statis lama yang sudah ada tetap tersimpan di **Pages** (sistem hanya membuat halaman wajib SINOVA/KMA 2-144/2022 yang belum ada).
+   * ✅ Beranda modern 12-kolom + 6 Menu Utama Standar SK 2722/2026 langsung aktif.
 
-#### Apa yang Dilakukan Mode Adopsi?
-* ✅ **Menu Navigasi Aman:** Menu yang sudah dibuat dari hasil migrasi Joomla tidak akan dihapus atau diganti.
-* ✅ **Beranda Tidak Tertimpa:** Halaman depan situs Anda tetap utuh sesuai tema WordPress yang Anda pilih (misal: Astra / Hello Elementor).
-* ✅ **CSP Otomatis Kompatibel (`compat`):** Mencegah stylesheet atau script bawaan tema lama terblokir oleh pengamanan ketat browser.
-* ✅ **Menambahkan Modul SINOVA Bersih:** Sistem hanya akan melengkapi 23 modul dokumen (LRA, DIPA, Renstra, dll.) dan halaman wajib yang belum ada tanpa menyentuh postingan berita lama.
+#### Skenario B — Website WordPress Lama (Elementor / Tema Eksisting) yang Tetap Mempertahankan Desain & Menu Lama
+1. Pastikan di **WP Admin → SINOVA Hub → tab Migrasi & Adopsi**, opsi:
+   ☑ **"Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)"** tetap **tercentang**.
+2. Klik tombol **"Simpan Mode & Jalankan Seeder Aman"**.
+3. Hasilnya:
+   * ✅ **Menu Navigasi Aman:** Menu utama dan header situs lama tidak akan dihapus atau diganti.
+   * ✅ **Beranda Tidak Tertimpa:** Halaman depan Elementor / Astra / tema lama Anda tetap utuh.
+   * ✅ **CSP Otomatis Kompatibel (`compat`):** Mencegah stylesheet atau script tema lama terblokir browser.
+   * ✅ **Modul SINOVA Terpasang Rapi:** Sistem hanya menambahkan 23+ laman arsip dokumen (LRA, DIPA, Renstra, dll.) yang belum ada tanpa menyentuh postingan berita maupun halaman lama.
 
 ---
 
@@ -202,6 +212,29 @@ Agar pengunjung dari Google atau media sosial tidak menemui pesan error **404 No
 
 ---
 
+## Tahap 5: Migrasi dari Website WordPress Lama ke PA SINOVA v2.5.0
+
+Jika satker saat ini **sudah menggunakan WordPress**, terdapat dua jalur yang sama-sama menjaga seluruh **berita (Posts), laman (Pages), dan foto (Media Library)**:
+
+### Jalur 1 — Pasang Langsung di Website WordPress Saat Ini (*In-Place*)
+1. Backup penuh database & `wp-content/uploads/` sebelum memulai.
+2. Upload dan aktifkan `dist/pa-sinova-starter.zip` melalui **Plugins → Add New Plugin → Upload Plugin**.
+3. Karena sistem mendeteksi postingan/laman lama Anda, **Mode Adopsi Situs Lama** aktif otomatis agar menu dan beranda lama tidak berubah mendadak:
+   * Jika ingin mempertahankan desain lama → cukup klik **Simpan Mode & Jalankan Seeder Aman** di tab **Migrasi & Adopsi**.
+   * Jika ingin beralih ke tampilan Beranda v2.5.0 + 6 Menu Standar → matikan centang **Mode Adopsi** lalu klik **Generate Halaman, Beranda & Menu (1-Klik)**. Seluruh berita, kategori, laman lama, dan foto Media Library tetap utuh.
+
+### Jalur 2 — Pindah dari WordPress Lama ke Instalasi WordPress Baru (*Fresh Install*)
+1. **Di WordPress Lama:** Buka **Tools → Export → All content** (atau ekspor terpisah *Posts* dan *Pages*) untuk mengunduh berkas `.xml` (*WXR*). **Pastikan website WordPress lama masih online/dapat diakses** selama proses impor berlangsung agar lampiran foto bisa diunduh otomatis.
+2. **Di WordPress Baru:**
+   * Buka **Tools → Import → WordPress → Run Importer**.
+   * Unggah file `.xml` dari WP lama.
+   * **WAJIB centang kotak `"Download and import file attachments"`** pada halaman *Assign Authors* sebelum klik **Submit**, agar seluruh foto berita & gambar di dalam laman disalin masuk ke `wp-content/uploads/` WordPress baru.
+   * *(Alternatif bila situs WP lama offline / pakai banyak Custom Post Type & Elementor)*: gunakan plugin kloning utuh seperti **All-in-One WP Migration** atau **UpdraftPlus** agar database dan seluruh folder `uploads/` pindah 100% identik, baru kemudian aktifkan `pa-sinova-starter.zip`.
+3. Pasang `pa-sinova-starter.zip`, sesuaikan **Settings → Permalinks (`/%postname%/`)**, lalu pilih **Skenario A** atau **Skenario B** pada **Tahap 3.3** di atas.
+4. Untuk berita lama yang *Featured Image*-nya tidak ikut terset (hanya berupa gambar di dalam badan artikel), modul Beranda PA SINOVA otomatis menampilkan gambar pertama artikel via `pa_portal_extract_post_thumb()`.
+
+---
+
 ## 7. Matriks Troubleshooting & Solusi Error Umum
 
 Berikut daftar kendala yang paling sering dikeluhkan operator satker saat migrasi Joomla ke WordPress, beserta solusi teknisnya:
@@ -221,13 +254,13 @@ Berikut daftar kendala yang paling sering dikeluhkan operator satker saat migras
 
 Lakukan verifikasi 5 menit sebelum memindahkan domain resmi ke WordPress baru:
 
-- [ ] Seluruh artikel berita lama dari tahun ke tahun dapat dibuka dengan isi dan gambar lengkap.
+- [ ] Seluruh artikel berita dan laman penting lama dapat dibuka dengan isi dan foto lengkap (termasuk gambar di Media Library).
 - [ ] Permalink WordPress sudah berformat `/%postname%/`.
-- [ ] Mode Adopsi aktif di **WP Admin → SINOVA Hub → tab Migrasi & Adopsi**.
+- [ ] Mode tampilan telah dipastikan di **WP Admin → SINOVA Hub → tab Migrasi & Adopsi** (Mode Adopsi ON jika pakai tema/menu lama, atau OFF + Seeder 1-Klik jika memakai Beranda modern v2.5.0).
 - [ ] Nilai kepatuhan pada **Dashboard 3 Pilar & 35 Kriteria** telah diperiksa (skor target &ge; 90 / Predikat Sangat Baik).
 - [ ] URL login admin telah diamankan dan MFA TOTP diaktifkan untuk akun operator.
-- [ ] Aturan Redirect 301 aktif untuk mencegah error 404 dari Google.
-- [ ] Plugin *FG Joomla to WordPress* telah dinonaktifkan dan dihapus.
+- [ ] Aturan Redirect 301 aktif untuk mencegah error 404 dari Google (khususnya URL `/index.php/...` dari Joomla).
+- [ ] Plugin *FG Joomla to WordPress* (jika dari Joomla) telah dinonaktifkan dan dihapus.
 - [ ] Sertifikat SSL/HTTPS aktif pada domain resmi `.go.id`.
 
 ---

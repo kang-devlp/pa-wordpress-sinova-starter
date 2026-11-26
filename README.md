@@ -60,13 +60,17 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 |---|---|
 | ![Direktori Putusan Hybrid](docs/screenshots/direktori-putusan.png) | ![Arsip Dokumen Publik](docs/screenshots/modul-sinova.png) |
 
-| Dashboard Kepatuhan 35 Kriteria | Migrasi & Adopsi Situs Lama |
+| Dashboard Kepatuhan 3 Pilar & 35 Kriteria (v2.5.0) | Desain & Tata Letak Beranda 12-Kolom (v2.5.0) |
 |---|---|
-| ![Dashboard 35 Kriteria](docs/screenshots/admin-dashboard-35.png) | ![Migrasi & Adopsi Situs Lama](docs/screenshots/admin-migrasi-adopsi.png) |
+| ![Dashboard 35 Kriteria](docs/screenshots/admin-dashboard-35.png) | ![Desain Beranda 12-Kolom](docs/screenshots/admin-beranda-grid.png) |
 
-| Keamanan MFA & Sembunyikan Login | |
+| Jadwal Sidang & Sinkronisasi SIPP (v2.5.0) | Keamanan, Update 1-Klik & FIM SHA-256 (v2.5.0) |
 |---|---|
-| ![Keamanan & Login](docs/screenshots/admin-keamanan-login.png) | |
+| ![Jadwal Sidang & SIPP](docs/screenshots/admin-jadwal-sidang.png) | ![Keamanan & Update](docs/screenshots/admin-keamanan-login.png) |
+
+| Migrasi & Adopsi Situs Lama (Non-Destruktif) | |
+|---|---|
+| ![Migrasi & Adopsi Situs Lama](docs/screenshots/admin-migrasi-adopsi.png) | |
 
 ---
 
@@ -80,11 +84,12 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 
 ---
 
-## Memasang di Website Lama / Migrasi dari Joomla (Tanpa Hapus Berita)
+## Memasang di Website Lama / Migrasi dari Joomla & WordPress (Tanpa Hapus Berita & Foto)
 
-- **WordPress Lama (Elementor / desain eksisting):** Setelah pasang plugin/`mu-plugins`, **wajib** buka **SINOVA Hub → Migrasi & Adopsi**, centang **"Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)"**, lalu klik **`Simpan Mode & Jalankan Seeder Aman`**.
-- **Migrasi dari Joomla (1.5 s.d. 5.x):** Gunakan plugin gratis **`FG Joomla to WordPress`**, lalu aktifkan **Mode Adopsi** sebelum menjalankan Seeder.  
-  📖 Panduan lengkap beserta solusi error umum: **[docs/PANDUAN-MIGRASI-JOOMLA-KE-WORDPRESS.md](docs/PANDUAN-MIGRASI-JOOMLA-KE-WORDPRESS.md)**.
+- **WordPress Lama (In-Place / Elementor / desain eksisting):** Saat mengaktifkan `dist/pa-sinova-starter.zip` di situs yang sudah berisi konten (> 2 pos / > 3 laman / page builder), **Mode Adopsi Situs Lama** otomatis aktif agar menu dan beranda tidak tertimpa. Klik **`Simpan Mode & Jalankan Seeder Aman`** di **SINOVA Hub → Migrasi & Adopsi** bila ingin mempertahankan desain lama, atau matikan Mode Adopsi lalu jalankan Seeder 1-Klik bila ingin beralih ke Beranda v2.5.0.
+- **Pindah ke WordPress Baru (WP → WP):** Ekspor dari WP lama lewat **Tools → Export**, lalu di WP baru impor lewat **Tools → Import → WordPress** dengan **wajib mencentang `"Download and import file attachments"`** (pastikan situs lama masih online saat impor, atau pakai kloning penuh seperti *All-in-One WP Migration*).
+- **Migrasi dari Joomla (1.5 s.d. 5.x):** Gunakan **`FG Joomla to WordPress`** (*Import media* + *Featured image: Intro/First image* aktif). Apabila ada pos migrasi yang belum punya *Featured Image*, portal v2.5.0 otomatis mengambil foto pertama di isi berita via `pa_portal_extract_post_thumb()`.  
+  📖 Panduan lengkap beserta Skenario A/B dan solusi error umum: **[docs/PANDUAN-MIGRASI-JOOMLA-KE-WORDPRESS.md](docs/PANDUAN-MIGRASI-JOOMLA-KE-WORDPRESS.md)**.
 
 ---
 
@@ -103,7 +108,7 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 ```text
 ├── dist/pa-sinova-starter.zip             # Paket plugin WordPress siap upload (1-klik)
 ├── version.json                           # Manifest versi untuk Update 1-Klik dari GitHub
-├── wordpress-mu-plugins/                  # 6 file inti PHP + assets/cctv-aco.gif
+├── wordpress-mu-plugins/                  # 6 file inti PHP + assets/ (CCTV ACO & 5 foto dummy SVG)
 ├── wordpress-plugin-wrapper/              # Pembungkus plugin standar WP + anti-bentrok
 ├── wordpress-templates/                   # Referensi template HTML Beranda
 ├── scripts/build-plugin-zip.sh            # Skrip pembuat ulang dist/pa-sinova-starter.zip
