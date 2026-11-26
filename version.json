@@ -1,10 +1,10 @@
 {
-  "version": "2.3.4",
+  "version": "2.4.0",
   "released_at": "2026-11-26",
   "requires_php": "8.1",
   "requires_wp": "6.2",
   "tested_wp": "7.0",
   "repo": "kang-devlp/pa-wordpress-sinova-starter",
   "download_url": "https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip",
-  "changelog": "v2.3.4: Pembaruan kredit footer menjadi Pengadilan Agama Devlp Community disertai hover card copyright 'Developed with love', badge versi Starter Kit, dan metadata satker."
+  "changelog": "v2.4.0: Kredit footer editable (PA Devlpr Community + hover di badge versi), logo ACO fleksibel/geser & media upload, teks berjalan Info Layanan beranimasi, blok khusus Iframe/Gambar/Slider, thumbnail berita & pengumuman, perbaikan pencarian & auto-sync Direktori Putusan, serta dashboard admin ber-tab & tooltip (i) super ringkas."
 }

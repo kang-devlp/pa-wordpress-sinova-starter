@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA Starter - Official RSS Feeds (MA RI & Badilag), Data Operasional, Quick Search & SEO JSON-LD
  * Description: Mengambil dan menayangkan pengumuman resmi Mahkamah Agung RI & Ditjen Badilag via RSS (SWR cache + SSRF guard), tabel & shortcode terstruktur Pegawai/Jadwal Sidang/Panggilan Ghaib/Statistik Perkara, REST API Pencarian Kilat Ctrl+K, serta Open Graph & JSON-LD GovernmentOrganization.
- * Version: 2.3.0-starter
+ * Version: 2.4.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -302,16 +302,30 @@ add_action('rest_api_init', static function () {
     ));
 });
 
-add_shortcode('pa_official_announcements', static function ($atts) {
-    $cfgAtts = shortcode_atts(array('limit' => 4), $atts, 'pa_official_announcements');
-    $limit   = max(1, min(10, (int) $cfgAtts['limit']));
-    $feeds   = pa_portal_get_official_feeds(false);
-    $maList  = array_slice((array) ($feeds['ma'] ?? array()), 0, $limit);
-    $bdList  = array_slice((array) ($feeds['badilag'] ?? array()), 0, $limit);
-    $needsHydrate = empty($maList) && empty($bdList);
+function pa_portal_extract_post_thumb(WP_Post $post, string $size = 'medium_large'): string {
+    if (function_exists('get_the_post_thumbnail_url')) {
+        $featured = get_the_post_thumbnail_url($post->ID, $size);
+        if (is_string($featured) && $featured !== '') {
+            return esc_url_raw($featured, array('http', 'https'));
+        }
+    }
+    if (preg_match('/<img\b[^>]*\bsrc=["\']([^"\']+)["\']/i', (string) $post->post_content, $m)) {
+        $src = html_entity_decode(trim((string) $m[1]), ENT_QUOTES, 'UTF-8');
+        if (strpos($src, '/') === 0 && strpos($src, '//') !== 0) {
+            $src = home_url($src);
+        }
+        $clean = esc_url_raw($src, array('http', 'https'));
+        if ($clean !== '' && !preg_match('/^(?:javascript|data):/i', $clean)) {
+            return $clean;
+        }
+    }
+    return '';
+}
 
-    $satkerList    = array();
-    $satkerPostCnt = 0;
+function pa_portal_get_satker_announcements(int $limit = 5): array {
+    $limit      = max(1, min(12, $limit));
+    $satkerList = array();
+
     if (function_exists('get_posts')) {
         $annPosts = get_posts(array(
             'post_type'      => 'post',
@@ -322,13 +336,20 @@ add_shortcode('pa_official_announcements', static function ($atts) {
             'order'          => 'DESC',
         ));
         foreach ((array) $annPosts as $ap) {
-            $ts           = strtotime((string) ($ap->post_date ?? ''));
+            if (!$ap instanceof WP_Post) {
+                continue;
+            }
+            $ts    = strtotime((string) ($ap->post_date ?? ''));
+            $dtLbl = $ts ? pa_portal_format_id_date($ts) : '';
             $satkerList[] = array(
                 'title'      => (string) get_the_title($ap),
                 'link'       => (string) get_permalink($ap),
-                'date_label' => $ts ? pa_portal_format_id_date($ts) : '',
+                'url'        => (string) get_permalink($ap),
+                'date_label' => $dtLbl,
+                'date'       => $dtLbl,
+                'thumb'      => pa_portal_extract_post_thumb($ap, 'medium'),
+                'kind'       => 'post',
             );
-            $satkerPostCnt++;
         }
     }
 
@@ -343,13 +364,17 @@ add_shortcode('pa_official_announcements', static function ($atts) {
             array_unshift($satkerList, array(
                 'title'      => $emgTxt,
                 'link'       => $emgHref,
+                'url'        => $emgHref,
                 'date_label' => 'Serta-Merta',
+                'date'       => 'Serta-Merta',
+                'thumb'      => '',
+                'kind'       => 'emergency',
             ));
         }
     }
 
     if (count($satkerList) < $limit && function_exists('pa_portal_get_records')) {
-        $ghaibUrl = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/');
+        $ghaibUrl  = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/');
         $ghaibRecs = pa_portal_get_records('ghaib', $limit);
         foreach ($ghaibRecs as $gr) {
             if (count($satkerList) >= $limit) {
@@ -361,14 +386,38 @@ add_shortcode('pa_official_announcements', static function ($atts) {
             }
             $pihak = trim((string) ($meta['pihak'] ?? ''));
             $tsEv  = !empty($gr['event_date']) ? strtotime((string) $gr['event_date']) : 0;
+            $dtLbl = $tsEv ? pa_portal_format_id_date($tsEv) : 'Ghaib';
+            $href  = !empty($meta['doc_url']) ? (string) $meta['doc_url'] : $ghaibUrl;
             $satkerList[] = array(
                 'title'      => 'Panggilan Ghaib ' . (string) ($gr['title'] ?? '') . ($pihak !== '' ? ' — ' . $pihak : ''),
-                'link'       => !empty($meta['doc_url']) ? (string) $meta['doc_url'] : $ghaibUrl,
-                'date_label' => $tsEv ? pa_portal_format_id_date($tsEv) : 'Ghaib',
+                'link'       => $href,
+                'url'        => $href,
+                'date_label' => $dtLbl,
+                'date'       => $dtLbl,
+                'thumb'      => '',
+                'kind'       => 'ghaib',
             );
         }
     }
-    $satkerList = array_slice($satkerList, 0, $limit);
+
+    return array_slice($satkerList, 0, $limit);
+}
+
+add_shortcode('pa_official_announcements', static function ($atts) {
+    $cfgAtts = shortcode_atts(array('limit' => 4), $atts, 'pa_official_announcements');
+    $limit   = max(1, min(10, (int) $cfgAtts['limit']));
+    $feeds   = pa_portal_get_official_feeds(false);
+    $maList  = array_slice((array) ($feeds['ma'] ?? array()), 0, $limit);
+    $bdList  = array_slice((array) ($feeds['badilag'] ?? array()), 0, $limit);
+    $needsHydrate = empty($maList) && empty($bdList);
+
+    $satkerList    = pa_portal_get_satker_announcements($limit);
+    $satkerPostCnt = 0;
+    foreach ($satkerList as $slItem) {
+        if (($slItem['kind'] ?? '') === 'post') {
+            $satkerPostCnt++;
+        }
+    }
 
     $satkerMoreUrl = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/');
     if ($satkerPostCnt > 0 && function_exists('get_category_by_slug') && function_exists('get_category_link')) {
@@ -392,8 +441,16 @@ add_shortcode('pa_official_announcements', static function ($atts) {
             $dtShort = $dtRaw !== '' ? trim((string) preg_replace('/\s+\d{4}$/', '', $dtRaw)) : '';
             $dt      = $dtShort !== '' ? '<span class="pa-feed-date">' . esc_html($dtShort) . '</span>' : '';
             $title   = (string) ($it['title'] ?? '');
+            $thumb   = trim((string) ($it['thumb'] ?? ''));
+            $thumbHtml = '';
+            if (!$isExternal) {
+                $thumbHtml = $thumb !== ''
+                    ? '<span class="pa-feed-thumb"><img src="' . esc_url($thumb) . '" alt="" loading="lazy" decoding="async"></span>'
+                    : '<span class="pa-feed-thumb pa-feed-thumb-ph" aria-hidden="true">📣</span>';
+            }
             $html .= '<li class="pa-feed-item">'
                 . '<a href="' . esc_url((string) $it['link']) . '"' . $attr . ' title="' . esc_attr($title) . '">'
+                . $thumbHtml
                 . $dt
                 . '<span class="pa-feed-title">' . esc_html($title) . '</span>'
                 . '<span class="pa-feed-ext" aria-hidden="true">' . $arr . '</span>'
@@ -492,15 +549,34 @@ function pa_portal_dirput_resolve_urls(string $rawDirUrl = '', string $rawRssUrl
         $courtLabel   = '';
     }
 
-    $finalRss = ($rss !== '' && preg_match('#^https?://#i', $rss)) ? esc_url_raw($rss, array('http', 'https')) : $autoRssUrl;
+    $finalRss  = ($rss !== '' && preg_match('#^https?://#i', $rss)) ? esc_url_raw($rss, array('http', 'https')) : $autoRssUrl;
+    $courtHash = strtolower(trim((string) ($cfg['dirput_court_hash'] ?? '')));
+    if (!preg_match('/^[a-f0-9]{32}$/', $courtHash)) {
+        $courtHash = '';
+        if (preg_match('/[?&]court=([a-f0-9]{32})/i', $dir, $cm)) {
+            $courtHash = strtolower($cm[1]);
+        }
+    }
+    $courtSearchHint = '';
+    if ($slug !== '') {
+        if (preg_match('/^(pa|pta|ms|pn|pt|ptun|dilmil)-(.+)$/i', $slug, $sm)) {
+            $courtSearchHint = strtoupper($sm[1]) . ' ' . ucwords(str_replace('-', ' ', $sm[2]));
+        } else {
+            $courtSearchHint = $courtLabel;
+        }
+    } elseif (!empty($cfg['satker_name']) && stripos((string) $cfg['satker_name'], 'contoh') === false) {
+        $courtSearchHint = trim((string) preg_replace('/\s+kelas\s+.*/i', '', (string) $cfg['satker_name']));
+    }
 
     return array(
-        'slug'          => $slug,
-        'court_label'   => $courtLabel,
-        'profile_url'   => $profileUrl,
-        'directory_url' => $directoryUrl,
-        'rss_url'       => $finalRss,
-        'search_url'    => 'https://putusan3.mahkamahagung.go.id/search.html',
+        'slug'              => $slug,
+        'court_label'       => $courtLabel,
+        'court_hash'        => $courtHash,
+        'court_search_hint' => $courtSearchHint,
+        'profile_url'       => $profileUrl,
+        'directory_url'     => $directoryUrl,
+        'rss_url'           => $finalRss,
+        'search_url'        => 'https://putusan3.mahkamahagung.go.id/search.html',
     );
 }
 
@@ -639,17 +715,19 @@ add_action('rest_api_init', static function () {
 });
 
 function pa_portal_render_dirput_widget(string $title = '', int $limit = 6, string $overrideUrl = ''): string {
-    $limit    = max(2, min(12, $limit));
-    $data     = pa_portal_get_dirput_feed(false, $overrideUrl);
-    $resolved = is_array($data['resolved'] ?? null) ? $data['resolved'] : pa_portal_dirput_resolve_urls($overrideUrl);
-    $items    = array_slice((array) ($data['items'] ?? array()), 0, $limit);
-    $slug     = (string) ($resolved['slug'] ?? '');
-    $courtLbl = (string) ($resolved['court_label'] ?? '');
-    $profUrl  = (string) ($resolved['profile_url'] ?? 'https://putusan3.mahkamahagung.go.id/');
-    $dirUrl   = (string) ($resolved['directory_url'] ?? 'https://putusan3.mahkamahagung.go.id/');
-    $rssUrl   = (string) ($resolved['rss_url'] ?? '');
-    $needsHyd = (empty($items) && $rssUrl !== '' && ($data['status'] ?? '') === 'pending');
-    $heading  = $title !== '' ? $title : 'Direktori Putusan Terbaru';
+    $limit     = max(2, min(12, $limit));
+    $data      = pa_portal_get_dirput_feed(false, $overrideUrl);
+    $resolved  = is_array($data['resolved'] ?? null) ? $data['resolved'] : pa_portal_dirput_resolve_urls($overrideUrl);
+    $items     = array_slice((array) ($data['items'] ?? array()), 0, $limit);
+    $slug      = (string) ($resolved['slug'] ?? '');
+    $courtLbl  = (string) ($resolved['court_label'] ?? '');
+    $courtHash = (string) ($resolved['court_hash'] ?? '');
+    $courtHint = (string) ($resolved['court_search_hint'] ?? '');
+    $profUrl   = (string) ($resolved['profile_url'] ?? 'https://putusan3.mahkamahagung.go.id/');
+    $dirUrl    = (string) ($resolved['directory_url'] ?? 'https://putusan3.mahkamahagung.go.id/');
+    $rssUrl    = (string) ($resolved['rss_url'] ?? '');
+    $needsHyd  = (empty($items) && $rssUrl !== '' && ($data['status'] ?? '') === 'pending');
+    $heading   = $title !== '' ? $title : 'Direktori Putusan Terbaru';
 
     ob_start();
     ?>
@@ -665,13 +743,19 @@ function pa_portal_render_dirput_widget(string $title = '', int $limit = 6, stri
             </div>
         </header>
 
-        <form class="pa-dirput-search" action="https://putusan3.mahkamahagung.go.id/search.html" method="get" target="_blank" rel="noopener noreferrer" role="search">
+        <form class="pa-dirput-search" action="https://putusan3.mahkamahagung.go.id/search.html" method="get" target="_blank" rel="noopener noreferrer" role="search" data-court-hint="<?php echo esc_attr($courtHint); ?>" data-court-hash="<?php echo esc_attr($courtHash); ?>">
             <label class="screen-reader-text" for="pa-dirput-q-<?php echo esc_attr($slug ?: 'ma'); ?>">Cari Nomor Perkara atau Kata Kunci Putusan</label>
             <input id="pa-dirput-q-<?php echo esc_attr($slug ?: 'ma'); ?>" type="search" name="q" placeholder="Cari nomor perkara, jenis perkara, atau kata kunci putusan<?php echo $courtLbl !== '' ? ' (' . esc_attr($courtLbl) . ')' : ''; ?>..." required>
-            <?php if ($slug !== '') : ?>
-                <input type="hidden" name="court" value="<?php echo esc_attr($slug); ?>">
+            <?php if ($courtHash !== '') : ?>
+                <input type="hidden" name="court" value="<?php echo esc_attr($courtHash); ?>">
             <?php endif; ?>
             <button type="submit">Cari Putusan</button>
+            <?php if ($courtHint !== '' && $courtHash === '') : ?>
+                <label class="pa-dirput-scope">
+                    <input type="checkbox" class="pa-dirput-scope-chk" checked>
+                    <span>Fokus pencarian di <strong><?php echo esc_html($courtHint); ?></strong></span>
+                </label>
+            <?php endif; ?>
         </form>
 
         <div class="pa-dirput-list" data-pa-dirput-list>
@@ -703,17 +787,15 @@ function pa_portal_render_dirput_widget(string $title = '', int $limit = 6, stri
                         <strong><?php echo $slug !== '' ? 'Portal Resmi Direktori Putusan ' . esc_html($courtLbl) : 'Portal Direktori Putusan Mahkamah Agung RI'; ?></strong>
                         <p>
                             <?php if ($slug !== '') : ?>
-                                Akses langsung arsip salinan putusan perkara yang telah dianonimisasi dan dipublikasikan pada Direktori Putusan Mahkamah Agung RI.
+                                Akses langsung arsip salinan putusan perkara satuan kerja pada Direktori Putusan Mahkamah Agung RI.
                             <?php else : ?>
-                                Tempelkan URL profil Direktori Putusan satker Anda (contoh: <code>https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-semarang.html</code>) pada <strong>WP Admin → SINOVA Hub → Identitas &amp; Seeder</strong> untuk mengaktifkan RSS Putusan satker secara otomatis.
+                                Tempelkan URL profil Direktori Putusan satker Anda (contoh: <code>https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-sumedang.html</code>) pada <strong>WP Admin → SINOVA Hub → Identitas &amp; Seeder</strong>.
                             <?php endif; ?>
                         </p>
                         <div class="pa-dirput-fb-links">
                             <a href="<?php echo esc_url($dirUrl); ?>" target="_blank" rel="noopener noreferrer" class="pa-dirput-chip">Buka Daftar Putusan ↗</a>
                             <a href="<?php echo esc_url($profUrl); ?>" target="_blank" rel="noopener noreferrer" class="pa-dirput-chip">Statistik &amp; Profil Pengadilan ↗</a>
-                            <?php if ($rssUrl !== '') : ?>
-                                <a href="<?php echo esc_url($rssUrl); ?>" target="_blank" rel="noopener noreferrer" class="pa-dirput-chip">Umpan RSS Satker ↗</a>
-                            <?php endif; ?>
+                            <a href="https://putusan3.mahkamahagung.go.id/search.html" target="_blank" rel="noopener noreferrer" class="pa-dirput-chip">Pencarian Lanjutan MA RI ↗</a>
                         </div>
                     </div>
                 </div>
@@ -1235,9 +1317,17 @@ function pa_portal_render_announcements_compact(string $heading = 'Pengumuman & 
                         $title = (string) ($it['title'] ?? '');
                         $url   = (string) ($it['url'] ?? ($it['link'] ?? '#'));
                         $date  = (string) ($it['date'] ?? '');
+                        $thumb = trim((string) ($it['thumb'] ?? ''));
                     ?>
                         <li class="pa-feed-item">
                             <a href="<?php echo esc_url($url); ?>" <?php echo $g['ext'] ? 'target="_blank" rel="noopener noreferrer"' : ''; ?>>
+                                <?php if (!$g['ext']) : ?>
+                                    <?php if ($thumb !== '') : ?>
+                                        <span class="pa-feed-thumb"><img src="<?php echo esc_url($thumb); ?>" alt="" loading="lazy" decoding="async"></span>
+                                    <?php else : ?>
+                                        <span class="pa-feed-thumb pa-feed-thumb-ph" aria-hidden="true">📣</span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
                                 <?php if ($date !== '') : ?><span class="pa-feed-date"><?php echo esc_html($date); ?></span><?php endif; ?>
                                 <span class="pa-feed-title"><?php echo esc_html($title); ?></span>
                             </a>

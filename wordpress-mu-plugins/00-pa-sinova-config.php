@@ -2,12 +2,12 @@
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
  * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen (Edit & Hapus Massal), & Audit Keamanan + MFA di WP Admin.
- * Version: 2.3.4-starter
+ * Version: 2.4.0-starter
  */
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.3.4');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.4.0');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -27,10 +27,14 @@ function pa_sinova_get_settings(): array {
         'ecourt_url'               => 'https://ecourt.mahkamahagung.go.id/',
         'direktori_url'            => 'https://putusan3.mahkamahagung.go.id/',
         'dirput_rss_url'           => '',
+        'dirput_court_hash'        => '',
         'survey_url'               => 'https://survei.badilag.net/',
         'aco_url'                  => 'https://cctv.badilag.net/',
         'aco_logo_url'             => '',
         'aco_float_enabled'        => '1',
+        'aco_float_position'       => 'bottom_right',
+        'aco_float_size'           => 'md',
+        'aco_float_draggable'      => '1',
         'rss_ma_url'               => 'https://kepaniteraan.mahkamahagung.go.id/?format=feed&type=rss',
         'rss_badilag_url'          => 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik?format=feed&type=rss',
         'custom_login_slug'        => '',
@@ -52,7 +56,12 @@ function pa_sinova_get_settings(): array {
         'zi_area_6_url'            => '',
         // Pengaturan Visual Beranda Dinamis ([pa_sinova_beranda]) — tanpa edit HTML / tanpa Elementor
         'home_show_ticker'          => '1',
+        'home_ticker_label'         => 'INFO LAYANAN',
         'home_ticker_text'          => 'Selamat datang di Portal Resmi Informasi Peradilan · Layanan PTSP buka Senin–Kamis 08.00–16.30 WIB & Jumat 08.00–17.00 WIB · Seluruh layanan bebas dari pungutan liar dan gratifikasi.',
+        'footer_credit_text'        => 'Pengadilan Agama Devlpr Community',
+        'footer_credit_suffix'      => 'Portal Keterbukaan Informasi Publik',
+        'footer_hover_text'         => 'Developed with ♥ by PA Devlpr Community',
+        'footer_credit_url'         => '',
         'home_hero_kicker'          => 'Zona Integritas WBK / WBBM · Keterbukaan Informasi Publik',
         'home_hero_title'           => 'Portal Keterbukaan Informasi & Layanan Peradilan',
         'home_hero_lead'            => 'Menyediakan akses informasi perkara, jadwal sidang, panjar biaya, laporan kinerja, serta arsip transparansi keuangan yang akurat dan mudah diakses masyarakat pencari keadilan.',
@@ -223,7 +232,7 @@ function pa_starter_security_headers_map(bool $isPublic = true, ?string $nonce =
         }
     }
 
-    $csp = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; "
+    $csp = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self' https://putusan3.mahkamahagung.go.id; "
         . "img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; "
         . "connect-src 'self' https://challenges.cloudflare.com; "
         . 'frame-src ' . implode(' ', $frameOrigins) . '; ';
@@ -442,6 +451,83 @@ add_action('admin_notices', static function () {
                 . ') — Perbarui aman 1-klik tanpa menghapus berita/dokumen di <a href="' . esc_url($secUrl)
                 . '"><strong>SINOVA Hub → Keamanan &amp; Update</strong></a>.</p></div>';
         }
+    }
+});
+
+/**
+ * Tombol ikon (i) ringkas untuk menampilkan keterangan hanya saat disorot atau diklik di WP Admin.
+ */
+function pa_sinova_info_tip(string $text, string $ariaLabel = 'Informasi'): string {
+    $clean = trim(preg_replace('/\s+/', ' ', $text));
+    if ($clean === '') {
+        return '';
+    }
+    return '<button type="button" class="pa-info-btn" data-pa-info="' . esc_attr($clean) . '" aria-label="' . esc_attr($ariaLabel) . '" aria-expanded="false">i</button>';
+}
+
+/**
+ * Sinkronkan halaman /direktori-putusan/ otomatis bila URL Direktori Putusan satker diisi & halaman masih memuat [LENGKAPI].
+ */
+function pa_sinova_sync_direktori_putusan_page(string $rawDirUrl = ''): bool {
+    $cfg = pa_sinova_get_settings();
+    $dir = trim($rawDirUrl !== '' ? $rawDirUrl : (string) ($cfg['direktori_url'] ?? ''));
+    if ($dir === '') {
+        return false;
+    }
+    $norm = rtrim(strtolower($dir), '/');
+    if ($norm === 'https://putusan3.mahkamahagung.go.id' || $norm === 'http://putusan3.mahkamahagung.go.id') {
+        return false;
+    }
+    $page = pa_sinova_find_existing_page('direktori-putusan');
+    if (!$page instanceof WP_Post || $page->post_status !== 'publish') {
+        return false;
+    }
+    if (stripos((string) $page->post_content, '[LENGKAPI') === false) {
+        update_option('pa_sinova_dirput_page_synced', md5($dir), false);
+        return false;
+    }
+    $newContent = '<h2>Direktori Putusan Mahkamah Agung RI</h2><p>Akses publikasi salinan putusan perkara satuan kerja pada Direktori Putusan Mahkamah Agung Republik Indonesia.</p>[pa_direktori_putusan limit="10"]';
+    wp_update_post(array(
+        'ID'           => (int) $page->ID,
+        'post_content' => $newContent,
+    ));
+    clean_post_cache((int) $page->ID);
+    update_option('pa_sinova_dirput_page_synced', md5($dir), false);
+    if (function_exists('pa_sinova_purge_html_cache_files')) {
+        pa_sinova_purge_html_cache_files();
+    }
+    return true;
+}
+
+add_action('admin_init', static function () {
+    $cfg = pa_sinova_get_settings();
+    $dir = trim((string) ($cfg['direktori_url'] ?? ''));
+    if ($dir === '') {
+        return;
+    }
+    $norm = rtrim(strtolower($dir), '/');
+    if ($norm === 'https://putusan3.mahkamahagung.go.id' || $norm === 'http://putusan3.mahkamahagung.go.id') {
+        return;
+    }
+    if ((string) get_option('pa_sinova_dirput_page_synced', '') !== md5($dir)) {
+        pa_sinova_sync_direktori_putusan_page($dir);
+    }
+});
+
+add_action('template_redirect', static function () {
+    if (is_admin() || !is_page('direktori-putusan')) {
+        return;
+    }
+    $cfg = pa_sinova_get_settings();
+    $dir = trim((string) ($cfg['direktori_url'] ?? ''));
+    if ($dir !== '' && (string) get_option('pa_sinova_dirput_page_synced', '') !== md5($dir)) {
+        pa_sinova_sync_direktori_putusan_page($dir);
+    }
+}, 2);
+
+add_action('admin_enqueue_scripts', static function ($hook) {
+    if ($hook === 'toplevel_page_pa-sinova-starter' && function_exists('wp_enqueue_media')) {
+        wp_enqueue_media();
     }
 });
 
@@ -786,7 +872,23 @@ function pa_sinova_wp_compliance_report(): array {
             if ($pageObj instanceof WP_Post && $pageObj->post_status === 'publish') {
                 $rawContent = (string) $pageObj->post_content;
                 $recType    = $slugToRecType[$slug] ?? '';
-                if ($recType !== '' && stripos($rawContent, '[pa_') !== false) {
+                if ($slug === 'direktori-putusan') {
+                    $dirRaw        = trim((string) ($cfg['direktori_url'] ?? ''));
+                    $dirNorm       = rtrim(strtolower($dirRaw), '/');
+                    $hasDirputLink = ($dirRaw !== '' && $dirNorm !== 'https://putusan3.mahkamahagung.go.id' && $dirNorm !== 'http://putusan3.mahkamahagung.go.id');
+                    $resolvedDp    = ($hasDirputLink && function_exists('pa_portal_dirput_resolve_urls')) ? pa_portal_dirput_resolve_urls() : array();
+                    $editUrl       = admin_url('admin.php?page=pa-sinova-starter&tab=settings');
+                    if ($hasDirputLink) {
+                        $status = 'lengkap';
+                        $pts    = 10;
+                        $lblDp  = !empty($resolvedDp['court_label']) ? (string) $resolvedDp['court_label'] : $dirRaw;
+                        $note   = 'Tautan Direktori Putusan satker aktif (' . $lblDp . ').';
+                    } else {
+                        $status = 'perhatian';
+                        $pts    = 5;
+                        $note   = 'Isi URL profil Direktori Putusan satker di Identitas & Seeder.';
+                    }
+                } elseif ($recType !== '' && stripos($rawContent, '[pa_') !== false) {
                     $recCnt = (int) ($recStats[$recType] ?? 0);
                     if ($recCnt > 0) {
                         $status   = 'lengkap';
@@ -1023,12 +1125,12 @@ function pa_sinova_full_audit_report(): array {
         array('label' => 'HTTPS/SSL Aktif & HSTS Preload (2 Tahun)', 'pass' => $isHttps, 'detail' => $isHttps ? 'HTTPS + HSTS max-age=63072000; preload aktif' : 'Berjalan di HTTP (wajib aktifkan SSL di server produksi)', 'tab' => 'security'),
         array('label' => 'Domain Resmi Pemerintah (.go.id)', 'pass' => $isGoId, 'detail' => $isGoId ? "Domain resmi ({$host})" : "Host saat ini: {$host} (ganti ke .go.id saat tayang)", 'tab' => 'settings'),
         array('label' => 'Runtime PHP Non-EOL (>= 8.1)', 'pass' => $phpOk, 'detail' => 'PHP ' . PHP_VERSION, 'tab' => 'security'),
-        array('label' => 'Chrome Security Headers (CSP Nonce + Trusted Types + COOP + CORP)', 'pass' => $cspStrict, 'detail' => $cspStrict ? 'Mode Strict aktif (CSP Nonce + Trusted Types + COOP/CORP)' : "Mode CSP saat ini: {$cspMode}", 'tab' => 'settings'),
+        array('label' => 'Header Keamanan Web (CSP Nonce + Trusted Types + COOP/CORP)', 'pass' => $cspStrict, 'detail' => $cspStrict ? 'Mode Strict aktif (CSP Nonce + Trusted Types + COOP/CORP)' : "Mode CSP saat ini: {$cspMode}", 'tab' => 'settings'),
         array('label' => 'Early Page Cache + Gzip + ETag/304 + Speculation Rules', 'pass' => $cacheActive, 'detail' => $cacheActive ? 'Cache HTML statis SWR + ETag + Gzip aktif' : 'Cache statis tidak aktif', 'tab' => 'security'),
         array('label' => 'Kebijakan MFA TOTP RFC 6238 & Password Kuat + Simbol', 'pass' => ($mfaEnforced && $hasAnyMfa), 'detail' => ($mfaEnforced ? 'Wajib MFA aktif' : 'Wajib MFA belum dicentang') . ' · ' . ($hasAnyMfa ? 'Akun Anda ber-MFA' : 'Akun Anda belum aktivasi MFA'), 'tab' => 'security'),
         array('label' => 'Custom Hidden Login URL + WAF Anti-Judol + Rate Limiter', 'pass' => ($hiddenSlug !== ''), 'detail' => $hiddenSlug !== '' ? "URL Login tersembunyi (/{$hiddenSlug}/)" : 'URL Login masih standar /wp-login.php', 'tab' => 'security'),
         array('label' => 'RFC 9116 security.txt, Proteksi PDF .htaccess & Blokir XML-RPC', 'pass' => $pdfHardened, 'detail' => $pdfHardened ? '/.well-known/security.txt & .htaccess PDF aktif' : 'Folder upload belum dikunci .htaccess', 'tab' => 'security'),
-        array('label' => 'SEO Teknis Chrome (Indeks Aktif, Meta Description, JSON-LD, Sitemap)', 'pass' => $blogPublic, 'detail' => $blogPublic ? 'Visibilitas mesin pencari aktif + JSON-LD + Meta Description + Sitemap' : 'PERINGATAN: Settings → Reading mencentang Discourage Search Engines (noindex)!', 'tab' => 'settings'),
+        array('label' => 'SEO Teknis (Indeks Aktif, Meta Description, JSON-LD, Sitemap)', 'pass' => $blogPublic, 'detail' => $blogPublic ? 'Visibilitas mesin pencari aktif + JSON-LD + Meta Description + Sitemap' : 'PERINGATAN: Settings → Reading mencentang Discourage Search Engines (noindex)!', 'tab' => 'settings'),
         array('label' => 'File Integrity Monitor (FIM SHA-256 Berkas Inti)', 'pass' => !empty($fim['ok']), 'detail' => !empty($fim['ok']) ? "Semua {$fim['checked_count']} berkas sesuai baseline SHA-256" : 'Terdeteksi perubahan berkas: ' . implode(', ', $fim['changed']), 'tab' => 'security'),
     );
     $p3Pass = 0;
@@ -1446,6 +1548,7 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
     }
 
     update_option('pa_sinova_seeded_pages', $seeded, false);
+    pa_sinova_sync_direktori_putusan_page();
 
     return array(
         'pages_created' => $createdCount,
@@ -1473,6 +1576,9 @@ function pa_sinova_home_block_catalog(): array {
         'videos'        => array('label' => 'Galeri Video', 'default_w' => 6, 'default_h' => 1, 'icon' => '▶'),
         'greetings'     => array('label' => 'Ucapan & Belasungkawa', 'default_w' => 6, 'default_h' => 1, 'icon' => '💐'),
         'dirput'        => array('label' => 'Direktori Putusan (MA RI)', 'default_w' => 12, 'default_h' => 1, 'icon' => '⚖'),
+        'iframe_embed'  => array('label' => 'Sematan Iframe / Aplikasi', 'default_w' => 6, 'default_h' => 1, 'icon' => '🖥'),
+        'image_banner'  => array('label' => 'Gambar / Poster / Banner', 'default_w' => 6, 'default_h' => 1, 'icon' => '🖼'),
+        'photo_slider'  => array('label' => 'Slider Gambar / Infografis', 'default_w' => 12, 'default_h' => 1, 'icon' => '🎞'),
         'custom'        => array('label' => 'Konten Bebas / Sematan', 'default_w' => 6, 'default_h' => 1, 'icon' => '✦'),
     );
 }
@@ -1556,6 +1662,56 @@ function pa_sinova_sanitize_home_blocks($rawBlocks): array {
         }
         if (!empty($rawCfg['cta_url'])) {
             $bCfg['cta_url'] = esc_url_raw((string) $rawCfg['cta_url'], array('http', 'https'));
+        }
+        if (!empty($rawCfg['image_url'])) {
+            $imgU = esc_url_raw((string) $rawCfg['image_url'], array('http', 'https'));
+            if ($imgU !== '') {
+                $bCfg['image_url'] = $imgU;
+            }
+        }
+        if (!empty($rawCfg['image_alt'])) {
+            $bCfg['image_alt'] = sanitize_text_field((string) $rawCfg['image_alt']);
+        }
+        if (!empty($rawCfg['image_fit']) && in_array((string) $rawCfg['image_fit'], array('cover', 'contain'), true)) {
+            $bCfg['image_fit'] = (string) $rawCfg['image_fit'];
+        }
+        if (!empty($rawCfg['caption'])) {
+            $bCfg['caption'] = sanitize_text_field((string) $rawCfg['caption']);
+        }
+        if (!empty($rawCfg['link_url'])) {
+            $lnkU = esc_url_raw((string) $rawCfg['link_url'], array('http', 'https'));
+            if ($lnkU !== '') {
+                $bCfg['link_url'] = $lnkU;
+            }
+        }
+        if (isset($rawCfg['show_fullscreen'])) {
+            $bCfg['show_fullscreen'] = !empty($rawCfg['show_fullscreen']) ? '1' : '0';
+        }
+        if (!empty($rawCfg['slide_source']) && in_array((string) $rawCfg['slide_source'], array('custom', 'records'), true)) {
+            $bCfg['slide_source'] = (string) $rawCfg['slide_source'];
+        }
+        if (isset($rawCfg['autoplay_sec'])) {
+            $bCfg['autoplay_sec'] = max(0, min(15, (int) $rawCfg['autoplay_sec']));
+        }
+        if (!empty($rawCfg['slides']) && is_array($rawCfg['slides'])) {
+            $cleanSlides = array();
+            foreach (array_slice($rawCfg['slides'], 0, 10) as $sl) {
+                if (!is_array($sl)) {
+                    continue;
+                }
+                $sImg = esc_url_raw((string) ($sl['image_url'] ?? ''), array('http', 'https'));
+                if ($sImg === '') {
+                    continue;
+                }
+                $cleanSlides[] = array(
+                    'image_url' => $sImg,
+                    'title'     => sanitize_text_field((string) ($sl['title'] ?? '')),
+                    'link_url'  => esc_url_raw((string) ($sl['link_url'] ?? ''), array('http', 'https')),
+                );
+            }
+            if (!empty($cleanSlides)) {
+                $bCfg['slides'] = $cleanSlides;
+            }
         }
 
         $clean[] = array(
@@ -2625,6 +2781,36 @@ function pa_sinova_render_admin_page(): void {
             $sippSlideWarn = !$sippSlideChk['valid'];
             $sippSlideSave = $sippSlideChk['valid'] ? $sippSlideChk['url'] : (string) ($cur['sipp_slide_url'] ?? '');
 
+            $rawHash = trim(sanitize_text_field(wp_unslash((string) ($_POST['dirput_court_hash'] ?? ''))));
+            $cleanHash = '';
+            if ($rawHash !== '') {
+                if (preg_match('/[a-f0-9]{32}/i', $rawHash, $hm)) {
+                    $cleanHash = strtolower($hm[0]);
+                }
+            }
+
+            $acoPos = sanitize_key((string) ($_POST['aco_float_position'] ?? ($cur['aco_float_position'] ?? 'bottom_right')));
+            if (!in_array($acoPos, array('bottom_right', 'middle_right', 'bottom_left', 'middle_left', 'top_right'), true)) {
+                $acoPos = 'bottom_right';
+            }
+            $acoSz = sanitize_key((string) ($_POST['aco_float_size'] ?? ($cur['aco_float_size'] ?? 'md')));
+            if (!in_array($acoSz, array('sm', 'md', 'lg'), true)) {
+                $acoSz = 'md';
+            }
+
+            $footerCredit = sanitize_text_field(wp_unslash((string) ($_POST['footer_credit_text'] ?? ($cur['footer_credit_text'] ?? 'Pengadilan Agama Devlpr Community'))));
+            if ($footerCredit === '') {
+                $footerCredit = 'Pengadilan Agama Devlpr Community';
+            }
+            $footerHover = sanitize_text_field(wp_unslash((string) ($_POST['footer_hover_text'] ?? ($cur['footer_hover_text'] ?? 'Developed with ♥ by PA Devlpr Community'))));
+            if ($footerHover === '') {
+                $footerHover = 'Developed with ♥ by PA Devlpr Community';
+            }
+            $tickerLbl = sanitize_text_field(wp_unslash((string) ($_POST['home_ticker_label'] ?? ($cur['home_ticker_label'] ?? 'INFO LAYANAN'))));
+            if ($tickerLbl === '') {
+                $tickerLbl = 'INFO LAYANAN';
+            }
+
             $new = array_merge($cur, array(
                 'satker_name'              => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
                 'logo_url'                 => esc_url_raw(wp_unslash((string) ($_POST['logo_url'] ?? ''))),
@@ -2640,10 +2826,21 @@ function pa_sinova_render_admin_page(): void {
                 'ecourt_url'               => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
                 'direktori_url'            => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
                 'dirput_rss_url'           => $rssDirCheck['url'],
+                'dirput_court_hash'        => $cleanHash,
                 'survey_url'               => esc_url_raw(wp_unslash((string) ($_POST['survey_url'] ?? ''))),
                 'aco_url'                  => esc_url_raw(wp_unslash((string) ($_POST['aco_url'] ?? ($cur['aco_url'] ?? '')))),
                 'aco_logo_url'             => esc_url_raw(wp_unslash((string) ($_POST['aco_logo_url'] ?? ''))),
                 'aco_float_enabled'        => !empty($_POST['aco_float_enabled']) ? '1' : '0',
+                'aco_float_position'       => $acoPos,
+                'aco_float_size'           => $acoSz,
+                'aco_float_draggable'      => !empty($_POST['aco_float_draggable']) ? '1' : '0',
+                'home_show_ticker'         => isset($_POST['home_show_ticker']) ? (!empty($_POST['home_show_ticker']) ? '1' : '0') : ((string) ($cur['home_show_ticker'] ?? '1')),
+                'home_ticker_label'        => $tickerLbl,
+                'home_ticker_text'         => sanitize_textarea_field(wp_unslash((string) ($_POST['home_ticker_text'] ?? ($cur['home_ticker_text'] ?? '')))),
+                'footer_credit_text'       => $footerCredit,
+                'footer_credit_suffix'     => sanitize_text_field(wp_unslash((string) ($_POST['footer_credit_suffix'] ?? ''))),
+                'footer_hover_text'        => $footerHover,
+                'footer_credit_url'        => esc_url_raw(wp_unslash((string) ($_POST['footer_credit_url'] ?? ''))),
                 'rss_ma_url'               => $rssMaCheck['url'],
                 'rss_badilag_url'          => $rssBadCheck['url'],
                 'enforce_mfa'              => (string) ($cur['enforce_mfa'] ?? '0'),
@@ -2671,6 +2868,7 @@ function pa_sinova_render_admin_page(): void {
             if (($new['direktori_url'] ?? '') !== ($cur['direktori_url'] ?? '') || ($new['dirput_rss_url'] ?? '') !== ($cur['dirput_rss_url'] ?? '')) {
                 delete_option('pa_dirput_feed_cache');
             }
+            pa_sinova_sync_direktori_putusan_page((string) ($new['direktori_url'] ?? ''));
             if (function_exists('pa_home_page_cache_mark_stale')) {
                 pa_home_page_cache_mark_stale();
             }
@@ -2736,7 +2934,7 @@ function pa_sinova_render_admin_page(): void {
                 // Sinkronkan pengaturan Hero/Ticker/Survei/SIPP jika ikut dikirim dari modal/panel
                 $cur = pa_sinova_get_settings();
                 $patch = array();
-                foreach (array('home_ticker_text', 'home_hero_kicker', 'home_hero_title', 'home_hero_lead', 'home_survey_period', 'home_survey_grade', 'home_survey_skm', 'home_survey_spak', 'home_survey_spkp') as $hk) {
+                foreach (array('home_ticker_label', 'home_ticker_text', 'home_hero_kicker', 'home_hero_title', 'home_hero_lead', 'home_survey_period', 'home_survey_grade', 'home_survey_skm', 'home_survey_spak', 'home_survey_spkp') as $hk) {
                     if (isset($_POST[$hk])) {
                         $patch[$hk] = ($hk === 'home_hero_lead' || $hk === 'home_ticker_text')
                             ? sanitize_textarea_field(wp_unslash((string) $_POST[$hk]))
@@ -3413,6 +3611,32 @@ function pa_sinova_render_admin_page(): void {
         .pa-dlg-field input[type="text"],.pa-dlg-field input[type="url"],.pa-dlg-field input[type="number"],.pa-dlg-field select,.pa-dlg-field textarea{width:100%;box-sizing:border-box}
         .pa-dlg-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
         .pa-dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid #e2e8f0;background:#f8fafc}
+        .pa-info-btn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;margin-left:5px;border-radius:50%;border:1px solid #C9A227;background:#fffbeb;color:#6e5204;font:800 11px/1 Georgia,serif;font-style:italic;cursor:pointer;vertical-align:middle;transition:background-color .14s,color .14s,border-color .14s}
+        .pa-info-btn:hover,.pa-info-btn:focus-visible,.pa-info-btn[aria-expanded="true"]{background:#056e4f;border-color:#056e4f;color:#E5C158;outline:2px solid #C9A227;outline-offset:1px}
+        #pa-adm-tip-pop{position:fixed;z-index:100000;max-width:min(320px,calc(100vw - 24px));padding:9px 12px;border-radius:10px;background:#022c22;color:#f8fafc;border:1px solid #C9A227;font:500 12px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 14px 32px rgba(2,44,34,.34);pointer-events:auto}
+        #pa-adm-tip-pop[hidden]{display:none !important}
+        .pa-all-green-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;background:#dcfce7;border:1px solid #22c55e;color:#14532d;font-size:12px;font-weight:800}
+        .pa-dash-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;padding:6px;background:#e8efeb;border:1px solid #cbd5e1;border-radius:12px}
+        .pa-dash-tab{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;border:1px solid transparent;background:transparent;color:#334155;font-size:12.5px;font-weight:700;cursor:pointer;transition:background-color .15s,color .15s,border-color .15s}
+        .pa-dash-tab:hover{background:#fff;color:#043927}
+        .pa-dash-tab.is-active{background:#043927;color:#fff;border-color:#043927;box-shadow:0 4px 12px rgba(2,44,34,.18)}
+        .pa-tab-ok-ico{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#16a34a;color:#fff;font-size:11px;font-weight:900}
+        .pa-tab-pct-pill{padding:1px 7px;border-radius:999px;background:rgba(15,23,42,.08);font-size:11px;font-weight:800}
+        .pa-dash-tab.is-active .pa-tab-pct-pill{background:rgba(229,193,88,.22);color:#E5C158}
+        .pa-ticker-admin-bar{display:grid;grid-template-columns:auto 160px 1fr auto;gap:10px;align-items:center;background:#fff;border:1px solid #cbd5e1;border-left:4px solid #C9A227;border-radius:12px;padding:10px 14px;margin-bottom:12px}
+        @media(max-width:780px){.pa-ticker-admin-bar{grid-template-columns:1fr}}
+        .pa-sec-pill-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+        .pa-sec-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:#f8fafc;border:1px solid #cbd5e1;font-size:12px;font-weight:700;color:#0f172a}
+        .pa-sec-pill.is-ok{background:#f0fdf4;border-color:#86efac;color:#14532d}
+        .pa-sec-pill.is-warn{background:#fffbeb;border-color:#fcd34d;color:#78350f}
+        .pa-adm-fold{background:#fff;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:14px;overflow:hidden}
+        .pa-adm-fold>summary{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;cursor:pointer;font-weight:800;color:#043927;font-size:14px;list-style:none}
+        .pa-adm-fold>summary::-webkit-details-marker{display:none}
+        .pa-adm-fold[open]>summary{border-bottom:1px solid #e2e8f0;background:#f8fbf9}
+        .pa-adm-fold-body{padding:14px 16px}
+        .pa-slide-row{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;margin-bottom:6px}
+        .pa-media-preview{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;overflow:hidden;vertical-align:middle}
+        .pa-media-preview img{max-width:100%;max-height:100%;object-fit:contain}
     </style>
 
     <div class="pa-adm-shell">
@@ -3504,99 +3728,83 @@ function pa_sinova_render_admin_page(): void {
                 <div class="notice <?php echo esc_attr($noticeClass); ?> inline is-dismissible" style="margin:0 0 14px;"><p><strong><?php echo esc_html($notice); ?></strong></p></div>
             <?php endif; ?>
 
-        <?php if ($activeTab === 'compliance') : ?>
+        <?php if ($activeTab === 'compliance') :
+            $p1Green  = ((int) ($report['counts']['lengkap'] ?? 0) === 35);
+            $p2Green  = ((float) ($audit['pilar2_pct'] ?? 0) >= 100);
+            $p3Green  = ((float) ($audit['pilar3_pct'] ?? 0) >= 100);
+            $allGreen = ($p1Green && $p2Green && $p3Green);
+            $hasRecs  = !empty($audit['recommendations']);
+        ?>
             <div style="background:linear-gradient(135deg,#043927 0%,#056e4f 100%);color:#fff;border:1px solid #C9A227;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;">
                 <div>
-                    <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#E5C158;text-transform:uppercase;">Skor Gabungan 3 Pilar SINOVA + Standar Web Modern Chrome</div>
-                    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:4px;">
+                    <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#E5C158;text-transform:uppercase;">Skor Gabungan 3 Pilar SINOVA <?php echo pa_sinova_info_tip('Bobot penilaian internal: Pilar 1 Konten 60%, Pilar 2 UI/UX & WCAG 2.2 20%, Pilar 3 Performa & Keamanan 20%.', 'Info skor 3 pilar'); ?></div>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;">
                         <span style="font-size:34px;font-weight:900;color:#fff;"><?php echo esc_html((string) $audit['weighted_total']); ?> / 100</span>
                         <span style="display:inline-block;padding:4px 12px;border-radius:999px;background:#fff;color:<?php echo esc_attr($audit['predicate_color']); ?>;font-weight:800;font-size:12.5px;">Predikat: <?php echo esc_html($audit['predicate']); ?></span>
+                        <?php if ($allGreen) : ?>
+                            <span class="pa-all-green-badge"><span aria-hidden="true">✔</span> Semua Pilar Hijau</span>
+                        <?php endif; ?>
                     </div>
-                    <div style="font-size:12px;color:#d1fae5;margin-top:4px;">
-                        Pilar 1 Konten (60%): <strong><?php echo esc_html((string) $audit['pilar1_pct']); ?>%</strong> ·
-                        Pilar 2 UI/UX &amp; WCAG 2.2 (20%): <strong><?php echo esc_html((string) $audit['pilar2_pct']); ?>%</strong> ·
-                        Pilar 3 Performa, Keamanan &amp; Chrome (20%): <strong><?php echo esc_html((string) $audit['pilar3_pct']); ?>%</strong>
+                    <div style="font-size:12px;color:#d1fae5;margin-top:6px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+                        <span>Pilar 1 Konten (60%): <strong><?php echo esc_html((string) $audit['pilar1_pct']); ?>%</strong> <?php echo $p1Green ? '<span aria-label="Lengkap">🟢</span>' : ''; ?></span>
+                        <span>· Pilar 2 UI/UX &amp; WCAG 2.2 (20%): <strong><?php echo esc_html((string) $audit['pilar2_pct']); ?>%</strong> <?php echo $p2Green ? '<span aria-label="Lengkap">🟢</span>' : ''; ?></span>
+                        <span>· Pilar 3 Performa &amp; Keamanan (20%): <strong><?php echo esc_html((string) $audit['pilar3_pct']); ?>%</strong> <?php echo $p3Green ? '<span aria-label="Lengkap">🟢</span>' : ''; ?></span>
                     </div>
                 </div>
                 <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                    <a href="<?php echo esc_url($exportCsvUrl); ?>" class="button button-secondary">⬇ Ekspor Bukti CSV (SINOVA)</a>
-                    <a href="<?php echo esc_url($exportJsonUrl); ?>" class="button button-secondary">⬇ Ekspor Laporan JSON 3 Pilar</a>
+                    <a href="<?php echo esc_url($exportCsvUrl); ?>" class="button button-secondary">⬇ Ekspor Bukti CSV</a>
+                    <a href="<?php echo esc_url($exportJsonUrl); ?>" class="button button-secondary">⬇ Ekspor Laporan JSON</a>
                 </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:18px;">
-                <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #056e4f;border-radius:10px;padding:14px;">
-                    <div style="font-size:12px;color:#64748b;font-weight:700;">SKOR 35 KRITERIA (PILAR 1)</div>
-                    <div style="font-size:28px;font-weight:900;color:#056e4f;"><?php echo esc_html((string) $report['total']); ?>%</div>
-                    <div style="font-size:11.5px;color:#475569;">Berkala: <?php echo esc_html((string) $report['berkala']); ?>% · Wajib: <?php echo esc_html((string) $report['wajib']); ?>%</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin-bottom:16px;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #056e4f;border-radius:10px;padding:12px 14px;">
+                    <div style="font-size:11px;color:#64748b;font-weight:700;">SKOR 35 KRITERIA</div>
+                    <div style="font-size:26px;font-weight:900;color:#056e4f;"><?php echo esc_html((string) $report['total']); ?>%</div>
+                    <div style="font-size:11px;color:#475569;">Berkala: <?php echo esc_html((string) $report['berkala']); ?>% · Wajib: <?php echo esc_html((string) $report['wajib']); ?>%</div>
                 </div>
-                <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #16a34a;border-radius:10px;padding:14px;">
-                    <div style="font-size:12px;color:#64748b;font-weight:700;">LENGKAP</div>
-                    <div style="font-size:28px;font-weight:900;color:#15803d;"><?php echo esc_html((string) $report['counts']['lengkap']); ?> / 35</div>
-                    <div style="font-size:11.5px;color:#475569;">Siap dinilai otomatis</div>
+                <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #16a34a;border-radius:10px;padding:12px 14px;">
+                    <div style="font-size:11px;color:#64748b;font-weight:700;">LENGKAP</div>
+                    <div style="font-size:26px;font-weight:900;color:#15803d;"><?php echo esc_html((string) $report['counts']['lengkap']); ?> / 35</div>
+                    <div style="font-size:11px;color:#475569;">Siap dinilai</div>
                 </div>
-                <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #d97706;border-radius:10px;padding:14px;">
-                    <div style="font-size:12px;color:#64748b;font-weight:700;">PERLU DILENGKAPI</div>
-                    <div style="font-size:28px;font-weight:900;color:#b45309;"><?php echo esc_html((string) $report['counts']['perhatian']); ?> / 35</div>
-                    <div style="font-size:11.5px;color:#475569;">Bertanda [LENGKAPI] / kurang tahun</div>
+                <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #d97706;border-radius:10px;padding:12px 14px;">
+                    <div style="font-size:11px;color:#64748b;font-weight:700;">PERLU DILENGKAPI</div>
+                    <div style="font-size:26px;font-weight:900;color:#b45309;"><?php echo esc_html((string) $report['counts']['perhatian']); ?> / 35</div>
+                    <div style="font-size:11px;color:#475569;">Butuh pelengkap</div>
                 </div>
-                <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #dc2626;border-radius:10px;padding:14px;">
-                    <div style="font-size:12px;color:#64748b;font-weight:700;">KOSONG</div>
-                    <div style="font-size:28px;font-weight:900;color:#b91c1c;"><?php echo esc_html((string) $report['counts']['kosong']); ?> / 35</div>
-                    <div style="font-size:11.5px;color:#475569;">Belum terunggah</div>
-                </div>
-            </div>
-
-            <?php if (!empty($audit['recommendations'])) : ?>
-                <div style="background:#fffbeb;border:1px solid #f59e0b;border-left:5px solid #d97706;border-radius:10px;padding:14px 18px;margin-bottom:18px;">
-                    <strong style="color:#92400e;">Rekomendasi Prioritas Menuju Predikat Sangat Baik / Excellent (&ge; 90):</strong>
-                    <ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:#78350f;">
-                        <?php foreach (array_slice($audit['recommendations'], 0, 8) as $rec) : ?>
-                            <li>
-                                <strong><?php echo esc_html($rec['label']); ?>:</strong>
-                                <?php echo esc_html($rec['detail']); ?>
-                                <?php if (!empty($rec['tab']) && in_array($rec['tab'], $allowedTabs, true)) : ?>
-                                    — <a href="<?php echo esc_url($tabBaseUrl . $rec['tab']); ?>">Perbaiki di tab <?php echo esc_html(ucfirst($rec['tab'])); ?> →</a>
-                                <?php endif; ?>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-            <?php endif; ?>
-
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;margin-bottom:18px;">
-                <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:14px;">
-                    <h3 style="margin:0 0 10px;color:#056e4f;">Pilar 2 — UI/UX, 2-Click Rule &amp; Aksesibilitas WCAG 2.2 (<?php echo esc_html((string) $audit['pilar2_pct']); ?>%)</h3>
-                    <table class="widefat striped">
-                        <tbody>
-                            <?php foreach ($audit['p2_checks'] as $chk) : ?>
-                                <tr>
-                                    <td style="width:28px;font-weight:900;color:<?php echo $chk['pass'] ? '#15803d' : '#b45309'; ?>;"><?php echo $chk['pass'] ? '✔' : '!'; ?></td>
-                                    <td><strong><?php echo esc_html($chk['label']); ?></strong><br><small style="color:#475569;"><?php echo esc_html($chk['detail']); ?></small></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:14px;">
-                    <h3 style="margin:0 0 10px;color:#056e4f;">Pilar 3 — Performa, Keamanan &amp; Standar Chrome (<?php echo esc_html((string) $audit['pilar3_pct']); ?>%)</h3>
-                    <table class="widefat striped">
-                        <tbody>
-                            <?php foreach ($audit['p3_checks'] as $chk) : ?>
-                                <tr>
-                                    <td style="width:28px;font-weight:900;color:<?php echo $chk['pass'] ? '#15803d' : '#b45309'; ?>;"><?php echo $chk['pass'] ? '✔' : '!'; ?></td>
-                                    <td><strong><?php echo esc_html($chk['label']); ?></strong><br><small style="color:#475569;"><?php echo esc_html($chk['detail']); ?></small></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #dc2626;border-radius:10px;padding:12px 14px;">
+                    <div style="font-size:11px;color:#64748b;font-weight:700;">KOSONG</div>
+                    <div style="font-size:26px;font-weight:900;color:#b91c1c;"><?php echo esc_html((string) $report['counts']['kosong']); ?> / 35</div>
+                    <div style="font-size:11px;color:#475569;">Belum terunggah</div>
                 </div>
             </div>
 
-            <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:16px;">
+            <div class="pa-dash-tabs" role="tablist" aria-label="Tab Pilar Audit SINOVA">
+                <button type="button" role="tab" id="pa-dtab-1" aria-controls="pa-dpanel-1" aria-selected="true" tabindex="0" class="pa-dash-tab is-active" data-dash-tab="p1">
+                    <span>Pilar 1 · 35 Kriteria</span>
+                    <?php if ($p1Green) : ?><span class="pa-tab-ok-ico" title="Semua Hijau">✔</span><?php else : ?><span class="pa-tab-pct-pill"><?php echo esc_html((string) $report['total']); ?>%</span><?php endif; ?>
+                </button>
+                <button type="button" role="tab" id="pa-dtab-2" aria-controls="pa-dpanel-2" aria-selected="false" tabindex="-1" class="pa-dash-tab" data-dash-tab="p2">
+                    <span>Pilar 2 · UI/UX &amp; WCAG</span>
+                    <?php if ($p2Green) : ?><span class="pa-tab-ok-ico" title="100% Terpenuhi">✔</span><?php else : ?><span class="pa-tab-pct-pill"><?php echo esc_html((string) $audit['pilar2_pct']); ?>%</span><?php endif; ?>
+                </button>
+                <button type="button" role="tab" id="pa-dtab-3" aria-controls="pa-dpanel-3" aria-selected="false" tabindex="-1" class="pa-dash-tab" data-dash-tab="p3">
+                    <span>Pilar 3 · Performa &amp; Keamanan</span>
+                    <?php if ($p3Green) : ?><span class="pa-tab-ok-ico" title="100% Terpenuhi">✔</span><?php else : ?><span class="pa-tab-pct-pill"><?php echo esc_html((string) $audit['pilar3_pct']); ?>%</span><?php endif; ?>
+                </button>
+                <?php if ($hasRecs) : ?>
+                    <button type="button" role="tab" id="pa-dtab-rec" aria-controls="pa-dpanel-rec" aria-selected="false" tabindex="-1" class="pa-dash-tab" data-dash-tab="rec">
+                        <span>Prioritas Perbaikan</span>
+                        <span class="pa-tab-pct-pill"><?php echo esc_html((string) count($audit['recommendations'])); ?></span>
+                    </button>
+                <?php endif; ?>
+            </div>
+
+            <div role="tabpanel" id="pa-dpanel-1" aria-labelledby="pa-dtab-1" data-dash-panel="p1" style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:14px 16px;">
                 <table class="widefat striped">
                     <thead>
-                        <tr><th style="width:64px;">Kode</th><th style="width:90px;">Kelompok</th><th>Kriteria Lampiran II</th><th style="width:125px;">Status</th><th>Catatan Evaluasi</th><th style="width:230px;">URL Bukti untuk SINOVA</th></tr>
+                        <tr><th style="width:64px;">Kode</th><th style="width:90px;">Kelompok</th><th>Kriteria Lampiran II</th><th style="width:125px;">Status</th><th>Catatan</th><th style="width:230px;">URL Bukti</th></tr>
                     </thead>
                     <tbody>
                         <?php foreach ($report['items'] as $it) :
@@ -3619,16 +3827,97 @@ function pa_sinova_render_admin_page(): void {
                     </tbody>
                 </table>
             </div>
+
+            <div role="tabpanel" id="pa-dpanel-2" aria-labelledby="pa-dtab-2" data-dash-panel="p2" hidden style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:14px 16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+                    <h3 style="margin:0;color:#056e4f;">Pilar 2 — UI/UX, Aturan 2-Klik &amp; Aksesibilitas WCAG 2.2 (<?php echo esc_html((string) $audit['pilar2_pct']); ?>%)</h3>
+                    <?php if ($p2Green) : ?><span class="pa-all-green-badge">✔ Hijau 100%</span><?php endif; ?>
+                </div>
+                <table class="widefat striped">
+                    <tbody>
+                        <?php foreach ($audit['p2_checks'] as $chk) : ?>
+                            <tr>
+                                <td style="width:28px;font-weight:900;color:<?php echo $chk['pass'] ? '#15803d' : '#b45309'; ?>;"><?php echo $chk['pass'] ? '✔' : '!'; ?></td>
+                                <td><strong><?php echo esc_html($chk['label']); ?></strong><?php echo pa_sinova_info_tip($chk['detail'], 'Detail ' . $chk['label']); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div role="tabpanel" id="pa-dpanel-3" aria-labelledby="pa-dtab-3" data-dash-panel="p3" hidden style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:14px 16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+                    <h3 style="margin:0;color:#056e4f;">Pilar 3 — Performa, Keamanan &amp; Infrastruktur Web (<?php echo esc_html((string) $audit['pilar3_pct']); ?>%)</h3>
+                    <?php if ($p3Green) : ?><span class="pa-all-green-badge">✔ Hijau 100%</span><?php endif; ?>
+                </div>
+                <table class="widefat striped">
+                    <tbody>
+                        <?php foreach ($audit['p3_checks'] as $chk) : ?>
+                            <tr>
+                                <td style="width:28px;font-weight:900;color:<?php echo $chk['pass'] ? '#15803d' : '#b45309'; ?>;"><?php echo $chk['pass'] ? '✔' : '!'; ?></td>
+                                <td><strong><?php echo esc_html($chk['label']); ?></strong><?php echo pa_sinova_info_tip($chk['detail'], 'Detail ' . $chk['label']); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <?php if ($hasRecs) : ?>
+                <div role="tabpanel" id="pa-dpanel-rec" aria-labelledby="pa-dtab-rec" data-dash-panel="rec" hidden style="background:#fffbeb;border:1px solid #f59e0b;border-left:5px solid #d97706;border-radius:10px;padding:14px 18px;">
+                    <strong style="color:#92400e;">Rekomendasi Prioritas Menuju Predikat Sangat Baik (&ge; 90):</strong>
+                    <ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:#78350f;">
+                        <?php foreach (array_slice($audit['recommendations'], 0, 10) as $rec) : ?>
+                            <li style="margin-bottom:5px;">
+                                <strong><?php echo esc_html($rec['label']); ?>:</strong>
+                                <?php echo esc_html($rec['detail']); ?>
+                                <?php if (!empty($rec['tab']) && in_array($rec['tab'], $allowedTabs, true)) : ?>
+                                    — <a href="<?php echo esc_url($tabBaseUrl . $rec['tab']); ?>">Perbaiki di tab <?php echo esc_html(ucfirst($rec['tab'])); ?> →</a>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+
             <script>
-                document.querySelectorAll('.pa-copy-url-btn').forEach(function(btn){
-                    btn.addEventListener('click', function(){
-                        var u = btn.getAttribute('data-url');
-                        if(navigator.clipboard){ navigator.clipboard.writeText(u); }
-                        var orig = btn.textContent;
-                        btn.textContent = 'Tersalin!';
-                        setTimeout(function(){ btn.textContent = orig; }, 1400);
+                (function(){
+                    document.querySelectorAll('.pa-copy-url-btn').forEach(function(btn){
+                        btn.addEventListener('click', function(){
+                            var u = btn.getAttribute('data-url');
+                            if(navigator.clipboard){ navigator.clipboard.writeText(u); }
+                            var orig = btn.textContent;
+                            btn.textContent = 'Tersalin!';
+                            setTimeout(function(){ btn.textContent = orig; }, 1400);
+                        });
                     });
-                });
+                    var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-dash-tab]'));
+                    var panels = Array.prototype.slice.call(document.querySelectorAll('[data-dash-panel]'));
+                    if(!tabs.length) return;
+                    function activateDashTab(key, focusMove){
+                        tabs.forEach(function(t){
+                            var on = (t.getAttribute('data-dash-tab') === key);
+                            t.classList.toggle('is-active', on);
+                            t.setAttribute('aria-selected', on ? 'true' : 'false');
+                            t.setAttribute('tabindex', on ? '0' : '-1');
+                            if(on && focusMove) t.focus();
+                        });
+                        panels.forEach(function(p){
+                            if(p.getAttribute('data-dash-panel') === key) p.removeAttribute('hidden');
+                            else p.setAttribute('hidden', '');
+                        });
+                    }
+                    tabs.forEach(function(tab, idx){
+                        tab.addEventListener('click', function(){ activateDashTab(tab.getAttribute('data-dash-tab'), false); });
+                        tab.addEventListener('keydown', function(e){
+                            var next = -1;
+                            if(e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
+                            else if(e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
+                            else if(e.key === 'Home') next = 0;
+                            else if(e.key === 'End') next = tabs.length - 1;
+                            if(next >= 0){ e.preventDefault(); activateDashTab(tabs[next].getAttribute('data-dash-tab'), true); }
+                        });
+                    });
+                })();
             </script>
 
         <?php elseif ($activeTab === 'upload') :
@@ -3714,19 +4003,20 @@ function pa_sinova_render_admin_page(): void {
             <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start;">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingDoc ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
-                        <h2 style="margin:0;color:#056e4f;"><?php echo $isEditingDoc ? 'Edit Dokumen Arsip' : 'Upload Dokumen Cepat'; ?></h2>
+                        <h2 style="margin:0;color:#056e4f;">
+                            <?php echo $isEditingDoc ? 'Edit Dokumen Arsip' : 'Upload Dokumen Cepat'; ?>
+                            <?php echo pa_sinova_info_tip($isEditingDoc ? 'Kosongkan file & URL jika hanya memperbaiki modul, tahun, slot, atau judul.' : 'Unggah PDF maksimal 10 MB atau tempel tautan Google Drive / cloud resmi.', 'Info upload'); ?>
+                        </h2>
                         <?php if ($isEditingDoc) : ?>
                             <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Mode Edit · ID #<?php echo esc_html((string) $editDoc['id']); ?></span>
                         <?php endif; ?>
                     </div>
                     <?php if ($isEditingDoc) : ?>
                         <p style="font-size:12.5px;color:#334155;background:#f8fafc;border-left:3px solid #056e4f;padding:8px 10px;margin:8px 0 12px;">
-                            Mengubah dokumen <strong><?php echo esc_html((string) $editDoc['title']); ?></strong>.<br>
-                            Sumber aktif:
+                            <strong><?php echo esc_html((string) $editDoc['title']); ?></strong> ·
                             <a href="<?php echo esc_url((string) $editDoc['doc_url']); ?>" target="_blank" rel="noopener noreferrer">
-                                <?php echo esc_html(($editDoc['source_type'] ?? '') === 'wp_pdf' ? 'PDF Lokal (' . basename((string) $editDoc['doc_url']) . ')' : (string) $editDoc['doc_url']); ?> ↗
+                                <?php echo esc_html(($editDoc['source_type'] ?? '') === 'wp_pdf' ? 'PDF Lokal (' . basename((string) $editDoc['doc_url']) . ')' : 'Sumber URL'); ?> ↗
                             </a>
-                            <br><span style="color:#64748b;">Biarkan berkas &amp; kolom URL kosong jika hanya ingin memperbaiki modul, tahun, slot, atau judul.</span>
                         </p>
                     <?php endif; ?>
                     <form method="post" action="<?php echo esc_url($uploadViewUrl); ?>" enctype="multipart/form-data">
@@ -4242,16 +4532,12 @@ function pa_sinova_render_admin_page(): void {
         ?>
             <div style="display:grid;grid-template-columns:1fr;gap:20px;">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">1. Mode Adopsi Situs Lama (Non-Destruktif)</h2>
-                    <p style="color:#475569;margin-top:0;">Cocok bagi Satker yang <strong>sudah memiliki website WordPress aktif</strong> atau baru saja mengimpor konten artikel dari <strong>Joomla</strong> dan ingin mempertahankan tema, susunan menu, serta halaman Beranda lama.</p>
+                    <h2 style="margin-top:0;color:#056e4f;">1. Mode Adopsi Situs Lama (Non-Destruktif) <?php echo pa_sinova_info_tip('Aktifkan bila sudah punya tema, menu, Elementor, atau konten impor Joomla yang ingin tetap dipertahankan.', 'Info mode adopsi'); ?></h2>
                     <form method="post">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                        <label style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:14px;">
-                            <input type="checkbox" name="preserve_existing_design" value="1" <?php checked($isAdoption); ?> style="margin-top:3px;">
-                            <span>
-                                <strong>Pertahankan header, menu navigasi, dan beranda situs lama (Mode Non-Destruktif)</strong><br>
-                                <small style="color:#475569;">Jika diaktifkan: header, navbar, dan tampilan depan situs lama Anda tidak disentuh. Hanya fitur backend (23 Modul Dokumen <code>[pa_sinova_docs]</code>, Dashboard 35 Kriteria, Keamanan WAF/Rate Limit, &amp; Cache) yang bekerja.</small>
-                            </span>
+                        <label style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:14px;">
+                            <input type="checkbox" name="preserve_existing_design" value="1" <?php checked($isAdoption); ?>>
+                            <span><strong>Pertahankan header, menu navigasi, dan beranda situs lama</strong> <?php echo pa_sinova_info_tip('Header, navbar, dan halaman depan lama tidak diubah. Modul dokumen [pa_sinova_docs], Dashboard 35 Kriteria, WAF keamanan, dan cache tetap aktif.', 'Detail mode non-destruktif'); ?></span>
                         </label>
                         <div style="display:flex;flex-wrap:wrap;gap:10px;">
                             <button type="submit" name="pa_sinova_action" value="save_adoption_mode" class="button button-secondary">Simpan Pengaturan Mode Adopsi</button>
@@ -4261,8 +4547,7 @@ function pa_sinova_render_admin_page(): void {
                 </div>
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">2. Ekstrak &amp; Impor Tautan Dokumen dari Halaman/Pos Lama</h2>
-                    <p style="color:#475569;margin-top:0;">Pindai daftar tautan PDF atau Google Drive yang sudah tertulis pada halaman/berita lama (termasuk hasil migrasi Joomla) untuk dimasukkan langsung ke tabel modul arsip.</p>
+                    <h2 style="margin-top:0;color:#056e4f;">2. Ekstrak &amp; Impor Tautan Dokumen <?php echo pa_sinova_info_tip('Pindai link PDF atau Google Drive dari halaman/berita lama (termasuk hasil impor Joomla) langsung ke tabel modul arsip.', 'Info impor tautan'); ?></h2>
                     <form method="post" style="display:grid;grid-template-columns:1.4fr 1.2fr 120px auto;gap:12px;align-items:end;margin-bottom:16px;">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="scan_links">
@@ -4341,8 +4626,7 @@ function pa_sinova_render_admin_page(): void {
                 </div>
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">3. Pemetaan Halaman Lama untuk 35 Kriteria</h2>
-                    <p style="color:#475569;margin-top:0;">Jika halaman pada website lama memakai URL/slug berbeda (misal <code>/profil/visi-misi/</code> atau hasil migrasi Joomla), tautkan di sini agar Dashboard Kepatuhan &amp; tombol <strong>Salin URL</strong> mengarah ke halaman lama tanpa mengubah tautan publik.</p>
+                    <h2 style="margin-top:0;color:#056e4f;">3. Pemetaan Halaman Lama untuk 35 Kriteria <?php echo pa_sinova_info_tip('Petakan URL/slug halaman lama Anda agar Dashboard Kepatuhan & tombol Salin URL tetap membaca halaman lama.', 'Info pemetaan halaman'); ?></h2>
                     <form method="post">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="save_custom_map">
@@ -4394,6 +4678,7 @@ function pa_sinova_render_admin_page(): void {
             $homeGlobals   = array(
                 'sipp_slide_url'     => (string) ($cfg['sipp_slide_url'] ?? ''),
                 'home_show_ticker'   => (string) ($cfg['home_show_ticker'] ?? '1'),
+                'home_ticker_label'  => (string) ($cfg['home_ticker_label'] ?? 'INFO LAYANAN'),
                 'home_ticker_text'   => (string) ($cfg['home_ticker_text'] ?? ''),
                 'home_hero_kicker'   => (string) ($cfg['home_hero_kicker'] ?? ''),
                 'home_hero_title'    => (string) ($cfg['home_hero_title'] ?? ''),
@@ -4416,6 +4701,17 @@ function pa_sinova_render_admin_page(): void {
                 </div>
             <?php endif; ?>
 
+            <div class="pa-ticker-admin-bar">
+                <label style="font-weight:700;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;">
+                    <input type="checkbox" id="pa-gb-top-show-ticker" <?php checked($homeGlobals['home_show_ticker'] !== '0'); ?>>
+                    Pita Teks Berjalan
+                    <?php echo pa_sinova_info_tip('Teks Info Layanan berjalan halus otomatis di bagian atas Beranda. Klik Simpan Tampilan Beranda di bawah untuk menerapkan.', 'Info teks berjalan'); ?>
+                </label>
+                <input type="text" id="pa-gb-top-ticker-lbl" value="<?php echo esc_attr($homeGlobals['home_ticker_label']); ?>" placeholder="INFO LAYANAN" aria-label="Label Pita Info">
+                <input type="text" id="pa-gb-top-ticker-txt" value="<?php echo esc_attr($homeGlobals['home_ticker_text']); ?>" placeholder="Teks informasi berjalan di Beranda..." aria-label="Teks Berjalan Info Layanan">
+                <span style="font-size:11px;color:#64748b;">Ikut tersimpan saat klik Simpan</span>
+            </div>
+
             <div class="pa-grid-toolbar">
                 <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
                     <select id="pa-gb-add-type" aria-label="Pilih jenis blok" style="min-width:210px;">
@@ -4424,7 +4720,7 @@ function pa_sinova_render_admin_page(): void {
                         <?php endforeach; ?>
                     </select>
                     <button type="button" id="pa-gb-add-btn" class="button">+ Tambah Blok</button>
-                    <span class="pa-adm-tip" tabindex="0" data-tip="Seret kotak untuk pindah kolom/baris. Tarik sudut kanan bawah kotak untuk atur lebar (1–12 kolom) dan tinggi. Klik ikon pensil untuk ubah isi blok." aria-label="Cara pakai editor grid">i</span>
+                    <?php echo pa_sinova_info_tip('Seret kotak untuk pindah kolom/baris. Tarik sudut kanan bawah kotak untuk atur lebar (2–12 kolom) dan tinggi. Klik ikon pensil untuk ubah isi blok.', 'Cara pakai editor grid'); ?>
                 </div>
                 <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
                     <form method="post" style="margin:0;" onsubmit="return confirm('Kembalikan tata letak Beranda ke susunan standar 12 kolom?');">
@@ -4437,6 +4733,7 @@ function pa_sinova_render_admin_page(): void {
                         <input type="hidden" name="pa_sinova_action" value="save_home_grid">
                         <input type="hidden" name="pa_home_blocks_json" id="pa-gb-json-input" value="">
                         <input type="hidden" name="home_show_ticker" id="pa-gb-h-show-ticker" value="<?php echo esc_attr($homeGlobals['home_show_ticker']); ?>">
+                        <input type="hidden" name="home_ticker_label" id="pa-gb-h-ticker-lbl" value="<?php echo esc_attr($homeGlobals['home_ticker_label']); ?>">
                         <input type="hidden" name="home_ticker_text" id="pa-gb-h-ticker" value="<?php echo esc_attr($homeGlobals['home_ticker_text']); ?>">
                         <input type="hidden" name="home_hero_kicker" id="pa-gb-h-kicker" value="<?php echo esc_attr($homeGlobals['home_hero_kicker']); ?>">
                         <input type="hidden" name="home_hero_title" id="pa-gb-h-title" value="<?php echo esc_attr($homeGlobals['home_hero_title']); ?>">
@@ -4533,6 +4830,52 @@ function pa_sinova_render_admin_page(): void {
                             <div class="pa-dlg-field"><label for="pa-ed-ctaurl">URL Tombol (Opsional)</label><input type="url" id="pa-ed-ctaurl" placeholder="https://..."></div>
                         </div>
                     </div>
+
+                    <div id="pa-ed-sec-iframe" hidden>
+                        <div class="pa-dlg-field"><label for="pa-ed-if-url">URL Sematan Iframe (HTTPS)</label><input type="url" id="pa-ed-if-url" placeholder="https://sipp.pa-satker.go.id/... atau https://drive.google.com/..."></div>
+                        <div class="pa-dlg-grid4" style="grid-template-columns:1fr 1fr;">
+                            <div class="pa-dlg-field"><label for="pa-ed-if-h">Tinggi Iframe (px)</label><input type="number" id="pa-ed-if-h" min="260" max="900" value="440"></div>
+                            <div class="pa-dlg-field" style="display:flex;align-items:flex-end;padding-bottom:6px;"><label><input type="checkbox" id="pa-ed-if-fs" value="1" checked> Tampilkan tautan Layar Penuh</label></div>
+                        </div>
+                        <div class="pa-dlg-field"><label for="pa-ed-if-cap">Keterangan Singkat (Opsional)</label><input type="text" id="pa-ed-if-cap" placeholder="Misal: Jadwal Antrean PTSP Live"></div>
+                    </div>
+
+                    <div id="pa-ed-sec-image" hidden>
+                        <div class="pa-dlg-field">
+                            <label for="pa-ed-img-url">URL Gambar / Poster</label>
+                            <div style="display:flex;gap:6px;">
+                                <input type="url" id="pa-ed-img-url" placeholder="https://.../poster.jpg">
+                                <button type="button" class="button pa-media-pick-btn" data-target="pa-ed-img-url">Pilih Media</button>
+                            </div>
+                        </div>
+                        <div class="pa-dlg-grid4" style="grid-template-columns:1fr 1fr;">
+                            <div class="pa-dlg-field"><label for="pa-ed-img-fit">Mode Tampil</label><select id="pa-ed-img-fit"><option value="cover">Penuhi Bingkai (Cover)</option><option value="contain">Utuh / Proporsional (Contain)</option></select></div>
+                            <div class="pa-dlg-field"><label for="pa-ed-img-h">Tinggi Maksimal (px)</label><input type="number" id="pa-ed-img-h" min="180" max="900" value="360"></div>
+                        </div>
+                        <div class="pa-dlg-field"><label for="pa-ed-img-alt">Teks Alternatif / Keterangan Gambar</label><input type="text" id="pa-ed-img-alt" placeholder="Deskripsi singkat poster/infografis"></div>
+                        <div class="pa-dlg-field"><label for="pa-ed-img-link">URL Tautan Jika Gambar Diklik (Opsional)</label><input type="url" id="pa-ed-img-link" placeholder="https://..."></div>
+                    </div>
+
+                    <div id="pa-ed-sec-slider" hidden>
+                        <div class="pa-dlg-grid4" style="grid-template-columns:1fr 1fr;">
+                            <div class="pa-dlg-field">
+                                <label for="pa-ed-sl-src">Sumber Slide</label>
+                                <select id="pa-ed-sl-src">
+                                    <option value="custom">Daftar Gambar Kustom</option>
+                                    <option value="records">Otomatis dari Data Slider Beranda</option>
+                                </select>
+                            </div>
+                            <div class="pa-dlg-field"><label for="pa-ed-sl-auto">Putar Otomatis (detik, 0 = manual)</label><input type="number" id="pa-ed-sl-auto" min="0" max="15" value="5"></div>
+                        </div>
+                        <div class="pa-dlg-field"><label for="pa-ed-sl-h">Tinggi Slider (px)</label><input type="number" id="pa-ed-sl-h" min="220" max="720" value="360"></div>
+                        <div id="pa-ed-sl-custom-wrap">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <strong style="font-size:12px;color:#043927;">Daftar Slide Gambar</strong>
+                                <button type="button" id="pa-ed-sl-add" class="button button-small">+ Tambah Slide</button>
+                            </div>
+                            <div id="pa-ed-sl-list"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="pa-dlg-foot">
                     <form method="dialog" style="margin:0;"><button type="submit" class="button">Batal</button></form>
@@ -4586,7 +4929,7 @@ function pa_sinova_render_admin_page(): void {
                     document.getElementById('pa-ed-h').value = b.h;
                     document.getElementById('pa-grid-edit-title').textContent = 'Ubah: ' + (b.title || (catalog[b.type] ? catalog[b.type].label : b.type));
 
-                    ['pa-ed-sec-hero','pa-ed-sec-schedule','pa-ed-sec-survey','pa-ed-sec-count','pa-ed-sec-custom'].forEach(function(sid){
+                    ['pa-ed-sec-hero','pa-ed-sec-schedule','pa-ed-sec-survey','pa-ed-sec-count','pa-ed-sec-custom','pa-ed-sec-iframe','pa-ed-sec-image','pa-ed-sec-slider'].forEach(function(sid){
                         var el = document.getElementById(sid);
                         if (el) el.hidden = true;
                     });
@@ -4619,9 +4962,66 @@ function pa_sinova_render_admin_page(): void {
                         document.getElementById('pa-ed-body').value = b.config.body || '';
                         document.getElementById('pa-ed-ctalbl').value = b.config.cta_label || '';
                         document.getElementById('pa-ed-ctaurl').value = b.config.cta_url || '';
+                    } else if (b.type === 'iframe_embed') {
+                        document.getElementById('pa-ed-sec-iframe').hidden = false;
+                        document.getElementById('pa-ed-if-url').value = b.config.embed_url || '';
+                        document.getElementById('pa-ed-if-h').value = b.config.height || 440;
+                        document.getElementById('pa-ed-if-fs').checked = (b.config.show_fullscreen !== '0');
+                        document.getElementById('pa-ed-if-cap').value = b.config.caption || '';
+                    } else if (b.type === 'image_banner') {
+                        document.getElementById('pa-ed-sec-image').hidden = false;
+                        document.getElementById('pa-ed-img-url').value = b.config.image_url || '';
+                        document.getElementById('pa-ed-img-fit').value = b.config.image_fit || 'cover';
+                        document.getElementById('pa-ed-img-h').value = b.config.height || 360;
+                        document.getElementById('pa-ed-img-alt').value = b.config.image_alt || b.config.caption || '';
+                        document.getElementById('pa-ed-img-link').value = b.config.link_url || '';
+                    } else if (b.type === 'photo_slider') {
+                        document.getElementById('pa-ed-sec-slider').hidden = false;
+                        document.getElementById('pa-ed-sl-src').value = b.config.slide_source || 'custom';
+                        document.getElementById('pa-ed-sl-auto').value = (typeof b.config.autoplay_sec === 'number') ? b.config.autoplay_sec : 5;
+                        document.getElementById('pa-ed-sl-h').value = b.config.height || 360;
+                        renderSlideEditorList(Array.isArray(b.config.slides) ? b.config.slides : []);
                     }
                     dlg.showModal();
                 }
+
+                var slListEl = document.getElementById('pa-ed-sl-list');
+                var slSrcEl = document.getElementById('pa-ed-sl-src');
+                var slWrapEl = document.getElementById('pa-ed-sl-custom-wrap');
+                if (slSrcEl && slWrapEl) {
+                    slSrcEl.addEventListener('change', function(){ slWrapEl.style.display = (slSrcEl.value === 'custom') ? '' : 'none'; });
+                }
+                function addSlideRow(item){
+                    if (!slListEl) return;
+                    var row = document.createElement('div');
+                    row.className = 'pa-slide-row';
+                    var inpUrl = document.createElement('input');
+                    inpUrl.type = 'url'; inpUrl.className = 'pa-sl-url'; inpUrl.placeholder = 'URL Gambar (HTTPS)'; inpUrl.value = (item && item.image_url) || '';
+                    var inpTitle = document.createElement('input');
+                    inpTitle.type = 'text'; inpTitle.className = 'pa-sl-title'; inpTitle.placeholder = 'Judul / Keterangan (opsional)'; inpTitle.value = (item && item.title) || '';
+                    var actBox = document.createElement('div');
+                    actBox.style.cssText = 'display:flex;gap:4px;';
+                    var pick = document.createElement('button');
+                    pick.type = 'button'; pick.className = 'button button-small pa-media-pick-row'; pick.textContent = 'Media';
+                    pick.addEventListener('click', function(){
+                        if (window.paOpenMediaPicker) { window.paOpenMediaPicker(function(url){ inpUrl.value = url; }); }
+                    });
+                    var del = document.createElement('button');
+                    del.type = 'button'; del.className = 'button button-small'; del.textContent = '✕';
+                    del.addEventListener('click', function(){ row.remove(); });
+                    actBox.appendChild(pick); actBox.appendChild(del);
+                    row.appendChild(inpUrl); row.appendChild(inpTitle); row.appendChild(actBox);
+                    slListEl.appendChild(row);
+                }
+                function renderSlideEditorList(items){
+                    if (!slListEl) return;
+                    slListEl.replaceChildren();
+                    if (!items || !items.length) { addSlideRow({}); }
+                    else { items.forEach(addSlideRow); }
+                    if (slWrapEl && slSrcEl) slWrapEl.style.display = (slSrcEl.value === 'custom') ? '' : 'none';
+                }
+                var addSlBtn = document.getElementById('pa-ed-sl-add');
+                if (addSlBtn) { addSlBtn.addEventListener('click', function(){ addSlideRow({}); }); }
 
                 document.getElementById('pa-ed-apply').addEventListener('click', function(){
                     var id = document.getElementById('pa-ed-id').value;
@@ -4637,6 +5037,8 @@ function pa_sinova_render_admin_page(): void {
                     if (b.type === 'hero_slider') {
                         globals.home_show_ticker = document.getElementById('pa-ed-show-ticker').checked ? '1' : '0';
                         globals.home_ticker_text = document.getElementById('pa-ed-ticker').value.trim();
+                        if (topShowChk) topShowChk.checked = (globals.home_show_ticker !== '0');
+                        if (topTickTxt) topTickTxt.value = globals.home_ticker_text;
                         globals.home_hero_kicker = document.getElementById('pa-ed-kicker').value.trim();
                         globals.home_hero_title  = document.getElementById('pa-ed-htitle').value.trim();
                         globals.home_hero_lead   = document.getElementById('pa-ed-hlead').value.trim();
@@ -4662,6 +5064,31 @@ function pa_sinova_render_admin_page(): void {
                         b.config.body      = document.getElementById('pa-ed-body').value;
                         b.config.cta_label = document.getElementById('pa-ed-ctalbl').value.trim();
                         b.config.cta_url   = document.getElementById('pa-ed-ctaurl').value.trim();
+                    } else if (b.type === 'iframe_embed') {
+                        b.config.embed_url       = document.getElementById('pa-ed-if-url').value.trim();
+                        b.config.height          = clamp(parseInt(document.getElementById('pa-ed-if-h').value, 10) || 440, 260, 900);
+                        b.config.show_fullscreen = document.getElementById('pa-ed-if-fs').checked ? '1' : '0';
+                        b.config.caption         = document.getElementById('pa-ed-if-cap').value.trim();
+                    } else if (b.type === 'image_banner') {
+                        b.config.image_url = document.getElementById('pa-ed-img-url').value.trim();
+                        b.config.image_fit = document.getElementById('pa-ed-img-fit').value;
+                        b.config.height    = clamp(parseInt(document.getElementById('pa-ed-img-h').value, 10) || 360, 180, 900);
+                        b.config.image_alt = document.getElementById('pa-ed-img-alt').value.trim();
+                        b.config.caption   = b.config.image_alt;
+                        b.config.link_url  = document.getElementById('pa-ed-img-link').value.trim();
+                    } else if (b.type === 'photo_slider') {
+                        b.config.slide_source = document.getElementById('pa-ed-sl-src').value;
+                        b.config.autoplay_sec = clamp(parseInt(document.getElementById('pa-ed-sl-auto').value, 10) || 0, 0, 15);
+                        b.config.height       = clamp(parseInt(document.getElementById('pa-ed-sl-h').value, 10) || 360, 220, 720);
+                        var collected = [];
+                        if (slListEl) {
+                            slListEl.querySelectorAll('.pa-slide-row').forEach(function(r){
+                                var u = (r.querySelector('.pa-sl-url') || {}).value || '';
+                                var t = (r.querySelector('.pa-sl-title') || {}).value || '';
+                                if (u.trim()) collected.push({ image_url: u.trim(), title: t.trim(), link_url: '' });
+                            });
+                        }
+                        b.config.slides = collected;
                     }
                     dlg.close();
                     render();
@@ -4831,11 +5258,16 @@ function pa_sinova_render_admin_page(): void {
                     });
                 }
 
+                var topShowChk = document.getElementById('pa-gb-top-show-ticker');
+                var topTickLbl = document.getElementById('pa-gb-top-ticker-lbl');
+                var topTickTxt = document.getElementById('pa-gb-top-ticker-txt');
+
                 if (saveFrm) {
                     saveFrm.addEventListener('submit', function(){
                         jsonInp.value = JSON.stringify(blocks);
-                        document.getElementById('pa-gb-h-show-ticker').value = globals.home_show_ticker || '1';
-                        document.getElementById('pa-gb-h-ticker').value = globals.home_ticker_text || '';
+                        document.getElementById('pa-gb-h-show-ticker').value = topShowChk ? (topShowChk.checked ? '1' : '0') : (globals.home_show_ticker || '1');
+                        document.getElementById('pa-gb-h-ticker-lbl').value  = topTickLbl ? (topTickLbl.value.trim() || 'INFO LAYANAN') : (globals.home_ticker_label || 'INFO LAYANAN');
+                        document.getElementById('pa-gb-h-ticker').value      = topTickTxt ? topTickTxt.value.trim() : (globals.home_ticker_text || '');
                         document.getElementById('pa-gb-h-kicker').value = globals.home_hero_kicker || '';
                         document.getElementById('pa-gb-h-title').value  = globals.home_hero_title || '';
                         document.getElementById('pa-gb-h-lead').value   = globals.home_hero_lead || '';
@@ -4851,24 +5283,34 @@ function pa_sinova_render_admin_page(): void {
             </script>
 
         <?php elseif ($activeTab === 'settings') :
-            $isAdoption = (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1');
+            $isAdoption   = (!empty($cfg['preserve_existing_design']) && (string) $cfg['preserve_existing_design'] === '1');
+            $seededOption = get_option('pa_sinova_seeded_pages', array());
+            $seededCount  = is_array($seededOption) ? count($seededOption) : 0;
+            $dirputPrev   = function_exists('pa_portal_dirput_resolve_urls') ? pa_portal_dirput_resolve_urls() : array();
+            $acoLogoNow   = trim((string) ($cfg['aco_logo_url'] ?? ''));
         ?>
             <?php if ($isAdoption) : ?>
                 <div class="notice notice-info inline" style="margin:0 0 16px;padding:10px 14px;">
-                    <strong>Mode Adopsi Situs Lama sedang AKTIF:</strong> Seeder 1-Klik hanya melengkapi halaman yang belum tersedia tanpa mengubah tema, menu, maupun halaman Beranda eksisting. Kelola melalui tab <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>">Migrasi &amp; Adopsi</a>.
+                    <strong>Mode Adopsi Situs Lama sedang AKTIF</strong> <?php echo pa_sinova_info_tip('Seeder 1-Klik hanya melengkapi halaman yang kurang tanpa mengubah tema, menu, maupun Beranda lama.', 'Info mode adopsi'); ?>
+                    · <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>">Kelola</a>
                 </div>
             <?php endif; ?>
-            <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:start;">
+            <div style="display:grid;grid-template-columns:1.45fr 0.9fr;gap:20px;align-items:start;">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">Konfigurasi Identitas Satker &amp; API</h2>
+                    <h2 style="margin-top:0;color:#056e4f;">Identitas Satker, Tampilan &amp; API</h2>
                     <form method="post">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="save_settings">
                         <input type="hidden" name="preserve_existing_design" value="<?php echo $isAdoption ? '1' : '0'; ?>">
                         <table class="form-table">
                             <tr><th>Nama Satker</th><td><input type="text" name="satker_name" class="regular-text" value="<?php echo esc_attr($cfg['satker_name']); ?>"></td></tr>
-                            <tr><th>URL Logo Resmi</th><td><input type="url" name="logo_url" class="regular-text" value="<?php echo esc_attr($cfg['logo_url'] ?? ''); ?>" placeholder="https://.../logo-pa.png"></td></tr>
-                            <tr><th>Palet Aksen Visual (SK 2722)</th><td>
+                            <tr><th>URL Logo Resmi</th><td>
+                                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                                    <input type="url" id="pa-set-logo-url" name="logo_url" class="regular-text" value="<?php echo esc_attr($cfg['logo_url'] ?? ''); ?>" placeholder="https://.../logo-pa.png">
+                                    <button type="button" class="button pa-media-pick-btn" data-target="pa-set-logo-url">Pilih Media</button>
+                                </div>
+                            </td></tr>
+                            <tr><th>Palet Aksen Visual</th><td>
                                 <select name="accent_palette" class="regular-text">
                                     <option value="gold" <?php selected($cfg['accent_palette'] ?? 'gold', 'gold'); ?>>Hijau Institusional &amp; Royal Gold (#056e4f / #C9A227)</option>
                                     <option value="badilag_orange" <?php selected($cfg['accent_palette'] ?? 'gold', 'badilag_orange'); ?>>Hijau Badilag &amp; Aksen Oranye (#056e4f / #ff9900)</option>
@@ -4878,51 +5320,89 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>Telepon / WA PTSP</th><td><input type="text" name="phone" class="regular-text" value="<?php echo esc_attr($cfg['phone']); ?>"></td></tr>
                             <tr><th>Email Resmi</th><td><input type="email" name="email" class="regular-text" value="<?php echo esc_attr($cfg['email']); ?>"></td></tr>
                             <tr><th>Jam Sidang</th><td><input type="text" name="hearing_hours" class="regular-text" value="<?php echo esc_attr($cfg['hearing_hours'] ?? ''); ?>"></td></tr>
-                            <tr><th>Nama Pimpinan / Jabatan</th><td><input type="text" name="leader_name" class="regular-text" value="<?php echo esc_attr($cfg['leader_name']); ?>"></td></tr>
+                            <tr><th>Nama Pimpinan</th><td><input type="text" name="leader_name" class="regular-text" value="<?php echo esc_attr($cfg['leader_name']); ?>"></td></tr>
                             <tr><th>Sambutan Pimpinan</th><td><textarea name="leader_welcome" rows="3" class="large-text"><?php echo esc_textarea($cfg['leader_welcome']); ?></textarea></td></tr>
                             <tr><th>URL SIPP</th><td><input type="url" name="sipp_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_url']); ?>"></td></tr>
-                            <tr><th>URL Slide Jadwal Sidang SIPP (Beranda)</th><td><input type="url" name="sipp_slide_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_slide_url'] ?? ''); ?>" placeholder="https://sipp.pa-satker.go.id/Slide_sidang"><br><small style="color:#64748b;">Opsional (HTTPS): cukup tempel tautan <code>Slide_sidang</code> SIPP satker agar tampil otomatis sebagai panel jadwal sidang elegan di Beranda dan otomatis diizinkan pada header CSP <code>frame-src</code> (dapat juga ditaruh di halaman lain dengan shortcode <code>[pa_sinova_sipp_slide]</code>).</small></td></tr>
+                            <tr><th>URL Slide Jadwal Sidang SIPP <?php echo pa_sinova_info_tip('Tempel tautan Slide_sidang SIPP satker (HTTPS) untuk tampil sebagai panel jadwal sidang live di Beranda & izin frame-src otomatis.', 'Info slide SIPP'); ?></th><td><input type="url" name="sipp_slide_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_slide_url'] ?? ''); ?>" placeholder="https://sipp.pa-sumedang.go.id/Slide_sidang"></td></tr>
                             <tr><th>URL e-Court</th><td><input type="url" name="ecourt_url" class="regular-text" value="<?php echo esc_attr($cfg['ecourt_url']); ?>"></td></tr>
-                            <tr><th>URL Direktori Putusan Satker</th><td>
-                                <input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>" placeholder="https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-semarang.html">
-                                <?php
-                                $dirputPrev = function_exists('pa_portal_dirput_resolve_urls') ? pa_portal_dirput_resolve_urls() : array();
-                                ?>
-                                <br><small style="color:#64748b;">Tempel URL profil/direktori satker di <code>putusan3.mahkamahagung.go.id</code> (contoh: <code>.../pengadilan/profil/pengadilan/pa-semarang.html</code>). RSS Putusan satker otomatis terdeteksi<?php if (!empty($dirputPrev['rss_url'])) : ?>: <code><?php echo esc_html((string) $dirputPrev['rss_url']); ?></code><?php endif; ?> dan tampil di Beranda / shortcode <code>[pa_direktori_putusan]</code>.</small>
+                            <tr><th>URL Direktori Putusan Satker <?php echo pa_sinova_info_tip('Tempel URL profil/direktori satker di putusan3.mahkamahagung.go.id, misal https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-sumedang.html. Halaman /direktori-putusan/ dan pencarian Beranda menyesuaikan otomatis.', 'Info URL Direktori Putusan'); ?></th><td>
+                                <input type="url" name="direktori_url" class="regular-text" value="<?php echo esc_attr($cfg['direktori_url']); ?>" placeholder="https://putusan3.mahkamahagung.go.id/pengadilan/profil/pengadilan/pa-sumedang.html">
                             </td></tr>
-                            <tr><th>RSS Direktori Putusan (Opsional)</th><td>
-                                <input type="url" name="dirput_rss_url" class="regular-text" value="<?php echo esc_attr($cfg['dirput_rss_url'] ?? ''); ?>" placeholder="Kosongkan untuk otomatis dari URL Direktori Putusan di atas">
-                                <br><small style="color:#64748b;">Biarkan kosong agar otomatis menggunakan <code>https://putusan3.mahkamahagung.go.id/rss/pengadilan/&lt;kode-satker&gt;.html</code>.</small>
+                            <tr><th>Kode Hash Putusan3 (Opsional) <?php echo pa_sinova_info_tip('Opsional: kode 32 karakter parameter court= dari URL search.html putusan3 agar pencarian beranda mengunci satker Anda secara persis. Boleh dikosongkan; bila kosong pencarian otomatis menyertakan nama satker.', 'Info kode hash pengadilan'); ?></th><td>
+                                <input type="text" name="dirput_court_hash" class="regular-text" value="<?php echo esc_attr($cfg['dirput_court_hash'] ?? ''); ?>" placeholder="Opsional: tempel hash 32 hex atau URL search.html?court=...">
+                            </td></tr>
+                            <tr><th>RSS Direktori Putusan <?php echo pa_sinova_info_tip('Opsional. Jika dikosongkan otomatis memakai https://putusan3.mahkamahagung.go.id/rss/pengadilan/<kode-satker>.html.', 'Info RSS Direktori Putusan'); ?></th><td>
+                                <input type="url" name="dirput_rss_url" class="regular-text" value="<?php echo esc_attr($cfg['dirput_rss_url'] ?? ''); ?>" placeholder="<?php echo esc_attr(!empty($dirputPrev['rss_url']) ? $dirputPrev['rss_url'] : 'Otomatis dari URL Direktori Putusan di atas'); ?>">
                             </td></tr>
                             <tr><th>URL Survei Badilag</th><td><input type="url" name="survey_url" class="regular-text" value="<?php echo esc_attr($cfg['survey_url']); ?>"></td></tr>
-                            <tr><th>URL CCTV Online (ACO)</th><td><input type="url" name="aco_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" placeholder="https://cctv.badilag.net/"><br><small style="color:#64748b;">Tautan Access CCTV Online Badilag / ruang PTSP Satker (kosongkan untuk menyembunyikan tautan &amp; lencana ACO).</small></td></tr>
-                            <tr><th>Logo CCTV ACO (Opsional)</th><td><input type="url" name="aco_logo_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_logo_url'] ?? ''); ?>" placeholder="Kosongkan untuk memakai animasi CCTV ACO bawaan"><br><small style="color:#64748b;">Biarkan kosong untuk memakai gambar GIF CCTV ACO lokal bawaan (<code>assets/cctv-aco.gif</code>), atau isi URL gambar Media Library satker sendiri.</small></td></tr>
-                            <tr><th>Dock Floating CCTV ACO</th><td><label><input type="checkbox" name="aco_float_enabled" value="1" <?php checked(($cfg['aco_float_enabled'] ?? '1') !== '0'); ?>> Tampilkan lencana CCTV ACO mini di tepi kanan layar</label></td></tr>
+
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Teks Berjalan Beranda (Info Layanan)</th></tr>
+                            <tr><th>Teks Berjalan <?php echo pa_sinova_info_tip('Tampil sebagai pita informasi berjalan elegan di atas Beranda dan berhenti saat disorot kursor.', 'Info teks berjalan'); ?></th><td>
+                                <label style="display:inline-flex;align-items:center;gap:6px;margin-bottom:6px;"><input type="checkbox" name="home_show_ticker" value="1" <?php checked(($cfg['home_show_ticker'] ?? '1') !== '0'); ?>> Tampilkan pita Info Layanan berjalan di Beranda</label><br>
+                                <input type="text" name="home_ticker_label" value="<?php echo esc_attr($cfg['home_ticker_label'] ?? 'INFO LAYANAN'); ?>" placeholder="INFO LAYANAN" style="width:160px;margin-bottom:6px;">
+                                <textarea name="home_ticker_text" rows="2" class="large-text"><?php echo esc_textarea($cfg['home_ticker_text'] ?? ''); ?></textarea>
+                            </td></tr>
+
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Logo Melayang CCTV ACO</th></tr>
+                            <tr><th>URL Tujuan CCTV ACO <?php echo pa_sinova_info_tip('Tautan ketika ikon CCTV ACO di pojok/tepi layar diklik (misal link room ACO satker atau cctv.badilag.net). Kosongkan untuk menyembunyikan.', 'Info URL CCTV ACO'); ?></th><td><input type="url" name="aco_url" class="regular-text" value="<?php echo esc_attr($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" placeholder="https://cctv.badilag.net/"></td></tr>
+                            <tr><th>Gambar Logo ACO <?php echo pa_sinova_info_tip('Gunakan GIF animasi, PNG transparan, WebP, atau SVG. Kosongkan untuk memakai GIF bawaan (assets/cctv-aco.gif). Saran ukuran 120x120px.', 'Info gambar ACO'); ?></th><td>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <span class="pa-media-preview"><img id="pa-set-aco-preview" src="<?php echo esc_url($acoLogoNow !== '' ? $acoLogoNow : wp_make_link_relative(add_query_arg('pa_aco_asset', '1', home_url('/')))); ?>" alt="Pratinjau ACO"></span>
+                                    <input type="url" id="pa-set-aco-logo" name="aco_logo_url" class="regular-text" value="<?php echo esc_attr($acoLogoNow); ?>" placeholder="Kosongkan untuk GIF bawaan">
+                                    <button type="button" class="button pa-media-pick-btn" data-target="pa-set-aco-logo" data-preview="pa-set-aco-preview">Pilih / Upload GIF·PNG</button>
+                                </div>
+                            </td></tr>
+                            <tr><th>Letak &amp; Ukuran ACO <?php echo pa_sinova_info_tip('Pilih sudut bawaan serta ukuran logo. Aktifkan izinkan geser agar pengunjung/admin dapat memindahkan letaknya dengan drag.', 'Info letak & ukuran ACO'); ?></th><td>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+                                    <select name="aco_float_position" aria-label="Posisi Logo ACO">
+                                        <option value="bottom_right" <?php selected($cfg['aco_float_position'] ?? 'bottom_right', 'bottom_right'); ?>>Kanan Bawah</option>
+                                        <option value="middle_right" <?php selected($cfg['aco_float_position'] ?? 'bottom_right', 'middle_right'); ?>>Kanan Tengah</option>
+                                        <option value="top_right" <?php selected($cfg['aco_float_position'] ?? 'bottom_right', 'top_right'); ?>>Kanan Atas</option>
+                                        <option value="bottom_left" <?php selected($cfg['aco_float_position'] ?? 'bottom_right', 'bottom_left'); ?>>Kiri Bawah</option>
+                                        <option value="middle_left" <?php selected($cfg['aco_float_position'] ?? 'bottom_right', 'middle_left'); ?>>Kiri Tengah</option>
+                                    </select>
+                                    <select name="aco_float_size" aria-label="Ukuran Logo ACO">
+                                        <option value="sm" <?php selected($cfg['aco_float_size'] ?? 'md', 'sm'); ?>>Kecil (44px)</option>
+                                        <option value="md" <?php selected($cfg['aco_float_size'] ?? 'md', 'md'); ?>>Sedang (56px)</option>
+                                        <option value="lg" <?php selected($cfg['aco_float_size'] ?? 'md', 'lg'); ?>>Besar (68px)</option>
+                                    </select>
+                                </div>
+                                <label style="margin-right:12px;"><input type="checkbox" name="aco_float_enabled" value="1" <?php checked(($cfg['aco_float_enabled'] ?? '1') !== '0'); ?>> Tampilkan logo melayang</label>
+                                <label><input type="checkbox" name="aco_float_draggable" value="1" <?php checked(($cfg['aco_float_draggable'] ?? '1') !== '0'); ?>> Bisa digeser (drag)</label>
+                            </td></tr>
+
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Kredit Footer &amp; Sorot Versi</th></tr>
+                            <tr><th>Teks Kredit Footer <?php echo pa_sinova_info_tip('Tampil setelah simbol © tahun pada bagian bawah footer.', 'Info teks kredit footer'); ?></th><td><input type="text" name="footer_credit_text" class="regular-text" value="<?php echo esc_attr($cfg['footer_credit_text'] ?? 'Pengadilan Agama Devlpr Community'); ?>"></td></tr>
+                            <tr><th>Subteks Footer <?php echo pa_sinova_info_tip('Opsional: ditampilkan setelah tanda titik tengah, misal Portal Keterbukaan Informasi Publik.', 'Info subteks footer'); ?></th><td><input type="text" name="footer_credit_suffix" class="regular-text" value="<?php echo esc_attr($cfg['footer_credit_suffix'] ?? 'Portal Keterbukaan Informasi Publik'); ?>"></td></tr>
+                            <tr><th>Teks Sorot Versi <?php echo pa_sinova_info_tip('Muncul saat bagian versi di footer disorot/fokus. Simbol ♥ atau {love} otomatis diganti ikon hati merah.', 'Info sorot versi'); ?></th><td><input type="text" name="footer_hover_text" class="regular-text" value="<?php echo esc_attr($cfg['footer_hover_text'] ?? 'Developed with ♥ by PA Devlpr Community'); ?>"></td></tr>
+                            <tr><th>URL Tautan Versi</th><td><input type="url" name="footer_credit_url" class="regular-text" value="<?php echo esc_attr($cfg['footer_credit_url'] ?? ''); ?>" placeholder="https://github.com/kang-devlp/pa-wordpress-sinova-starter"></td></tr>
+
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Ekosistem, Informasi Serta-Merta &amp; Keamanan</th></tr>
                             <tr><th>URL SIWAS &amp; SP4N-LAPOR!</th><td>
                                 <input type="url" name="siwas_url" class="regular-text" value="<?php echo esc_attr($cfg['siwas_url'] ?? 'https://siwas.mahkamahagung.go.id/'); ?>" placeholder="https://siwas.mahkamahagung.go.id/"><br>
                                 <input type="url" name="lapor_url" class="regular-text" value="<?php echo esc_attr($cfg['lapor_url'] ?? 'https://www.lapor.go.id/'); ?>" placeholder="https://www.lapor.go.id/" style="margin-top:4px;">
                             </td></tr>
-                            <tr><th>Pita Informasi Serta-Merta (KMA 2-144)</th><td>
-                                <input type="text" name="emergency_notice" class="regular-text" value="<?php echo esc_attr($cfg['emergency_notice'] ?? ''); ?>" placeholder="Kosongkan bila layanan berjalan normal">
-                                <input type="url" name="emergency_notice_url" class="regular-text" value="<?php echo esc_attr($cfg['emergency_notice_url'] ?? ''); ?>" placeholder="URL detail pengumuman darurat (opsional)" style="margin-top:4px;"><br>
-                                <small style="color:#64748b;">Muncul di bagian paling atas website saat diisi (misal gangguan listrik/pemeliharaan/penundaan sidang mendadak).</small>
+                            <tr><th>Pita Informasi Serta-Merta <?php echo pa_sinova_info_tip('Sesuai KMA 2-144/2022: muncul di bagian paling atas portal saat ada pengumuman darurat atau gangguan layanan.', 'Info pita darurat'); ?></th><td>
+                                <input type="text" name="emergency_notice" class="regular-text" value="<?php echo esc_attr($cfg['emergency_notice'] ?? ''); ?>" placeholder="Kosongkan bila layanan normal">
+                                <input type="url" name="emergency_notice_url" class="regular-text" value="<?php echo esc_attr($cfg['emergency_notice_url'] ?? ''); ?>" placeholder="URL detail pengumuman (opsional)" style="margin-top:4px;">
                             </td></tr>
-                            <tr><th>Tautan Zona Integritas (Area I–VI)</th><td>
+                            <tr><th>Tautan Zona Integritas (I–VI) <?php echo pa_sinova_info_tip('Jika dikosongkan, kartu Area I–VI di Beranda otomatis mengarah ke /zona-integritas/.', 'Info tautan ZI'); ?></th><td>
                                 <?php for ($zi = 1; $zi <= 6; $zi++) : ?>
                                     <input type="url" name="zi_area_<?php echo $zi; ?>_url" class="regular-text" value="<?php echo esc_attr($cfg['zi_area_' . $zi . '_url'] ?? ''); ?>" placeholder="URL Folder Google Drive / Halaman Area <?php echo $zi; ?>" style="margin-bottom:4px;"><br>
                                 <?php endfor; ?>
-                                <small style="color:#64748b;">Bila dikosongkan, kartu Area ZI di Beranda otomatis mengarah ke halaman resmi <code>/zona-integritas/</code> (bebas tautan mati).</small>
                             </td></tr>
-                            <tr><th>RSS Pengumuman MA RI</th><td><input type="url" name="rss_ma_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_ma_url'] ?? 'https://kepaniteraan.mahkamahagung.go.id/?format=feed&type=rss'); ?>"></td></tr>
-                            <tr><th>RSS Pengumuman Badilag</th><td><input type="url" name="rss_badilag_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_badilag_url'] ?? 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik?format=feed&type=rss'); ?>"></td></tr>
-                            <tr><th>Mode Keamanan CSP (Chrome)</th><td>
+                            <tr><th>RSS Pengumuman MA &amp; Badilag</th><td>
+                                <input type="url" name="rss_ma_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_ma_url'] ?? 'https://kepaniteraan.mahkamahagung.go.id/?format=feed&type=rss'); ?>" style="margin-bottom:4px;"><br>
+                                <input type="url" name="rss_badilag_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_badilag_url'] ?? 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik?format=feed&type=rss'); ?>">
+                            </td></tr>
+                            <tr><th>Mode Keamanan CSP <?php echo pa_sinova_info_tip('Strict: Nonce + Strict-Dynamic + Trusted Types. Pilih Compat bila memakai plugin/Elementor lawas.', 'Info CSP'); ?></th><td>
                                 <select name="csp_mode" class="regular-text">
-                                    <option value="strict" <?php selected($cfg['csp_mode'] ?? 'strict', 'strict'); ?>>Strict (Nonce + Strict-Dynamic + Trusted Types) — Rekomendasi</option>
-                                    <option value="compat" <?php selected($cfg['csp_mode'] ?? 'strict', 'compat'); ?>>Compat (Aman untuk plugin/Elementor lawas)</option>
-                                    <option value="off" <?php selected($cfg['csp_mode'] ?? 'strict', 'off'); ?>>Off (Hanya header keamanan dasar)</option>
+                                    <option value="strict" <?php selected($cfg['csp_mode'] ?? 'strict', 'strict'); ?>>Strict (Rekomendasi)</option>
+                                    <option value="compat" <?php selected($cfg['csp_mode'] ?? 'strict', 'compat'); ?>>Compat (Plugin/Elementor Lawas)</option>
+                                    <option value="off" <?php selected($cfg['csp_mode'] ?? 'strict', 'off'); ?>>Off (Header Dasar Saja)</option>
                                 </select>
                             </td></tr>
-                            <tr><th>Secret Key HMAC API</th><td><input type="text" name="hmac_secret" class="regular-text" value="<?php echo esc_attr($cfg['hmac_secret']); ?>" placeholder="Minimal 32 karakter"><br><label><input type="checkbox" name="generate_hmac" value="1"> Generate Secret Key acak baru (64 hex)</label></td></tr>
+                            <tr><th>Secret Key HMAC API</th><td><input type="text" name="hmac_secret" class="regular-text" value="<?php echo esc_attr($cfg['hmac_secret']); ?>" placeholder="Minimal 32 karakter"><br><label><input type="checkbox" name="generate_hmac" value="1"> Generate Secret Key baru</label></td></tr>
                             <tr><th>Turnstile Site Key</th><td><input type="text" name="turnstile_site_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_site_key']); ?>"></td></tr>
                             <tr><th>Turnstile Secret Key</th><td><input type="password" name="turnstile_secret_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_secret_key']); ?>"></td></tr>
                         </table>
@@ -4931,21 +5411,28 @@ function pa_sinova_render_admin_page(): void {
                 </div>
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">Seeder Struktur Baku 1-Klik</h2>
-                    <p>Membuat otomatis <strong>23 halaman Arsip Dokumen</strong> (slot s.d. 2027), halaman <strong>Wajib, KMA 2-144/2022, &amp; Inklusif</strong> (termasuk <code>/disabilitas/</code>, <code>/informasi-serta-merta/</code>, <code>/informasi-tersedia-setiap-saat/</code>, <code>/layanan-pengaduan/</code>, <code>/zona-integritas/</code>, &amp; <code>/pengumuman-resmi/</code>), halaman <strong>Beranda</strong> lengkap, berita awal, dan menyusun <strong>6 Menu Utama Standar</strong> di tema Astra / WordPress.</p>
-                    <form method="post" style="margin-bottom:14px;">
-                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                        <input type="hidden" name="pa_sinova_action" value="run_seeder">
-                        <button type="submit" class="button button-primary">Generate Halaman, Beranda &amp; Menu (1-Klik)</button>
-                    </form>
-                    <hr style="margin:14px 0;">
-                    <h3 style="margin-top:0;font-size:14px;color:#0f172a;">Rapikan Ulang 6 Menu Utama Standar (SK 2722/2026)</h3>
-                    <p style="font-size:12.5px;color:#475569;">Menyusun ulang <em>Menu Utama SINOVA</em> menjadi tepat 6 induk: <strong>Beranda</strong>, <strong>Profil Pengadilan</strong>, <strong>Layanan Hukum</strong>, <strong>Transparansi</strong>, <strong>Layanan Publik &amp; Pengaduan</strong>, dan <strong>Berita &amp; Publikasi</strong>.</p>
-                    <form method="post" onsubmit="return confirm('Susun ulang item Menu Utama SINOVA menjadi 6 menu standar? Halaman tidak dihapus.');">
-                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                        <input type="hidden" name="pa_sinova_action" value="rebuild_6menu">
-                        <button type="submit" class="button button-secondary">Rapikan 6 Menu Resmi Sekarang</button>
-                    </form>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;">
+                        <h2 style="margin:0;color:#056e4f;font-size:16px;">Aksi Cepat Struktur</h2>
+                        <span style="padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;<?php echo $seededCount >= 15 ? 'background:#dcfce7;color:#166534;' : 'background:#fef3c7;color:#92400e;'; ?>">
+                            <?php echo $seededCount >= 15 ? ('● ' . (int) $seededCount . ' Halaman Siap') : '● Belum Di-seed'; ?>
+                        </span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <form method="post" style="margin:0;display:flex;align-items:center;gap:6px;">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="run_seeder">
+                            <button type="submit" class="button button-primary" style="flex:1;">
+                                <?php echo $seededCount >= 15 ? 'Lengkapi Halaman & Menu (1-Klik)' : 'Generate Halaman, Beranda & Menu (1-Klik)'; ?>
+                            </button>
+                            <?php echo pa_sinova_info_tip('Otomatis membuat halaman 23 modul arsip, halaman wajib SK 2722/2026 & KMA 2-144/2022, Beranda dinamis, berita contoh, serta menyusun 6 menu utama. Halaman lama tidak tertimpa.', 'Info Seeder 1-Klik'); ?>
+                        </form>
+                        <form method="post" style="margin:0;display:flex;align-items:center;gap:6px;" onsubmit="return confirm('Susun ulang item Menu Utama SINOVA menjadi 6 menu standar? Halaman tidak dihapus.');">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="rebuild_6menu">
+                            <button type="submit" class="button button-secondary" style="flex:1;">Rapikan 6 Menu Resmi</button>
+                            <?php echo pa_sinova_info_tip('Menata ulang Menu Utama SINOVA menjadi tepat 6 induk baku (Beranda, Profil, Layanan Hukum, Transparansi, Layanan Publik, Berita). Halaman & dokumen tetap aman.', 'Info Rapikan 6 Menu'); ?>
+                        </form>
+                    </div>
                 </div>
             </div>
 
@@ -4967,187 +5454,273 @@ function pa_sinova_render_admin_page(): void {
             $ghUpd         = current_user_can('manage_options') ? pa_sinova_github_check_update(false) : array();
         ?>
             <?php if (current_user_can('manage_options')) : ?>
-            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
+            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-                    <div>
-                        <h2 style="margin:0 0 4px;color:#056e4f;">Pembaruan Starter Kit 1-Klik dari GitHub</h2>
-                        <p style="margin:0;color:#475569;font-size:13px;">
-                            Versi terpasang: <strong>v<?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?></strong>
-                            · Sumber resmi: <code><?php echo esc_html(PA_SINOVA_GITHUB_REPO); ?></code>
-                            <?php if (!empty($ghUpd['ok'])) : ?>
-                                · Terbaru di GitHub: <strong>v<?php echo esc_html($ghUpd['latest']); ?></strong>
-                                (dicek <?php echo esc_html($ghUpd['checked_at']); ?>)
-                            <?php endif; ?>
-                        </p>
-                        <?php if (!empty($ghUpd['changelog'])) : ?>
-                            <p style="margin:6px 0 0;font-size:12.5px;color:#334155;"><strong>Catatan Rilis:</strong> <?php echo esc_html($ghUpd['changelog']); ?></p>
+                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
+                        <h2 style="margin:0;color:#056e4f;font-size:16px;">Pembaruan Starter Kit</h2>
+                        <span class="pa-sec-pill is-ok">v<?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?></span>
+                        <?php if (!empty($ghUpd['ok'])) : ?>
+                            <span class="pa-sec-pill <?php echo !empty($ghUpd['has_update']) ? 'is-warn' : ''; ?>">GitHub: v<?php echo esc_html($ghUpd['latest']); ?></span>
                         <?php endif; ?>
+                        <?php
+                        $updTipText = 'Sumber: ' . PA_SINOVA_GITHUB_REPO . ' · Pembaruan mengganti file inti secara atomik tanpa menghapus berita, dokumen, atau pengaturan satker.' . (!empty($ghUpd['changelog']) ? (' · Rilis: ' . (string) $ghUpd['changelog']) : '');
+                        echo pa_sinova_info_tip($updTipText, 'Info pembaruan GitHub');
+                        ?>
                         <?php if (!empty($ghUpd['error'])) : ?>
-                            <p style="margin:6px 0 0;font-size:12.5px;color:#b45309;"><?php echo esc_html($ghUpd['error']); ?></p>
+                            <span class="pa-sec-pill is-warn"><?php echo esc_html($ghUpd['error']); ?></span>
                         <?php endif; ?>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <form method="post">
                             <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                             <input type="hidden" name="pa_sinova_action" value="check_github_update">
-                            <button type="submit" class="button button-secondary">Cek Pembaruan Sekarang</button>
+                            <button type="submit" class="button button-secondary">Cek Pembaruan</button>
                         </form>
-                        <form method="post" onsubmit="return confirm('Unduh dan pasang berkas PA SINOVA terbaru dari GitHub sekarang? Berita, dokumen, halaman, dan pengaturan satker tetap aman tidak terhapus.');">
+                        <form method="post" onsubmit="return confirm('Unduh dan pasang berkas PA SINOVA terbaru dari GitHub? Data satker tetap aman.');">
                             <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                             <input type="hidden" name="pa_sinova_action" value="apply_github_update">
-                            <button type="submit" class="button button-primary"><?php echo !empty($ghUpd['has_update']) ? ('Update ke v' . esc_html($ghUpd['latest']) . ' (1-Klik)') : 'Sinkronkan Ulang dari GitHub (1-Klik)'; ?></button>
+                            <button type="submit" class="button button-primary"><?php echo !empty($ghUpd['has_update']) ? ('Update ke v' . esc_html($ghUpd['latest']) . ' (1-Klik)') : 'Sinkronkan Ulang (1-Klik)'; ?></button>
                         </form>
                     </div>
                 </div>
-                <p style="margin:10px 0 0;font-size:12px;color:#64748b;"><em>Aman &amp; non-destruktif: pembaruan hanya mengganti berkas kode inti secara atomik, otomatis membersihkan cache HTML, dan memperbarui baseline SHA-256 FIM.</em></p>
             </div>
             <?php endif; ?>
 
-            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
-                <h2 style="margin-top:0;color:#056e4f;">Autentikasi Dua Faktor (MFA TOTP RFC 6238 Bawaan)</h2>
-                <p style="color:#475569;margin-top:0;">Tambahkan lapisan verifikasi OTP 6-digit menggunakan Google Authenticator, FreeOTP, atau Aegis — tanpa plugin pihak ketiga dan tanpa mengirim kunci ke server eksternal.</p>
-                <?php if (!empty($mfaRecoveryOnce)) : ?>
-                    <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
-                        <strong style="color:#92400e;">Simpan 8 Kode Cadangan Pemulihan Ini (Hanya Ditampilkan Sekali):</strong>
-                        <div style="display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:8px;margin-top:8px;font-family:monospace;font-size:13px;">
-                            <?php foreach ($mfaRecoveryOnce as $rc) : ?>
-                                <code style="background:#fff;padding:4px 8px;border:1px solid #fcd34d;border-radius:4px;text-align:center;"><?php echo esc_html($rc); ?></code>
-                            <?php endforeach; ?>
-                        </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:16px;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:16px 18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;">
+                        <h2 style="margin:0;color:#056e4f;font-size:15.5px;">MFA TOTP (RFC 6238) <?php echo pa_sinova_info_tip('Verifikasi 6 digit via Google Authenticator/FreeOTP/Aegis tanpa pihak ketiga. Pemulihan darurat: define("PA_DISABLE_CUSTOM_MFA", true); di wp-config.php.', 'Info MFA'); ?></h2>
+                        <span class="pa-sec-pill <?php echo $mfaEnabled ? 'is-ok' : 'is-warn'; ?>"><?php echo $mfaEnabled ? '● Aktif' : '● Belum Aktif'; ?></span>
                     </div>
-                <?php endif; ?>
+                    <?php if (!empty($mfaRecoveryOnce)) : ?>
+                        <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+                            <strong style="color:#92400e;font-size:12px;">Simpan 8 Kode Cadangan (Sekali Tampil):</strong>
+                            <div style="display:grid;grid-template-columns:repeat(4,minmax(80px,1fr));gap:6px;margin-top:6px;font-family:monospace;font-size:12px;">
+                                <?php foreach ($mfaRecoveryOnce as $rc) : ?>
+                                    <code style="background:#fff;padding:3px 6px;border:1px solid #fcd34d;border-radius:4px;text-align:center;"><?php echo esc_html($rc); ?></code>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
 
-                <?php if ($mfaEnabled) : ?>
-                    <p style="color:#15803d;font-weight:700;">● MFA TOTP AKTIF pada akun Anda (sisa kode cadangan sekali pakai: <?php echo (int) $recRemaining; ?>).</p>
-                    <form method="post" onsubmit="return confirm('Nonaktifkan MFA TOTP untuk akun Anda?');" style="display:inline-block;margin-right:12px;">
-                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                        <input type="hidden" name="pa_sinova_action" value="mfa_disable">
-                        <button type="submit" class="button" style="color:#b91c1c;">Nonaktifkan MFA Akun Saya</button>
-                    </form>
-                <?php elseif ($mfaPending !== '') : ?>
-                    <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center;background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin-bottom:12px;">
-                        <div><?php echo $mfaQrSvg; ?></div>
-                        <div style="flex:1;min-width:250px;">
-                            <p style="margin-top:0;"><strong>1. Pindai QR Code</strong> dengan aplikasi autentikator, atau masukkan kode Base32 berikut secara manual:</p>
-                            <p><code style="font-size:14px;letter-spacing:1.2px;padding:4px 8px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;"><?php echo esc_html(trim(chunk_split($mfaPending, 4, ' '))); ?></code></p>
-                            <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <?php if ($mfaEnabled) : ?>
+                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                            <span style="font-size:12.5px;color:#334155;">Sisa kode cadangan: <strong><?php echo (int) $recRemaining; ?></strong></span>
+                            <form method="post" onsubmit="return confirm('Nonaktifkan MFA TOTP untuk akun Anda?');">
                                 <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                                <input type="hidden" name="pa_sinova_action" value="mfa_activate">
-                                <input type="text" name="mfa_verify_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 digit OTP" required style="width:130px;font-weight:700;letter-spacing:2px;text-align:center;">
-                                <button type="submit" class="button button-primary">Verifikasi &amp; Aktifkan MFA</button>
+                                <input type="hidden" name="pa_sinova_action" value="mfa_disable">
+                                <button type="submit" class="button button-small" style="color:#b91c1c;">Nonaktifkan MFA</button>
                             </form>
                         </div>
-                    </div>
-                <?php else : ?>
-                    <p style="color:#64748b;">Status akun Anda saat ini: <strong>Belum mengaktifkan MFA TOTP</strong>.</p>
-                    <form method="post">
-                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                        <input type="hidden" name="pa_sinova_action" value="mfa_setup_start">
-                        <button type="submit" class="button button-primary">Mulai Pengaturan MFA TOTP (Generate QR Lokal)</button>
-                    </form>
-                <?php endif; ?>
-
-                <?php if (current_user_can('manage_options')) : ?>
-                    <form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                        <input type="hidden" name="pa_sinova_action" value="mfa_policy">
-                        <label><input type="checkbox" name="enforce_mfa" value="1" <?php checked($mfaEnforced); ?>> Terapkan pengingat kewajiban MFA TOTP untuk seluruh Administrator &amp; Operator</label>
-                        <button type="submit" class="button button-secondary">Simpan Kebijakan MFA</button>
-                    </form>
-                <?php endif; ?>
-                <p style="margin:8px 0 0;font-size:12px;color:#64748b;"><em>Pemulihan darurat MFA: tambahkan <code>define('PA_DISABLE_CUSTOM_MFA', true);</code> di <code>wp-config.php</code> bila kehilangan perangkat &amp; kode cadangan.</em></p>
-            </div>
-
-            <?php if (current_user_can('manage_options')) : ?>
-            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;margin-bottom:18px;">
-                <h2 style="margin-top:0;color:#056e4f;">Sembunyikan Halaman Login Admin (Custom Login URL)</h2>
-                <p style="color:#475569;margin-top:0;">Lindungi halaman masuk operator dari serangan otomatis dengan memindahkan URL login dari <code>/wp-login.php</code> dan menyamarkan akses anonim <code>/wp-admin/</code> serta <code>/wp-login.php</code> dengan respon <strong>404 Not Found</strong>.</p>
-                <form method="post" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:10px;">
-                    <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                    <input type="hidden" name="pa_sinova_action" value="save_login_hide">
-                    <label style="font-weight:700;"><code><?php echo esc_html(trailingslashit(home_url('/'))); ?></code>
-                        <input type="text" name="custom_login_slug" value="<?php echo esc_attr($cfg['custom_login_slug'] ?? ''); ?>" placeholder="contoh: masuk-operator-pa" style="width:240px;margin-left:4px;">
-                    </label>
-                    <button type="submit" class="button button-primary">Simpan Pengaturan URL Login</button>
-                </form>
-                <p style="margin:0;font-size:12.5px;color:#334155;">
-                    <strong>Status saat ini:</strong>
-                    <?php if ($hiddenSlug !== '') : ?>
-                        <span style="color:#15803d;font-weight:700;">AKTIF TERSEMBUNYI</span> &rarr; URL login resmi: <code><?php echo esc_html(trailingslashit(home_url('/' . $hiddenSlug))); ?></code> (simpan alamat ini di bookmark).
+                    <?php elseif ($mfaPending !== '') : ?>
+                        <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:12px;">
+                            <div><?php echo $mfaQrSvg; ?></div>
+                            <div style="flex:1;min-width:180px;">
+                                <code style="display:block;font-size:12.5px;padding:4px 8px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:8px;"><?php echo esc_html(trim(chunk_split($mfaPending, 4, ' '))); ?></code>
+                                <form method="post" style="display:flex;gap:6px;align-items:center;">
+                                    <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                                    <input type="hidden" name="pa_sinova_action" value="mfa_activate">
+                                    <input type="text" name="mfa_verify_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 digit OTP" required style="width:110px;font-weight:700;text-align:center;">
+                                    <button type="submit" class="button button-primary button-small">Verifikasi</button>
+                                </form>
+                            </div>
+                        </div>
                     <?php else : ?>
-                        <span>Standar WordPress (<code><?php echo esc_html(site_url('wp-login.php')); ?></code>). Isi slug minimal 4 karakter untuk mengaktifkan, atau kosongkan untuk kembali ke standar.</span>
-                    <?php endif; ?>
-                </p>
-                <p style="margin:6px 0 0;font-size:12px;color:#64748b;"><em>Pemulihan darurat: jika lupa URL login baru, tambahkan <code>define('PA_DISABLE_CUSTOM_LOGIN', true);</code> di berkas <code>wp-config.php</code>.</em></p>
-            </div>
-            <?php endif; ?>
-
-            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;margin-bottom:18px;">
-                <h2 style="margin-top:0;color:#056e4f;">Status Pengamanan Chrome Modern Web &amp; Kontrol Akses Peran (RBAC)</h2>
-                <ul style="line-height:1.8;margin:0 0 12px;padding-left:18px;">
-                    <li><strong>Header Keamanan Chrome &amp; CSP:</strong> Mode <code><?php echo esc_html(strtoupper($cspModeNow)); ?></code> (CSP Nonce + <code>strict-dynamic</code> + Trusted Types + <code>COOP: same-origin</code> + <code>CORP: same-origin</code> + <code>XFO</code> + <code>XCTO</code> + <code>Permissions-Policy</code><?php echo pa_starter_is_https_request() ? ' + HSTS Preload 2 Tahun' : ' + HSTS siap saat HTTPS'; ?>) — aktif juga pada Early Cache</li>
-                    <li><strong>RFC 9116 security.txt &amp; Manifest:</strong> Tersedia di <code>/.well-known/security.txt</code> dan <code>/manifest.webmanifest</code></li>
-                    <li><strong>MFA TOTP &amp; Batas Sesi Admin:</strong> <?php echo $mfaEnabled ? 'MFA TOTP Aktif' : 'MFA TOTP Opsional/Menunggu Aktivasi'; ?> · Batas sesi diam otomatis <strong>60 menit</strong> · Kebijakan kata sandi minimal <strong>10 karakter</strong> (huruf kecil, besar, angka, &amp; simbol)</li>
-                    <li><strong>Halaman Login Admin:</strong> <?php echo $hiddenSlug !== '' ? 'Disembunyikan pada slug kustom (<code>/' . esc_html($hiddenSlug) . '/</code>), akses langsung <code>wp-login.php</code> &amp; <code>/wp-admin/</code> anonim diblokir 404' : 'Standar <code>/wp-login.php</code> (dapat disembunyikan melalui formulir di atas)'; ?></li>
-                    <li><strong>File Editor WP Admin:</strong> Dinonaktifkan (<code>DISALLOW_FILE_EDIT = true</code>)</li>
-                    <li><strong>XML-RPC, Komentar &amp; User Enumeration REST/Author:</strong> Diblokir untuk pengguna anonim</li>
-                    <li><strong>Brute-Force Rate Limiter Login &amp; API:</strong> Aktif (blokir 15 menit setelah 5x login gagal; rate limiter REST pencarian &amp; kunjungan)</li>
-                    <li><strong>Login Anti-Bot:</strong> <?php echo $tsActive ? 'Cloudflare Turnstile + Honeypot' : 'CAPTCHA Matematika Offline (HMAC) + Honeypot'; ?></li>
-                    <li><strong>Folder Unggahan PDF (<code>sinova-docs/.htaccess</code>):</strong> <?php echo is_file(WP_CONTENT_DIR . '/uploads/sinova-docs/.htaccess') ? 'Terlindungi (PHP execution &amp; listing diblokir + MIME PDF guard)' : 'Aktif setelah admin_init'; ?></li>
-                    <li><strong>WAF URI &amp; DB Content Guard:</strong> Aktif memblokir pola judi online, webshell, SQLi/XSS, &amp; cloaking tautan (termasuk deteksi scanner di Early Cache)</li>
-                </ul>
-                <p style="margin:0;font-size:12.5px;color:#334155;"><strong>Peran Operator Satker Tersedia (Users &rarr; Add New):</strong> <code>pa_kepaniteraan</code> (LIPA 7, Sisa Panjar, Prodeo, PPID &amp; Data Operasional), <code>pa_kesekretariatan</code> (Anggaran, SAKIP, BMN, LHKPN/LHKASN), dan <code>pa_humas</code> (Data Operasional, Survei, &amp; Berita).</p>
-            </div>
-
-            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;margin-bottom:18px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-                    <div>
-                        <h2 style="margin:0;color:#056e4f;">File Integrity Monitor (FIM SHA-256)</h2>
-                        <small style="color:#475569;">Baseline direkam: <?php echo esc_html($fim['baseline_at']); ?> · Status: <strong style="color:<?php echo $fim['ok'] ? '#15803d' : '#b91c1c'; ?>;"><?php echo $fim['ok'] ? 'BERSIH (Sesuai Baseline)' : 'ADA PERUBAHAN BERKAS'; ?></strong></small>
-                    </div>
-                    <?php if (current_user_can('manage_options')) : ?>
-                        <form method="post" onsubmit="return confirm('Perbarui baseline SHA-256 sesuai isi berkas saat ini?');">
+                        <form method="post">
                             <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                            <input type="hidden" name="pa_sinova_action" value="fim_reset_baseline">
-                            <button type="submit" class="button button-secondary">Perbarui Baseline SHA-256</button>
+                            <input type="hidden" name="pa_sinova_action" value="mfa_setup_start">
+                            <button type="submit" class="button button-primary">Atur MFA TOTP (QR Lokal)</button>
+                        </form>
+                    <?php endif; ?>
+
+                    <?php if (current_user_can('manage_options')) : ?>
+                        <form method="post" style="margin-top:12px;padding-top:10px;border-top:1px solid #e2e8f0;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="mfa_policy">
+                            <label style="font-size:12.5px;"><input type="checkbox" name="enforce_mfa" value="1" <?php checked($mfaEnforced); ?>> Wajibkan pengingat MFA</label>
+                            <button type="submit" class="button button-small">Simpan</button>
                         </form>
                     <?php endif; ?>
                 </div>
-                <table class="widefat striped">
-                    <thead><tr><th>Berkas Terpantau</th><th>Hash SHA-256 Aktif</th><th style="width:120px;">Status</th></tr></thead>
-                    <tbody>
-                        <?php foreach ($fim['current'] as $fKey => $fHash) :
-                            $isDirty = in_array($fKey, $fim['changed'], true) || in_array($fKey . ' (baru)', $fim['changed'], true);
-                        ?>
-                            <tr>
-                                <td><code><?php echo esc_html($fKey); ?></code></td>
-                                <td><code style="font-size:11px;"><?php echo esc_html(substr($fHash, 0, 32) . '...'); ?></code></td>
-                                <td><strong style="color:<?php echo $isDirty ? '#b91c1c' : '#15803d'; ?>;"><?php echo $isDirty ? 'Berubah' : 'Terverifikasi'; ?></strong></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+
+                <?php if (current_user_can('manage_options')) : ?>
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:16px 18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;">
+                        <h2 style="margin:0;color:#056e4f;font-size:15.5px;">URL Login Kustom <?php echo pa_sinova_info_tip('Pindahkan alamat masuk admin dari /wp-login.php dan blokir akses anonim dengan 404. Pemulihan darurat: define("PA_DISABLE_CUSTOM_LOGIN", true); di wp-config.php.', 'Info URL login kustom'); ?></h2>
+                        <span class="pa-sec-pill <?php echo $hiddenSlug !== '' ? 'is-ok' : ''; ?>"><?php echo $hiddenSlug !== '' ? ('/' . esc_html($hiddenSlug) . '/') : 'Standar'; ?></span>
+                    </div>
+                    <form method="post" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="save_login_hide">
+                        <input type="text" name="custom_login_slug" value="<?php echo esc_attr($cfg['custom_login_slug'] ?? ''); ?>" placeholder="slug-masuk-pa (kosongkan = standar)" style="flex:1;min-width:180px;">
+                        <button type="submit" class="button button-primary">Simpan Slug</button>
+                    </form>
+                    <div style="margin-top:8px;font-size:12px;color:#475569;">
+                        <?php echo $hiddenSlug !== '' ? ('Alamat login aktif: <code>' . esc_html(trailingslashit(home_url('/' . $hiddenSlug))) . '</code>') : ('Aktif: <code>' . esc_html(site_url('wp-login.php')) . '</code>'); ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
-            <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;">
-                <h2 style="margin-top:0;color:#056e4f;">Log Kejadian Keamanan Terakhir (40 Teratas)</h2>
-                <table class="widefat striped">
-                    <thead><tr><th>Waktu (UTC)</th><th>Jenis Kejadian</th><th>Keterangan</th><th>Hash IP</th></tr></thead>
-                    <tbody>
-                        <?php if (empty($secLogs)) : ?>
-                            <tr><td colspan="4">Belum ada percobaan mencurigakan yang tercatat.</td></tr>
-                        <?php else : foreach ($secLogs as $lg) : ?>
-                            <tr>
-                                <td><?php echo esc_html($lg['at'] ?? '-'); ?></td>
-                                <td><code><?php echo esc_html($lg['event'] ?? '-'); ?></code></td>
-                                <td><?php echo esc_html($lg['detail'] ?? '-'); ?></td>
-                                <td><code><?php echo esc_html($lg['ip_hash'] ?? '-'); ?></code></td>
-                            </tr>
-                        <?php endforeach; endif; ?>
-                    </tbody>
-                </table>
+
+            <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <h2 style="margin:0;color:#056e4f;font-size:15.5px;">Ringkasan Proteksi &amp; Peran Operator <?php echo pa_sinova_info_tip('Sorot atau klik ikon (i) di tiap lencana untuk melihat detail teknis modul proteksi.', 'Info proteksi'); ?></h2>
+                    <span style="font-size:12px;color:#475569;">Peran Operator: <code>pa_kepaniteraan</code> · <code>pa_kesekretariatan</code> · <code>pa_humas</code></span>
+                </div>
+                <div class="pa-sec-pill-grid">
+                    <span class="pa-sec-pill <?php echo $cspModeNow === 'strict' ? 'is-ok' : ''; ?>">CSP: <?php echo esc_html(strtoupper($cspModeNow)); ?> <?php echo pa_sinova_info_tip('Content Security Policy, Trusted Types, COOP/CORP, XFO, XCTO, HSTS — aktif juga di Early Cache.'); ?></span>
+                    <span class="pa-sec-pill is-ok">WAF &amp; Anti-Judol <?php echo pa_sinova_info_tip('Pemblokiran pola webshell, SQLi/XSS, dan kata kunci judi online di URI maupun konten database.'); ?></span>
+                    <span class="pa-sec-pill is-ok">Rate Limit &amp; Brute-Force <?php echo pa_sinova_info_tip('Blokir 15 menit setelah 5x login gagal, rate limiter REST pencarian & kunjungan, serta XML-RPC/user enumeration nonaktif.'); ?></span>
+                    <span class="pa-sec-pill is-ok"><?php echo $tsActive ? 'Turnstile + Honeypot' : 'CAPTCHA HMAC + Honeypot'; ?> <?php echo pa_sinova_info_tip('Pelindung formulir login & akses anti-bot otomatis.'); ?></span>
+                    <span class="pa-sec-pill <?php echo is_file(WP_CONTENT_DIR . '/uploads/sinova-docs/.htaccess') ? 'is-ok' : 'is-warn'; ?>">Kunci PDF .htaccess <?php echo pa_sinova_info_tip('Menonaktifkan eksekusi PHP & directory listing di folder sinova-docs serta validasi MIME PDF.'); ?></span>
+                    <span class="pa-sec-pill is-ok">RFC 9116 security.txt <?php echo pa_sinova_info_tip('Tersedia di /.well-known/security.txt; DISALLOW_FILE_EDIT aktif; batas sesi diam 60 menit; password min. 10 karakter.'); ?></span>
+                </div>
             </div>
+
+            <details class="pa-adm-fold" <?php echo empty($fim['ok']) ? 'open' : ''; ?>>
+                <summary>
+                    <span>File Integrity Monitor (FIM SHA-256) <?php echo pa_sinova_info_tip('Memantau perubahan tak terduga pada 6 berkas inti & .htaccess. Perbarui baseline setelah update manual.', 'Info FIM'); ?></span>
+                    <span class="pa-sec-pill <?php echo $fim['ok'] ? 'is-ok' : 'is-warn'; ?>"><?php echo $fim['ok'] ? '✔ Bersih' : '⚠ Ada Perubahan'; ?> · <?php echo esc_html($fim['baseline_at']); ?></span>
+                </summary>
+                <div class="pa-adm-fold-body">
+                    <?php if (current_user_can('manage_options')) : ?>
+                        <form method="post" style="margin-bottom:10px;" onsubmit="return confirm('Perbarui baseline SHA-256 sesuai isi berkas saat ini?');">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="fim_reset_baseline">
+                            <button type="submit" class="button button-secondary button-small">Perbarui Baseline SHA-256</button>
+                        </form>
+                    <?php endif; ?>
+                    <table class="widefat striped">
+                        <thead><tr><th>Berkas Terpantau</th><th>Hash SHA-256</th><th style="width:120px;">Status</th></tr></thead>
+                        <tbody>
+                            <?php foreach ($fim['current'] as $fKey => $fHash) :
+                                $isDirty = in_array($fKey, $fim['changed'], true) || in_array($fKey . ' (baru)', $fim['changed'], true);
+                            ?>
+                                <tr>
+                                    <td><code><?php echo esc_html($fKey); ?></code></td>
+                                    <td><code style="font-size:11px;"><?php echo esc_html(substr($fHash, 0, 32) . '...'); ?></code></td>
+                                    <td><strong style="color:<?php echo $isDirty ? '#b91c1c' : '#15803d'; ?>;"><?php echo $isDirty ? 'Berubah' : 'Terverifikasi'; ?></strong></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details class="pa-adm-fold" <?php echo !empty($secLogs) ? '' : ''; ?>>
+                <summary>
+                    <span>Log Kejadian Keamanan</span>
+                    <span class="pa-sec-pill"><?php echo esc_html((string) count($secLogs)); ?> catatan</span>
+                </summary>
+                <div class="pa-adm-fold-body">
+                    <table class="widefat striped">
+                        <thead><tr><th>Waktu (UTC)</th><th>Jenis Kejadian</th><th>Keterangan</th><th>Hash IP</th></tr></thead>
+                        <tbody>
+                            <?php if (empty($secLogs)) : ?>
+                                <tr><td colspan="4">Belum ada percobaan mencurigakan yang tercatat.</td></tr>
+                            <?php else : foreach ($secLogs as $lg) : ?>
+                                <tr>
+                                    <td><?php echo esc_html($lg['at'] ?? '-'); ?></td>
+                                    <td><code><?php echo esc_html($lg['event'] ?? '-'); ?></code></td>
+                                    <td><?php echo esc_html($lg['detail'] ?? '-'); ?></td>
+                                    <td><code><?php echo esc_html($lg['ip_hash'] ?? '-'); ?></code></td>
+                                </tr>
+                            <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
         <?php endif; ?>
         </main>
     </div>
+    <div id="pa-adm-tip-pop" role="tooltip" hidden></div>
+    <script>
+        (function(){
+            var pop = document.getElementById('pa-adm-tip-pop');
+            var activeBtn = null;
+            var pinned = false;
+            function hidePop(){
+                if (!pop) return;
+                pop.hidden = true;
+                if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+                activeBtn = null;
+                pinned = false;
+            }
+            function showPop(btn, isPin){
+                if (!pop || !btn) return;
+                var msg = btn.getAttribute('data-pa-info') || '';
+                if (!msg) return;
+                if (activeBtn && activeBtn !== btn) activeBtn.setAttribute('aria-expanded', 'false');
+                activeBtn = btn;
+                pinned = !!isPin;
+                pop.textContent = msg;
+                pop.hidden = false;
+                btn.setAttribute('aria-expanded', 'true');
+                var r = btn.getBoundingClientRect();
+                var pw = pop.offsetWidth || 280;
+                var ph = pop.offsetHeight || 60;
+                var left = Math.min(window.innerWidth - pw - 12, Math.max(12, r.left + (r.width / 2) - (pw / 2)));
+                var top = r.top - ph - 8;
+                if (top < 12) top = r.bottom + 8;
+                pop.style.left = Math.round(left) + 'px';
+                pop.style.top = Math.round(top) + 'px';
+            }
+            document.addEventListener('click', function(e){
+                var btn = e.target.closest ? e.target.closest('.pa-info-btn') : null;
+                if (btn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (activeBtn === btn && pinned) hidePop();
+                    else showPop(btn, true);
+                    return;
+                }
+                if (pop && !pop.contains(e.target)) hidePop();
+            });
+            document.addEventListener('mouseover', function(e){
+                var btn = e.target.closest ? e.target.closest('.pa-info-btn') : null;
+                if (btn && !pinned) showPop(btn, false);
+            });
+            document.addEventListener('mouseout', function(e){
+                var btn = e.target.closest ? e.target.closest('.pa-info-btn') : null;
+                if (btn && !pinned && (!e.relatedTarget || (pop && !pop.contains(e.relatedTarget)))) hidePop();
+            });
+            document.addEventListener('focusin', function(e){
+                var btn = e.target.closest ? e.target.closest('.pa-info-btn') : null;
+                if (btn) showPop(btn, false);
+            });
+            document.addEventListener('focusout', function(e){
+                if (!pinned && e.target.classList && e.target.classList.contains('pa-info-btn')) hidePop();
+            });
+            document.addEventListener('keydown', function(e){
+                if (e.key === 'Escape' && pop && !pop.hidden) hidePop();
+            });
+
+            window.paOpenMediaPicker = function(onSelect){
+                if (!window.wp || !wp.media) {
+                    alert('Pengelola Media WordPress belum siap. Muat ulang halaman.');
+                    return;
+                }
+                var frame = wp.media({ title: 'Pilih atau Unggah Gambar', button: { text: 'Gunakan Gambar Ini' }, multiple: false });
+                frame.on('select', function(){
+                    var att = frame.state().get('selection').first().toJSON();
+                    if (att && att.url && typeof onSelect === 'function') onSelect(att.url);
+                });
+                frame.open();
+            };
+            document.addEventListener('click', function(e){
+                var btn = e.target.closest ? e.target.closest('.pa-media-pick-btn') : null;
+                if (!btn) return;
+                e.preventDefault();
+                var tid = btn.getAttribute('data-target');
+                var pid = btn.getAttribute('data-preview');
+                window.paOpenMediaPicker(function(url){
+                    var inp = tid ? document.getElementById(tid) : null;
+                    if (inp) inp.value = url;
+                    var prv = pid ? document.getElementById(pid) : null;
+                    if (prv) prv.src = url;
+                });
+            });
+        })();
+    </script>
     <?php
 }

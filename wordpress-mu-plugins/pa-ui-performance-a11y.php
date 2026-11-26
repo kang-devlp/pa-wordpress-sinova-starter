@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - UI Portal Resmi PA, Pencarian, Statistik Pengunjung, Sidebar Halaman Dalam & Aksesibilitas Lengkap
  * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, bebas istilah internal di tampilan publik, kotak pencarian header, statistik pengunjung privasi ter-hash, sidebar & breadcrumb halaman dalam, serta dock disabilitas dengan Pembaca Suara Bahasa Indonesia.
- * Version: 2.3.4-starter
+ * Version: 2.4.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -661,6 +661,146 @@ function pa_sinova_render_home_block_item(array $blk, array $cfg): string {
             : '';
     }
 
+    if ($type === 'iframe_embed') {
+        $embedUrl = '';
+        if (!empty($bCfg['embed_url']) && function_exists('pa_sinova_sanitize_https_embed_url')) {
+            $ec = pa_sinova_sanitize_https_embed_url((string) $bCfg['embed_url']);
+            if ($ec['valid'] && $ec['url'] !== '') {
+                $embedUrl = $ec['url'];
+            }
+        }
+        $eHeight = max(260, min(900, (int) ($bCfg['height'] ?? 440)));
+        $caption = trim((string) ($bCfg['caption'] ?? ''));
+        $showFs  = (string) ($bCfg['show_fullscreen'] ?? '1') !== '0';
+        ob_start();
+        ?>
+        <section class="pa-grid-panel pa-iframe-panel" aria-label="<?php echo esc_attr($title ?: 'Sematan Aplikasi'); ?>">
+            <div class="pa-gp-head">
+                <h2 class="pa-gp-title"><?php echo esc_html($title ?: 'Sematan Aplikasi'); ?></h2>
+                <?php if ($embedUrl !== '' && $showFs) : ?>
+                    <a class="pa-gp-more" href="<?php echo esc_url($embedUrl); ?>" target="_blank" rel="noopener noreferrer">Layar Penuh ↗</a>
+                <?php endif; ?>
+            </div>
+            <?php if ($caption !== '') : ?>
+                <p class="pa-iframe-cap"><?php echo esc_html($caption); ?></p>
+            <?php endif; ?>
+            <?php if ($embedUrl !== '') : ?>
+                <div class="pa-sipp-frame-wrap" style="border-radius:10px;overflow:hidden;border:1px solid #d5e6dc;">
+                    <iframe class="pa-sipp-frame" src="<?php echo esc_url($embedUrl); ?>" title="<?php echo esc_attr($title ?: 'Sematan Iframe'); ?>" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen" allowfullscreen style="height:clamp(260px, 55vh, <?php echo (int) $eHeight; ?>px)"></iframe>
+                </div>
+            <?php else : ?>
+                <p class="pa-sched-empty">Tempel URL sematan HTTPS pada pengaturan blok <strong>Sematan Iframe / Aplikasi</strong>.</p>
+            <?php endif; ?>
+        </section>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    if ($type === 'image_banner') {
+        $imgUrl  = esc_url_raw((string) ($bCfg['image_url'] ?? ''), array('http', 'https'));
+        $imgAlt  = trim((string) ($bCfg['image_alt'] ?? ($bCfg['caption'] ?? $title)));
+        $fit     = (($bCfg['image_fit'] ?? 'cover') === 'contain') ? 'contain' : 'cover';
+        $maxH    = max(180, min(900, (int) ($bCfg['height'] ?? 360)));
+        $linkUrl = esc_url_raw((string) ($bCfg['link_url'] ?? ''), array('http', 'https'));
+        ob_start();
+        ?>
+        <section class="pa-grid-panel pa-image-panel" aria-label="<?php echo esc_attr($title ?: 'Gambar / Poster'); ?>">
+            <?php if ($title !== '') : ?>
+                <div class="pa-gp-head">
+                    <h2 class="pa-gp-title"><?php echo esc_html($title); ?></h2>
+                    <?php if ($linkUrl !== '') : ?>
+                        <a class="pa-gp-more" href="<?php echo esc_url($linkUrl); ?>" target="_blank" rel="noopener noreferrer">Buka ↗</a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            <?php if ($imgUrl !== '') : ?>
+                <figure class="pa-image-banner-box">
+                    <?php if ($linkUrl !== '') : ?><a href="<?php echo esc_url($linkUrl); ?>" target="_blank" rel="noopener noreferrer"><?php endif; ?>
+                    <img src="<?php echo esc_url($imgUrl); ?>" alt="<?php echo esc_attr($imgAlt); ?>" style="max-height:<?php echo (int) $maxH; ?>px;object-fit:<?php echo esc_attr($fit); ?>;" loading="lazy" decoding="async">
+                    <?php if ($linkUrl !== '') : ?></a><?php endif; ?>
+                    <?php if (!empty($bCfg['caption'])) : ?>
+                        <figcaption><?php echo esc_html((string) $bCfg['caption']); ?></figcaption>
+                    <?php endif; ?>
+                </figure>
+            <?php else : ?>
+                <p class="pa-sched-empty">Pilih gambar melalui Media Library atau isi URL gambar pada pengaturan blok.</p>
+            <?php endif; ?>
+        </section>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    if ($type === 'photo_slider') {
+        $srcMode = (($bCfg['slide_source'] ?? 'custom') === 'records') ? 'records' : 'custom';
+        $slides  = array();
+        if ($srcMode === 'custom' && !empty($bCfg['slides']) && is_array($bCfg['slides'])) {
+            foreach ($bCfg['slides'] as $sl) {
+                $su = esc_url_raw((string) ($sl['image_url'] ?? ''), array('http', 'https'));
+                if ($su === '') {
+                    continue;
+                }
+                $slides[] = array(
+                    'image_url' => $su,
+                    'title'     => (string) ($sl['title'] ?? ''),
+                    'link_url'  => esc_url_raw((string) ($sl['link_url'] ?? ''), array('http', 'https')),
+                );
+            }
+        } elseif ($srcMode === 'records' && function_exists('pa_portal_get_records')) {
+            foreach (pa_portal_get_records('slider', 8) as $sr) {
+                $sm = json_decode((string) ($sr['meta_json'] ?? ''), true);
+                $su = is_array($sm) ? esc_url_raw((string) ($sm['image_url'] ?? ''), array('http', 'https')) : '';
+                if ($su === '') {
+                    continue;
+                }
+                $slides[] = array(
+                    'image_url' => $su,
+                    'title'     => (string) ($sr['title'] ?? ''),
+                    'link_url'  => is_array($sm) ? esc_url_raw((string) ($sm['btn_url'] ?? ''), array('http', 'https')) : '',
+                );
+            }
+        }
+        $slH   = max(220, min(720, (int) ($bCfg['height'] ?? 360)));
+        $autoS = max(0, min(15, (int) ($bCfg['autoplay_sec'] ?? 5)));
+        ob_start();
+        ?>
+        <section class="pa-grid-panel pa-photo-slider-panel" aria-label="<?php echo esc_attr($title ?: 'Slider Gambar'); ?>">
+            <?php if ($title !== '') : ?>
+                <div class="pa-gp-head"><h2 class="pa-gp-title"><?php echo esc_html($title); ?></h2></div>
+            <?php endif; ?>
+            <?php if (!empty($slides)) : ?>
+                <div class="pa-photo-slider" data-pa-hero-slider data-autoplay="<?php echo (int) $autoS; ?>" style="--pa-ps-h:<?php echo (int) $slH; ?>px;">
+                    <div class="pa-ps-track">
+                        <?php foreach ($slides as $sIdx => $sl) : ?>
+                            <article class="pa-ps-slide<?php echo $sIdx === 0 ? ' is-active' : ''; ?>" data-hs-slide="<?php echo (int) $sIdx; ?>" <?php echo $sIdx > 0 ? 'hidden' : ''; ?>>
+                                <?php if ($sl['link_url'] !== '') : ?><a href="<?php echo esc_url($sl['link_url']); ?>" target="_blank" rel="noopener noreferrer"><?php endif; ?>
+                                <img src="<?php echo esc_url($sl['image_url']); ?>" alt="<?php echo esc_attr($sl['title']); ?>" <?php echo $sIdx === 0 ? 'decoding="async"' : 'loading="lazy" decoding="async"'; ?>>
+                                <?php if ($sl['title'] !== '') : ?>
+                                    <div class="pa-ps-caption"><?php echo esc_html($sl['title']); ?></div>
+                                <?php endif; ?>
+                                <?php if ($sl['link_url'] !== '') : ?></a><?php endif; ?>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php if (count($slides) > 1) : ?>
+                        <div class="pa-hs-controls">
+                            <button type="button" class="pa-hs-nav" data-hs-dir="-1" aria-label="Slide sebelumnya">‹</button>
+                            <div class="pa-hs-dots" role="group" aria-label="Pilih slide">
+                                <?php foreach ($slides as $sIdx => $_s) : ?>
+                                    <button type="button" class="pa-hs-dot<?php echo $sIdx === 0 ? ' is-active' : ''; ?>" data-hs-to="<?php echo (int) $sIdx; ?>" aria-label="Slide <?php echo (int) ($sIdx + 1); ?>" aria-pressed="<?php echo $sIdx === 0 ? 'true' : 'false'; ?>"></button>
+                                <?php endforeach; ?>
+                            </div>
+                            <button type="button" class="pa-hs-nav" data-hs-dir="1" aria-label="Slide berikutnya">›</button>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php else : ?>
+                <p class="pa-sched-empty">Tambahkan gambar slide pada pengaturan blok <strong>Slider Gambar / Infografis</strong>.</p>
+            <?php endif; ?>
+        </section>
+        <?php
+        return (string) ob_get_clean();
+    }
+
     if ($type === 'custom') {
         $embedUrl = '';
         if (!empty($bCfg['embed_url']) && function_exists('pa_sinova_sanitize_https_embed_url')) {
@@ -704,7 +844,10 @@ function pa_sinova_render_beranda(): string {
     $cfg       = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $blocks    = function_exists('pa_sinova_get_home_blocks') ? pa_sinova_get_home_blocks() : array();
     $showTick  = (string) ($cfg['home_show_ticker'] ?? '1') !== '0';
+    $tickLabel = trim((string) ($cfg['home_ticker_label'] ?? 'INFO LAYANAN')) ?: 'INFO LAYANAN';
     $tickerTxt = trim((string) ($cfg['home_ticker_text'] ?? ''));
+    $tickLen   = function_exists('mb_strlen') ? mb_strlen($tickerTxt, 'UTF-8') : strlen($tickerTxt);
+    $tickDur   = max(18, min(65, (int) round(max(40, $tickLen) * 0.24)));
     $ghaibUrl  = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/');
 
     ob_start();
@@ -712,8 +855,13 @@ function pa_sinova_render_beranda(): string {
     <div class="pa-starter-showcase">
         <?php if ($showTick && $tickerTxt !== '') : ?>
         <div class="pa-ticker-bar" role="region" aria-label="Informasi Terkini Layanan">
-            <span class="pa-ticker-tag">INFO LAYANAN</span>
-            <span class="pa-ticker-text"><?php echo esc_html($tickerTxt); ?></span>
+            <span class="pa-ticker-tag"><?php echo esc_html($tickLabel); ?></span>
+            <div class="pa-ticker-viewport">
+                <div class="pa-ticker-track" style="--pa-ticker-dur:<?php echo (int) $tickDur; ?>s;">
+                    <span class="pa-ticker-text"><?php echo esc_html($tickerTxt); ?></span>
+                    <span class="pa-ticker-text pa-ticker-dup" aria-hidden="true"><?php echo esc_html($tickerTxt); ?></span>
+                </div>
+            </div>
             <a class="pa-ticker-link" href="<?php echo esc_url($ghaibUrl); ?>">Panggilan Ghaib →</a>
         </div>
         <?php endif; ?>
@@ -769,6 +917,23 @@ add_filter('the_content', static function ($content) {
     return $content . $html;
 }, 25);
 
+// Pengaman tampilan publik halaman /direktori-putusan/ bila isi DB masih memuat placeholder [LENGKAPI...] lama
+add_filter('the_content', static function ($content) {
+    if (is_admin() || !is_page('direktori-putusan') || !is_main_query() || !in_the_loop()) {
+        return $content;
+    }
+    if (!is_string($content) || stripos($content, '[LENGKAPI') === false) {
+        return $content;
+    }
+    $cfg  = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $dir  = trim((string) ($cfg['direktori_url'] ?? ''));
+    $norm = rtrim(strtolower($dir), '/');
+    if ($dir === '' || $norm === 'https://putusan3.mahkamahagung.go.id' || $norm === 'http://putusan3.mahkamahagung.go.id') {
+        return $content;
+    }
+    return do_shortcode('[pa_direktori_putusan limit="10"]');
+}, 15);
+
 // 4. Shortcode [pa_sinova_latest_posts count="3"]: Berita Terkini Satuan Kerja (Memisahkan Kategori Pengumuman)
 add_shortcode('pa_sinova_latest_posts', static function ($atts) {
     $cfgAtts = shortcode_atts(array('count' => 3), $atts, 'pa_sinova_latest_posts');
@@ -811,12 +976,24 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
                 $permalink = get_permalink($p);
                 $dateStr   = get_the_date('d M Y', $p);
                 $excerpt   = wp_trim_words(wp_strip_all_tags((string) ($p->post_excerpt ?: $p->post_content)), 20, '...');
+                $thumbUrl  = function_exists('pa_portal_extract_post_thumb') ? pa_portal_extract_post_thumb($p, 'medium_large') : (string) get_the_post_thumbnail_url($p->ID, 'medium_large');
             ?>
                 <article class="pa-news-card">
-                    <span class="pa-news-date"><?php echo esc_html($dateStr); ?></span>
-                    <h3><a href="<?php echo esc_url((string) $permalink); ?>"><?php echo esc_html(get_the_title($p)); ?></a></h3>
-                    <p><?php echo esc_html($excerpt); ?></p>
-                    <a class="pa-news-more" href="<?php echo esc_url((string) $permalink); ?>">Baca selengkapnya →</a>
+                    <a class="pa-news-thumb" href="<?php echo esc_url((string) $permalink); ?>" aria-hidden="true" tabindex="-1">
+                        <?php if ($thumbUrl !== '') : ?>
+                            <img src="<?php echo esc_url($thumbUrl); ?>" alt="" loading="lazy" decoding="async">
+                        <?php else : ?>
+                            <span class="pa-news-thumb-ph">
+                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                            </span>
+                        <?php endif; ?>
+                    </a>
+                    <div class="pa-news-body">
+                        <span class="pa-news-date"><?php echo esc_html($dateStr); ?></span>
+                        <h3><a href="<?php echo esc_url((string) $permalink); ?>"><?php echo esc_html(get_the_title($p)); ?></a></h3>
+                        <p><?php echo esc_html($excerpt); ?></p>
+                        <a class="pa-news-more" href="<?php echo esc_url((string) $permalink); ?>">Baca selengkapnya →</a>
+                    </div>
                 </article>
             <?php endforeach; ?>
         </div>
@@ -1680,11 +1857,30 @@ body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa
 /* CSS Beranda Portal Resmi Pengadilan Agama (Clean Hover-First + GPU Parallax) */
 .pa-starter-showcase { max-width: 1180px; margin: 6px auto 28px; font-family: 'Inter', system-ui, sans-serif; overflow: visible !important; }
 .pa-section-block, .pa-services-grid, .pa-zi-grid, .pa-news-grid, .pa-split-section { overflow: visible !important; }
-.pa-ticker-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-radius: 10px; background: #f4faf7; border: 1px solid #d5e6dc; border-left: 4px solid #C9A227; margin-bottom: 18px; font-size: 12.5px; color: #043927; }
-.pa-ticker-tag { padding: 3px 9px; border-radius: 6px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
-.pa-ticker-text { flex: 1; min-width: 220px; font-weight: 600; }
-.pa-ticker-link { color: #056e4f !important; font-weight: 800; text-decoration: none !important; white-space: nowrap; }
+.pa-ticker-bar { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-radius: 10px; background: #f4faf7; border: 1px solid #d5e6dc; border-left: 4px solid #C9A227; margin-bottom: 18px; font-size: 12.5px; color: #043927; overflow: hidden; }
+.pa-ticker-tag { padding: 3px 9px; border-radius: 6px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; flex-shrink: 0; white-space: nowrap; }
+.pa-ticker-viewport { flex: 1 1 auto; min-width: 0; overflow: hidden; position: relative; mask-image: linear-gradient(90deg, transparent 0%, #000 3%, #000 97%, transparent 100%); -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 3%, #000 97%, transparent 100%); }
+.pa-ticker-track { display: inline-flex; align-items: center; gap: 48px; width: max-content; will-change: transform; animation: paTickerMarquee var(--pa-ticker-dur, 28s) linear infinite; }
+.pa-ticker-bar:hover .pa-ticker-track,
+.pa-ticker-bar:focus-within .pa-ticker-track { animation-play-state: paused; }
+.pa-ticker-text { font-weight: 600; white-space: nowrap; }
+.pa-ticker-link { color: #056e4f !important; font-weight: 800; text-decoration: none !important; white-space: nowrap; flex-shrink: 0; }
 .pa-ticker-link:hover { text-decoration: underline !important; }
+@keyframes paTickerMarquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+html[data-pa-nomotion="1"] .pa-ticker-track { animation: none !important; width: auto; }
+html[data-pa-nomotion="1"] .pa-ticker-dup { display: none; }
+html[data-pa-nomotion="1"] .pa-ticker-text { white-space: normal; }
+@media (prefers-reduced-motion: reduce) {
+    .pa-ticker-track { animation: none; width: auto; }
+    .pa-ticker-dup { display: none; }
+    .pa-ticker-text { white-space: normal; }
+}
+@media (max-width: 640px) {
+    .pa-ticker-bar { flex-wrap: wrap; }
+    .pa-ticker-viewport { order: 3; width: 100%; flex-basis: 100%; }
+}
+html[data-pa-theme="dark"] .pa-ticker-bar { background: #13221a; border-color: #2c4c3b; color: #e6f4ee; }
+html[data-pa-theme="dark"] .pa-ticker-link { color: #E5C158 !important; }
 .pa-hero-banner {
     position: relative;
     overflow: hidden;
@@ -2352,15 +2548,37 @@ html[data-pa-theme="dark"] .pa-aco-btn:focus-visible { background: #1e382b; bord
 .pa-news-all { color: #056e4f !important; font-weight: 800; font-size: 13px; text-decoration: none !important; }
 .pa-news-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; text-align: left; }
 @media (max-width: 860px) { .pa-news-grid { grid-template-columns: 1fr; } }
-.pa-news-card { position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #d5e6dc; box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05); transition: transform 0.18s ease, border-color 0.18s ease; }
+.pa-news-card { position: relative; z-index: 1; display: flex; flex-direction: column; padding: 0; border-radius: 14px; background: #ffffff; border: 1px solid #d5e6dc; box-shadow: 0 4px 14px rgba(4, 57, 39, 0.05); transition: transform 0.18s ease, border-color 0.18s ease; }
 .pa-news-card:hover,
 .pa-news-card:focus-within { transform: translateY(-3px); border-color: #C9A227; z-index: 35; }
+.pa-news-thumb { display: block; aspect-ratio: 16 / 10; border-radius: 13px 13px 0 0; overflow: hidden; background: linear-gradient(135deg, #e7f4ee 0%, #fef9e7 100%); border-bottom: 1px solid #e2ece6; }
+.pa-news-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.28s ease; }
+.pa-news-card:hover .pa-news-thumb img { transform: scale(1.04); }
+.pa-news-thumb-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #056e4f; opacity: 0.65; }
+.pa-news-body { padding: 14px 16px 16px; display: flex; flex-direction: column; flex: 1; justify-content: space-between; gap: 7px; }
 .pa-news-date { font-size: 11.5px; font-weight: 700; color: #6e5204; }
 .pa-news-card h3 { margin: 0; font-size: 15px; line-height: 1.4; }
 .pa-news-card h3 a { color: #043927 !important; text-decoration: none !important; }
 .pa-news-card h3 a:hover { color: #056e4f !important; }
 .pa-news-card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: #4b5563; }
 .pa-news-more { color: #056e4f !important; font-size: 12px; font-weight: 800; text-decoration: none !important; }
+.pa-feed-thumb { width: 38px; height: 38px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #ecfdf5; border: 1px solid #cce6da; display: inline-flex; align-items: center; justify-content: center; }
+.pa-feed-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pa-feed-thumb-ph { font-size: 15px; color: #056e4f; }
+.pa-image-banner-box { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.pa-image-banner-box img { width: 100%; border-radius: 12px; display: block; border: 1px solid #d5e6dc; }
+.pa-image-banner-box figcaption { font-size: 12.5px; color: #475569; text-align: center; }
+.pa-photo-slider { position: relative; border-radius: 14px; overflow: hidden; background: #022c22; }
+.pa-ps-slide { position: relative; height: var(--pa-ps-h, 360px); margin: 0; }
+.pa-ps-slide[hidden] { display: none !important; }
+.pa-ps-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pa-ps-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 18px 44px; background: linear-gradient(transparent, rgba(2, 44, 34, 0.86)); color: #fff; font-weight: 700; font-size: 14px; }
+.pa-dirput-scope { flex-basis: 100%; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; cursor: pointer; }
+html[data-pa-theme="dark"] .pa-feed-thumb { background: #182a20; border-color: #2c4c3b; }
+html[data-pa-theme="dark"] .pa-news-thumb { background: #111e18; border-color: #2c4637; }
+html[data-pa-theme="dark"] .pa-news-thumb-ph { color: #E5C158; }
+html[data-pa-theme="dark"] .pa-image-banner-box figcaption,
+html[data-pa-theme="dark"] .pa-dirput-scope { color: #cbd5e1; }
 .pa-split-section { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: stretch; }
 @media (max-width: 880px) { .pa-split-section { grid-template-columns: 1fr; } }
 .pa-starter-survey { padding: 18px; border-radius: 16px; background: linear-gradient(155deg, #065f46 0%, #044e3a 52%, #022c22 100%); border: 1.5px solid #C9A227; color: #fff; text-align: left; display: flex; flex-direction: column; justify-content: space-between; }
@@ -2676,7 +2894,7 @@ html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 5px 2px 5px 8px;
+    padding: 5px 4px 5px 8px;
     border-radius: 12px 0 0 12px;
     background: rgba(255, 255, 255, 0.94);
     backdrop-filter: blur(8px);
@@ -2684,13 +2902,20 @@ html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 
     border-right: 0;
     box-shadow: -3px 6px 18px rgba(2, 44, 34, 0.14);
     text-decoration: none !important;
+    touch-action: none;
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
+#pa-aco-float.pa-aco-pos-middle_right { top: 50%; bottom: auto; transform: translateY(-50%); }
+#pa-aco-float.pa-aco-pos-top_right { top: 112px; bottom: auto; }
+#pa-aco-float.pa-aco-pos-bottom_left { left: 0; right: auto; bottom: 76px; padding: 5px 8px 5px 4px; border-radius: 0 12px 12px 0; border-right: 1px solid rgba(5, 110, 79, 0.16); border-left: 0; box-shadow: 3px 6px 18px rgba(2, 44, 34, 0.14); }
+#pa-aco-float.pa-aco-pos-middle_left { left: 0; right: auto; top: 50%; bottom: auto; transform: translateY(-50%); padding: 5px 8px 5px 4px; border-radius: 0 12px 12px 0; border-right: 1px solid rgba(5, 110, 79, 0.16); border-left: 0; box-shadow: 3px 6px 18px rgba(2, 44, 34, 0.14); }
+#pa-aco-float.is-custom-pos { border-radius: 12px; border: 1px solid rgba(5, 110, 79, 0.22); padding: 6px 8px; box-shadow: 0 8px 22px rgba(2, 44, 34, 0.18); transform: none !important; }
+#pa-aco-float.is-draggable { cursor: grab; }
+#pa-aco-float.is-dragging { cursor: grabbing; opacity: 0.9; transition: none !important; }
 #pa-aco-float:hover,
 #pa-aco-float:focus-visible {
-    transform: translateX(-2px);
     border-color: rgba(201, 162, 39, 0.72);
-    box-shadow: -5px 10px 24px rgba(2, 44, 34, 0.22);
+    box-shadow: 0 10px 24px rgba(2, 44, 34, 0.22);
 }
 .pa-aco-float-img {
     display: block;
@@ -2699,6 +2924,8 @@ html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 
     object-fit: contain;
     pointer-events: none;
 }
+#pa-aco-float.pa-aco-sz-sm .pa-aco-float-img { width: 44px; height: 40px; }
+#pa-aco-float.pa-aco-sz-lg .pa-aco-float-img { width: 68px; height: 60px; }
 .pa-aco-float-img[hidden] { display: none !important; }
 .pa-aco-float-static {
     display: none;
@@ -2711,7 +2938,8 @@ html.pa-is-scrolled .pa-shell-navwrap { box-shadow: 0 10px 26px rgba(2, 44, 34, 
 }
 .pa-aco-float-static.is-fallback { display: inline-flex; }
 @media (max-width: 640px) {
-    #pa-aco-float { bottom: 70px; padding: 4px 2px 4px 6px; }
+    #pa-aco-float.pa-aco-pos-bottom_right,
+    #pa-aco-float.pa-aco-pos-bottom_left { bottom: 70px; padding: 4px 4px 4px 6px; }
     .pa-aco-float-img { width: 46px; height: 41px; }
 }
 html[data-pa-theme="dark"] #pa-aco-float {
@@ -2721,8 +2949,8 @@ html[data-pa-theme="dark"] #pa-aco-float {
 }
 @media (prefers-reduced-motion: reduce) {
     .pa-hero-banner::before, .pa-hero-banner::after, .pa-hero-content { transform: none !important; transition: none !important; }
-    .pa-aco-float-img { display: none !important; }
-    .pa-aco-float-static { display: inline-flex; }
+    #pa-aco-float.pa-aco-is-gif .pa-aco-float-img { display: none !important; }
+    #pa-aco-float.pa-aco-is-gif .pa-aco-float-static { display: inline-flex; }
     * { scroll-behavior: auto !important; }
 }
 @media print {
@@ -2745,24 +2973,22 @@ html[data-pa-theme="dark"] #pa-aco-float {
 .pa-footer-vis-row:last-child { margin-bottom: 0; }
 .pa-footer-vis-row strong { color: #E5C158; font-variant-numeric: tabular-nums; }
 .pa-shell-footer-bottom { max-width: 1180px; margin: 0 auto; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.14); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; font-size: 12px; }
-.pa-footer-credit-wrap { position: relative; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
-.pa-shell-footer .pa-footer-credit-trigger { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #d1fae5; text-decoration: none; line-height: 1.5; border-radius: 6px; transition: color 0.16s ease; }
-.pa-shell-footer .pa-footer-credit-trigger:hover,
-.pa-shell-footer .pa-footer-credit-trigger:focus-visible { color: #E5C158; text-decoration: none; }
-.pa-shell-footer .pa-footer-credit-trigger:focus-visible { outline: 2px solid #E5C158; outline-offset: 3px; }
-.pa-footer-ver-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: rgba(229, 193, 88, 0.14); border: 1px solid rgba(229, 193, 88, 0.42); color: #E5C158; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
-.pa-footer-credit-popover { position: absolute; left: 0; bottom: 100%; padding-bottom: 10px; width: max-content; max-width: min(370px, calc(100vw - 32px)); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(6px); transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease; z-index: 9999; }
-.pa-footer-credit-wrap:hover .pa-footer-credit-popover,
-.pa-footer-credit-wrap:focus-within .pa-footer-credit-popover { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
-.pa-footer-credit-wrap.is-dismissed .pa-footer-credit-popover { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
-.pa-footer-credit-card { position: relative; background: #012119; color: #ecfdf5; border: 1px solid #C9A227; border-radius: 12px; padding: 11px 14px; box-shadow: 0 14px 30px rgba(0, 0, 0, 0.36); text-align: left; line-height: 1.45; }
-.pa-footer-credit-card::after { content: ''; position: absolute; left: 22px; top: 100%; border-width: 6px 6px 0; border-style: solid; border-color: #C9A227 transparent transparent; }
-.pa-footer-credit-main { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12.5px; color: #ffffff; font-weight: 600; }
-.pa-footer-credit-main strong { color: #E5C158; font-weight: 800; }
+.pa-footer-credit-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; color: #d1fae5; line-height: 1.5; }
+.pa-footer-ver-wrap { position: relative; display: inline-flex; align-items: center; }
+.pa-shell-footer .pa-footer-ver-trigger { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; background: rgba(229, 193, 88, 0.14); border: 1px solid rgba(229, 193, 88, 0.45); color: #E5C158; font-size: 11px; font-weight: 800; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; text-decoration: none; transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease; }
+.pa-shell-footer .pa-footer-ver-trigger:hover,
+.pa-shell-footer .pa-footer-ver-trigger:focus-visible { background: #E5C158; border-color: #E5C158; color: #022c22; text-decoration: none; }
+.pa-shell-footer .pa-footer-ver-trigger:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+.pa-footer-credit-popover { position: absolute; left: 0; bottom: 100%; padding-bottom: 10px; width: max-content; max-width: min(350px, calc(100vw - 32px)); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(6px); transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease; z-index: 9999; }
+.pa-footer-ver-wrap:hover .pa-footer-credit-popover,
+.pa-footer-ver-wrap:focus-within .pa-footer-credit-popover { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.pa-footer-ver-wrap.is-dismissed .pa-footer-credit-popover { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+.pa-footer-credit-card { position: relative; background: #012119; color: #ecfdf5; border: 1px solid #C9A227; border-radius: 12px; padding: 10px 14px; box-shadow: 0 14px 30px rgba(0, 0, 0, 0.36); text-align: left; line-height: 1.45; }
+.pa-footer-credit-card::after { content: ''; position: absolute; left: 18px; top: 100%; border-width: 6px 6px 0; border-style: solid; border-color: #C9A227 transparent transparent; }
+.pa-footer-credit-main { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12.5px; color: #ffffff; font-weight: 700; }
 .pa-heart-ico { color: #fb7185; flex-shrink: 0; display: inline-block; vertical-align: middle; filter: drop-shadow(0 0 6px rgba(251, 113, 133, 0.45)); animation: paHeartBeat 1.8s ease-in-out infinite; }
 @keyframes paHeartBeat { 0%, 100% { transform: scale(1); } 18% { transform: scale(1.18); } 34% { transform: scale(0.98); } 50% { transform: scale(1.14); } }
-.pa-footer-credit-sub { margin-top: 4px; font-size: 11px; color: #a7f3d0; }
-.pa-footer-credit-meta { margin-top: 7px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.12); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11px; color: #cbd5e1; }
+.pa-footer-credit-meta { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.12); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11px; color: #cbd5e1; }
 .pa-footer-pop-ver { display: inline-block; padding: 1px 7px; border-radius: 999px; background: rgba(201, 162, 39, 0.22); border: 1px solid rgba(229, 193, 88, 0.45); color: #fde68a; font-weight: 700; }
 html[data-pa-nomotion="1"] .pa-heart-ico,
 html[data-pa-nomotion="1"] .pa-footer-credit-popover { animation: none !important; transition: none !important; }
@@ -3599,7 +3825,6 @@ add_action('wp_body_open', static function () {
             <span>PTSP: <?php echo esc_html($phone ?: 'Senin–Jumat'); ?></span>
             <a href="<?php echo esc_url($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Sistem Informasi Penelusuran Perkara">SIPP</a>
             <a href="<?php echo esc_url($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Layanan Perkara Elektronik MA RI">e-Court</a>
-            <a href="<?php echo esc_url($cfg['aco_url'] ?? 'https://cctv.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Pemantauan Access CCTV Online Ditjen Badilag" style="display:inline-flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>CCTV ACO</a>
             <a href="<?php echo esc_url($cfg['survey_url'] ?? 'https://survei.badilag.net/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Survei Persepsi Kepuasan &amp; Anti Korupsi">Survei Pelayanan</a>
             <button type="button" id="pa-topbar-theme-btn" class="pa-topbar-theme-btn" aria-pressed="false" data-pa-tip="Ubah tampilan antara Mode Terang dan Mode Gelap">🌙 Mode Gelap</button>
         </div>
@@ -3732,27 +3957,38 @@ add_action('wp_footer', static function () {
         </div>
     </div>
 <?php
-    $starterVer = defined('PA_SINOVA_STARTER_VERSION') ? (string) PA_SINOVA_STARTER_VERSION : '2.3.4';
-    $starterRepo = defined('PA_SINOVA_GITHUB_REPO') ? ('https://github.com/' . ltrim((string) PA_SINOVA_GITHUB_REPO, '/')) : 'https://github.com/kang-devlp/pa-wordpress-sinova-starter';
+    $starterVer    = defined('PA_SINOVA_STARTER_VERSION') ? (string) PA_SINOVA_STARTER_VERSION : '2.4.0';
+    $starterRepo   = defined('PA_SINOVA_GITHUB_REPO') ? ('https://github.com/' . ltrim((string) PA_SINOVA_GITHUB_REPO, '/')) : 'https://github.com/kang-devlp/pa-wordpress-sinova-starter';
+    $creditMain    = trim((string) ($cfg['footer_credit_text'] ?? 'Pengadilan Agama Devlpr Community')) ?: 'Pengadilan Agama Devlpr Community';
+    $creditSuffix  = trim((string) ($cfg['footer_credit_suffix'] ?? 'Portal Keterbukaan Informasi Publik'));
+    $creditHover   = trim((string) ($cfg['footer_hover_text'] ?? 'Developed with ♥ by PA Devlpr Community')) ?: 'Developed with ♥ by PA Devlpr Community';
+    $creditUrl     = esc_url_raw(trim((string) ($cfg['footer_credit_url'] ?? '')), array('http', 'https'));
+    if ($creditUrl === '') {
+        $creditUrl = $starterRepo;
+    }
+    $heartSvg = '<svg class="pa-heart-ico" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+    $hoverParts = preg_split('/(♥|\{love\})/', $creditHover, -1, PREG_SPLIT_DELIM_CAPTURE);
+    $hoverRendered = '';
+    if (is_array($hoverParts)) {
+        foreach ($hoverParts as $hp) {
+            $hoverRendered .= ($hp === '♥' || $hp === '{love}') ? $heartSvg : esc_html($hp);
+        }
+    } else {
+        $hoverRendered = esc_html($creditHover);
+    }
     ?>
     <div class="pa-shell-footer-bottom">
-        <div class="pa-footer-credit-wrap">
-            <a class="pa-footer-credit-trigger" href="<?php echo esc_url($starterRepo); ?>" target="_blank" rel="noopener noreferrer" aria-describedby="pa-footer-credit-card">
-                <span>&copy; <?php echo esc_html((string) wp_date('Y')); ?> Pengadilan Agama Devlp Community &middot; Portal Keterbukaan Informasi Publik</span>
-                <span class="pa-footer-ver-badge">v<?php echo esc_html($starterVer); ?></span>
-            </a>
-            <div class="pa-footer-credit-popover" id="pa-footer-credit-card" role="tooltip">
-                <div class="pa-footer-credit-card">
-                    <div class="pa-footer-credit-main">
-                        <span>Developed with</span>
-                        <svg class="pa-heart-ico" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                        <span>by</span>
-                        <strong>Pengadilan Agama Devlp Community</strong>
-                    </div>
-                    <div class="pa-footer-credit-sub">Kolaborasi Penggiat IT Peradilan Agama &middot; PA WordPress SINOVA Starter Kit</div>
-                    <div class="pa-footer-credit-meta">
-                        <span class="pa-footer-pop-ver">Versi <?php echo esc_html($starterVer); ?></span>
-                        <span>Satker: <?php echo esc_html($satker); ?></span>
+        <div class="pa-footer-credit-line">
+            <span>&copy; <?php echo esc_html((string) wp_date('Y')); ?> <?php echo esc_html($creditMain); ?><?php echo $creditSuffix !== '' ? ' &middot; ' . esc_html($creditSuffix) : ''; ?></span>
+            <div class="pa-footer-ver-wrap">
+                <a class="pa-footer-ver-trigger" href="<?php echo esc_url($creditUrl); ?>" target="_blank" rel="noopener noreferrer" aria-describedby="pa-footer-ver-card">v<?php echo esc_html($starterVer); ?></a>
+                <div class="pa-footer-credit-popover" id="pa-footer-ver-card" role="tooltip">
+                    <div class="pa-footer-credit-card">
+                        <div class="pa-footer-credit-main"><?php echo $hoverRendered; ?></div>
+                        <div class="pa-footer-credit-meta">
+                            <span class="pa-footer-pop-ver">Versi <?php echo esc_html($starterVer); ?></span>
+                            <span><?php echo esc_html($satker); ?></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3767,6 +4003,16 @@ add_action('wp_footer', static function () {
     if (!pa_sinova_is_adoption_mode() && $acoUrlRaw !== '' && $acoFloatOn) :
         $acoImgUrl     = trim((string) ($cfg['aco_logo_url'] ?? ''));
         $acoFallback   = wp_make_link_relative(add_query_arg('pa_aco_asset', '1', home_url('/')));
+        $acoPos        = (string) ($cfg['aco_float_position'] ?? 'bottom_right');
+        if (!in_array($acoPos, array('bottom_right', 'middle_right', 'bottom_left', 'middle_left', 'top_right'), true)) {
+            $acoPos = 'bottom_right';
+        }
+        $acoSize       = (string) ($cfg['aco_float_size'] ?? 'md');
+        if (!in_array($acoSize, array('sm', 'md', 'lg'), true)) {
+            $acoSize = 'md';
+        }
+        $acoDrag       = (string) ($cfg['aco_float_draggable'] ?? '1') !== '0';
+        $acoIsGif      = ($acoImgUrl === '' || (bool) preg_match('/\.gif(?:$|\?)/i', $acoImgUrl));
         if ($acoImgUrl === '') {
             if (defined('PA_SINOVA_ASSETS_DIR') && defined('PA_SINOVA_ASSETS_URL') && file_exists(PA_SINOVA_ASSETS_DIR . '/cctv-aco.gif')) {
                 $acoImgUrl = rtrim((string) PA_SINOVA_ASSETS_URL, '/') . '/cctv-aco.gif';
@@ -3792,8 +4038,10 @@ add_action('wp_footer', static function () {
                 $acoImgUrl = wp_make_link_relative($acoImgUrl);
             }
         }
+        $acoClasses = 'pa-aco-float pa-aco-pos-' . $acoPos . ' pa-aco-sz-' . $acoSize . ($acoIsGif ? ' pa-aco-is-gif' : '') . ($acoDrag ? ' is-draggable' : '');
+        $acoTip     = $acoDrag ? 'Access CCTV Online (ACO) · Klik untuk buka atau seret untuk pindah posisi' : 'Access CCTV Online (ACO) · Klik untuk memantau';
 ?>
-<a id="pa-aco-float" class="pa-aco-float" href="<?php echo esc_url($acoUrlRaw); ?>" target="_blank" rel="noopener noreferrer" aria-label="Buka Access CCTV Online (ACO) Ditjen Badilag" data-pa-tip="Access CCTV Online (ACO) · Klik untuk memantau">
+<a id="pa-aco-float" class="<?php echo esc_attr($acoClasses); ?>" data-aco-draggable="<?php echo $acoDrag ? '1' : '0'; ?>" href="<?php echo esc_url($acoUrlRaw); ?>" target="_blank" rel="noopener noreferrer" aria-label="Buka Access CCTV Online (ACO) Ditjen Badilag" data-pa-tip="<?php echo esc_attr($acoTip); ?>">
     <img class="pa-aco-float-img" src="<?php echo esc_url($acoImgUrl); ?>" data-aco-fallback="<?php echo esc_attr($acoFallback); ?>" alt="ACO Access CCTV Online" width="56" height="50" decoding="async">
     <span class="pa-aco-float-static" aria-hidden="true">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
@@ -4651,6 +4899,16 @@ add_action('wp_footer', static function () {
         dots.forEach(function(d){
             d.addEventListener('click', function(){ showSlide(parseInt(d.getAttribute('data-hs-to'), 10) || 0); });
         });
+        var autoSec = parseInt(slider.getAttribute('data-autoplay') || '0', 10) || 0;
+        var reduceM = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) || document.documentElement.getAttribute('data-pa-nomotion') === '1';
+        if(autoSec > 0 && !reduceM){
+            var slPaused = false;
+            slider.addEventListener('mouseenter', function(){ slPaused = true; });
+            slider.addEventListener('mouseleave', function(){ slPaused = false; });
+            slider.addEventListener('focusin', function(){ slPaused = true; });
+            slider.addEventListener('focusout', function(){ slPaused = false; });
+            setInterval(function(){ if(!slPaused) showSlide(cur + 1); }, autoSec * 1000);
+        }
     });
 
     var pegDlg = document.getElementById('pa-pegawai-dlg');
@@ -4756,6 +5014,7 @@ add_action('wp_footer', static function () {
         });
     });
 
+    var acoFloat = document.getElementById('pa-aco-float');
     var acoImg = document.querySelector('#pa-aco-float .pa-aco-float-img');
     var acoStatic = document.querySelector('#pa-aco-float .pa-aco-float-static');
     if(acoImg){
@@ -4776,7 +5035,86 @@ add_action('wp_footer', static function () {
         }
     }
 
-    var footerCredit = document.querySelector('.pa-footer-credit-wrap');
+    if(acoFloat && acoFloat.getAttribute('data-aco-draggable') === '1'){
+        var acoStoreKey = 'pa_aco_pos_v1';
+        try {
+            var savedPos = JSON.parse(localStorage.getItem(acoStoreKey) || 'null');
+            if(savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number'){
+                var maxL = Math.max(8, window.innerWidth - (acoFloat.offsetWidth || 64) - 8);
+                var maxT = Math.max(8, window.innerHeight - (acoFloat.offsetHeight || 56) - 8);
+                acoFloat.classList.add('is-custom-pos');
+                acoFloat.style.left = Math.min(maxL, Math.max(8, savedPos.left)) + 'px';
+                acoFloat.style.top = Math.min(maxT, Math.max(8, savedPos.top)) + 'px';
+                acoFloat.style.right = 'auto';
+                acoFloat.style.bottom = 'auto';
+            }
+        } catch(e){}
+        var acoDragging = false, acoMoved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+        acoFloat.addEventListener('pointerdown', function(e){
+            if(e.button !== 0) return;
+            var rect = acoFloat.getBoundingClientRect();
+            acoDragging = true; acoMoved = false;
+            sx = e.clientX; sy = e.clientY;
+            ox = rect.left; oy = rect.top;
+            if(acoFloat.setPointerCapture) acoFloat.setPointerCapture(e.pointerId);
+        });
+        acoFloat.addEventListener('pointermove', function(e){
+            if(!acoDragging) return;
+            var dx = e.clientX - sx, dy = e.clientY - sy;
+            if(!acoMoved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)){
+                acoMoved = true;
+                acoFloat.classList.add('is-dragging', 'is-custom-pos');
+                acoFloat.style.right = 'auto';
+                acoFloat.style.bottom = 'auto';
+            }
+            if(acoMoved){
+                var maxL = Math.max(8, window.innerWidth - acoFloat.offsetWidth - 8);
+                var maxT = Math.max(8, window.innerHeight - acoFloat.offsetHeight - 8);
+                acoFloat.style.left = Math.min(maxL, Math.max(8, ox + dx)) + 'px';
+                acoFloat.style.top = Math.min(maxT, Math.max(8, oy + dy)) + 'px';
+            }
+        });
+        var endAcoDrag = function(){
+            if(!acoDragging) return;
+            acoDragging = false;
+            acoFloat.classList.remove('is-dragging');
+            if(acoMoved){
+                var rect = acoFloat.getBoundingClientRect();
+                try { localStorage.setItem(acoStoreKey, JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) })); } catch(e){}
+                setTimeout(function(){ acoMoved = false; }, 80);
+            }
+        };
+        acoFloat.addEventListener('pointerup', endAcoDrag);
+        acoFloat.addEventListener('pointercancel', endAcoDrag);
+        acoFloat.addEventListener('click', function(e){ if(acoMoved) e.preventDefault(); });
+    }
+
+    document.querySelectorAll('.pa-dirput-search').forEach(function(form){
+        form.addEventListener('submit', function(e){
+            var qInp = form.querySelector('input[type="search"]');
+            if(!qInp) return;
+            var rawQ = (qInp.value || '').trim();
+            if(!rawQ) return;
+            var hint = (form.getAttribute('data-court-hint') || '').trim();
+            var hash = (form.getAttribute('data-court-hash') || '').trim();
+            var scopeChk = form.querySelector('.pa-dirput-scope-chk');
+            var useScope = (!scopeChk || scopeChk.checked);
+            var finalQ = rawQ;
+            if(useScope && hint && !hash){
+                var lowQ = rawQ.toLowerCase();
+                var lowH = hint.toLowerCase();
+                if(lowQ.indexOf(lowH) === -1 && !/pdt\.|pa\.|ms\.|pta\./i.test(rawQ)){
+                    finalQ = rawQ + ' ' + hint;
+                }
+            }
+            e.preventDefault();
+            var targetUrl = 'https://putusan3.mahkamahagung.go.id/search.html?q=' + encodeURIComponent(finalQ);
+            if(hash){ targetUrl += '&court=' + encodeURIComponent(hash); }
+            window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        });
+    });
+
+    var footerCredit = document.querySelector('.pa-footer-ver-wrap');
     if(footerCredit){
         footerCredit.addEventListener('mouseleave', function(){ footerCredit.classList.remove('is-dismissed'); });
         footerCredit.addEventListener('focusout', function(e){
