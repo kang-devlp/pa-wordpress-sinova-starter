@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-label="Ilustrasi Gedung Kantor Pengadilan Agama">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#022c22"/>
+      <stop offset="58%" stop-color="#05583f"/>
+      <stop offset="100%" stop-color="#0d7a58"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fbf9"/>
+      <stop offset="100%" stop-color="#e3efe8"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#C9A227"/>
+      <stop offset="100%" stop-color="#E5C158"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="520" fill="url(#sky)"/>
+  <circle cx="670" cy="96" r="54" fill="#E5C158" opacity="0.16"/>
+  <circle cx="670" cy="96" r="34" fill="#E5C158" opacity="0.22"/>
+  <path d="M0 395 Q220 355 440 390 T800 378 L800 520 L0 520 Z" fill="#033b2a"/>
+  <rect x="0" y="425" width="800" height="95" fill="#02271d"/>
+  <!-- Sayap Kiri & Kanan Gedung -->
+  <rect x="86" y="210" width="628" height="190" rx="6" fill="url(#wall)" stroke="#c7ddd1" stroke-width="2"/>
+  <rect x="86" y="196" width="628" height="16" rx="4" fill="#043927"/>
+  <rect x="86" y="210" width="628" height="5" fill="url(#gold)"/>
+  <!-- Jendela Sayap Kiri -->
+  <g fill="#064e3b" opacity="0.86">
+    <rect x="116" y="236" width="38" height="52" rx="4"/><rect x="168" y="236" width="38" height="52" rx="4"/>
+    <rect x="220" y="236" width="38" height="52" rx="4"/>
+    <rect x="116" y="308" width="38" height="52" rx="4"/><rect x="168" y="308" width="38" height="52" rx="4"/>
+    <rect x="220" y="308" width="38" height="52" rx="4"/>
+    <!-- Jendela Sayap Kanan -->
+    <rect x="542" y="236" width="38" height="52" rx="4"/><rect x="594" y="236" width="38" height="52" rx="4"/>
+    <rect x="646" y="236" width="38" height="52" rx="4"/>
+    <rect x="542" y="308" width="38" height="52" rx="4"/><rect x="594" y="308" width="38" height="52" rx="4"/>
+    <rect x="646" y="308" width="38" height="52" rx="4"/>
+  </g>
+  <!-- Portiko Tengah & Atap Pedimen -->
+  <polygon points="274,176 400,104 526,176" fill="#043927" stroke="url(#gold)" stroke-width="4"/>
+  <polygon points="304,170 400,118 496,170" fill="#065f46"/>
+  <circle cx="400" cy="147" r="15" fill="none" stroke="#E5C158" stroke-width="2.5"/>
+  <path d="M400 137 V156 M391 143 H409" stroke="#E5C158" stroke-width="2" stroke-linecap="round"/>
+  <rect x="282" y="176" width="236" height="224" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="282" y="176" width="236" height="10" fill="url(#gold)"/>
+  <!-- 4 Pilar Utama -->
+  <g fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5">
+    <rect x="298" y="186" width="20" height="204" rx="3"/>
+    <rect x="348" y="186" width="20" height="204" rx="3"/>
+    <rect x="432" y="186" width="20" height="204" rx="3"/>
+    <rect x="482" y="186" width="20" height="204" rx="3"/>
+  </g>
+  <!-- Pintu Utama PTSP -->
+  <rect x="374" y="286" width="52" height="104" rx="6" fill="#043927" stroke="#C9A227" stroke-width="2.5"/>
+  <line x1="400" y1="286" x2="400" y2="390" stroke="#E5C158" stroke-width="1.5"/>
+  <rect x="352" y="220" width="96" height="32" rx="6" fill="#056e4f"/>
+  <text x="400" y="241" text-anchor="middle" fill="#E5C158" font-family="system-ui,sans-serif" font-size="13" font-weight="800" letter-spacing="1">PTSP RESMI</text>
+  <!-- Tangga & Teras -->
+  <rect x="256" y="390" width="288" height="14" rx="3" fill="#d1fae5"/>
+  <rect x="236" y="404" width="328" height="14" rx="3" fill="#a7f3d0"/>
+  <rect x="216" y="418" width="368" height="14" rx="3" fill="#6ee7b7" opacity="0.65"/>
+  <!-- Tiang Bendera Merah Putih -->
+  <rect x="64" y="184" width="4" height="246" fill="#e2e8f0"/>
+  <rect x="68" y="188" width="52" height="17" fill="#dc2626"/>
+  <rect x="68" y="205" width="52" height="17" fill="#ffffff"/>
+  <!-- Pepohonan Taman -->
+  <g fill="#065f46">
+    <circle cx="48" cy="390" r="28"/><circle cx="748" cy="384" r="32"/><circle cx="712" cy="398" r="22"/>
+  </g>
+  <!-- Label Bantuan Penggantian -->
+  <rect x="20" y="468" width="376" height="34" rx="999" fill="#011e17" opacity="0.86" stroke="#C9A227" stroke-opacity="0.7"/>
+  <text x="38" y="490" fill="#fde68a" font-family="system-ui,sans-serif" font-size="12.5" font-weight="700">Foto Gedung Kantor Satker · Ganti di SINOVA Hub</text>
+</svg>

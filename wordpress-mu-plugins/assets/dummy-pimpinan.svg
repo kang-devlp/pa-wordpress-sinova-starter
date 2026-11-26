@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 460" role="img" aria-label="Ilustrasi Foto Resmi Pimpinan Pengadilan Agama">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#022c22"/>
+      <stop offset="60%" stop-color="#05583f"/>
+      <stop offset="100%" stop-color="#056e4f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#C9A227"/>
+      <stop offset="100%" stop-color="#E5C158"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="460" rx="22" fill="url(#bg)"/>
+  <circle cx="200" cy="186" r="134" fill="#E5C158" opacity="0.09"/>
+  <circle cx="200" cy="186" r="102" fill="none" stroke="#E5C158" stroke-opacity="0.24" stroke-width="1.5" stroke-dasharray="6 6"/>
+  <!-- Siluet Formal Pimpinan -->
+  <circle cx="200" cy="162" r="54" fill="#ecfdf5" opacity="0.92"/>
+  <path d="M98 378 C98 286 142 246 200 246 C258 246 302 286 302 378 Z" fill="#012119" stroke="#C9A227" stroke-width="2.5"/>
+  <!-- Kerah Jas & Dasi Institusional -->
+  <polygon points="172,248 200,320 228,248" fill="#ffffff" opacity="0.94"/>
+  <polygon points="193,262 207,262 203,322 200,330 197,322" fill="url(#gold)"/>
+  <!-- Pin Timbangan Keadilan -->
+  <circle cx="246" cy="296" r="12" fill="url(#gold)"/>
+  <path d="M246 290 V302 M240 294 H252" stroke="#022c22" stroke-width="2" stroke-linecap="round"/>
+  <!-- Footer Label -->
+  <rect x="28" y="396" width="344" height="40" rx="12" fill="#011e17" opacity="0.9" stroke="#C9A227" stroke-opacity="0.65"/>
+  <text x="200" y="421" text-anchor="middle" fill="#E5C158" font-family="system-ui,sans-serif" font-size="13" font-weight="800">Foto Pimpinan · Ganti di SINOVA Hub</text>
+</svg>

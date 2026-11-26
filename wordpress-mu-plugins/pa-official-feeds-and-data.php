@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA Starter - Official RSS Feeds (MA RI & Badilag), Data Operasional, Quick Search & SEO JSON-LD
  * Description: Mengambil dan menayangkan pengumuman resmi Mahkamah Agung RI & Ditjen Badilag via RSS (SWR cache + SSRF guard), tabel & shortcode terstruktur Pegawai/Jadwal Sidang/Panggilan Ghaib/Statistik Perkara, REST API Pencarian Kilat Ctrl+K, serta Open Graph & JSON-LD GovernmentOrganization.
- * Version: 2.4.1-starter
+ * Version: 2.5.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -731,6 +731,26 @@ function pa_portal_render_dirput_widget(string $title = '', int $limit = 6, stri
     $needsHyd  = (empty($items) && $rssUrl !== '' && ($data['status'] ?? '') === 'pending');
     $heading   = $title !== '' ? $title : 'Direktori Putusan Terbaru';
 
+    // Jalur Hybrid v2.5: jika RSS putusan3.mahkamahagung.go.id belum terisi/terbatas Cloudflare, tampilkan Putusan Pilihan / Push SIPP lokal
+    if (empty($items) && function_exists('pa_portal_get_records')) {
+        foreach (pa_portal_get_records('putusan', $limit) as $pr) {
+            $pm     = json_decode((string) ($pr['meta_json'] ?? ''), true);
+            $pm     = is_array($pm) ? $pm : array();
+            $pUrl   = esc_url_raw((string) ($pm['doc_url'] ?? ''), array('http', 'https'));
+            $pStat  = trim((string) ($pm['status_hukum'] ?? ''));
+            $pCat   = trim((string) ($pr['category'] ?? ''));
+            $pSub   = trim((string) ($pr['subtitle'] ?? ''));
+            $exPart = array_filter(array($pCat, $pSub, $pStat));
+            $items[] = array(
+                'title'      => (string) ($pr['title'] ?? ''),
+                'link'       => ($pUrl !== '' ? $pUrl : $dirUrl),
+                'date_label' => !empty($pr['event_date']) ? wp_date('d M Y', strtotime((string) $pr['event_date'])) : 'Putusan',
+                'excerpt'    => implode(' · ', $exPart),
+                'badge'      => 'PUTUSAN SATKER',
+            );
+        }
+    }
+
     ob_start();
     ?>
     <section class="pa-dirput-card pa-hg-fullh" aria-label="<?php echo esc_attr($heading); ?>" data-pa-dirput-hydrate="<?php echo $needsHyd ? '1' : '0'; ?>" data-pa-dirput-limit="<?php echo (int) $limit; ?>">
@@ -771,7 +791,7 @@ function pa_portal_render_dirput_widget(string $title = '', int $limit = 6, stri
                     <article class="pa-dirput-item">
                         <a href="<?php echo esc_url((string) ($it['link'] ?? $dirUrl)); ?>" target="_blank" rel="noopener noreferrer">
                             <div class="pa-dirput-item-top">
-                                <span class="pa-dirput-badge">PUTUSAN</span>
+                                <span class="pa-dirput-badge"><?php echo esc_html((string) ($it['badge'] ?? 'PUTUSAN')); ?></span>
                                 <span class="pa-dirput-date"><?php echo esc_html($dtLabel); ?></span>
                             </div>
                             <strong class="pa-dirput-title"><?php echo esc_html($itTitle); ?></strong>
@@ -878,6 +898,13 @@ function pa_portal_delete_sample_records(): int {
         '0042/Pdt.P/2026/PA.Cth',
         '0214/Pdt.G/2026/PA.Cth',
         '0229/Pdt.G/2026/PA.Cth',
+        '0156/Pdt.G/2026/PA.Cth',
+        '0089/Pdt.P/2026/PA.Cth',
+        '0204/Pdt.G/2026/PA.Cth',
+        'SIPANTAU — Pantau Antrean Sidang & PTSP',
+        'SIAKTA Keliling — Pengambilan Akta Cerai Terjadwal',
+        'E-PANJAR — Simulasi & Taksiran Panjar Biaya',
+        'SI-RENTAN — Layanan Prioritas Disabilitas & Lansia',
     );
     $placeholders = implode(',', array_fill(0, count($sampleTitles), '%s'));
     $deleted = (int) $wpdb->query($wpdb->prepare(
@@ -932,7 +959,67 @@ function pa_portal_seed_sample_records(): void {
             'updated_at'  => $now,
         ));
     }
+    pa_portal_seed_v25_samples();
 }
+
+function pa_portal_seed_v25_samples(): void {
+    pa_portal_records_ensure_table();
+    global $wpdb;
+    $table = pa_portal_records_table();
+    $now   = current_time('mysql');
+
+    $putCount = (int) $wpdb->get_var("SELECT COUNT(*) FROM `{$table}` WHERE record_type = 'putusan'");
+    if ($putCount === 0) {
+        $putSeeds = array(
+            array('0156/Pdt.G/2026/PA.Cth', 'Dikabulkan Sebagian — Cerai Gugat & Hak Asuh Anak', 'Cerai Gugat', wp_date('Y-m-d', time() - 3 * 86400), array('doc_url' => '', 'majelis' => 'Majelis Hakim I', 'status_hukum' => 'Berkekuatan Hukum Tetap'), 1),
+            array('0089/Pdt.P/2026/PA.Cth', 'Dikabulkan — Penetapan Ahli Waris & Dispensasi', 'Permohonan (Voluntair)', wp_date('Y-m-d', time() - 7 * 86400), array('doc_url' => '', 'majelis' => 'Hakim Tunggal', 'status_hukum' => 'Berkekuatan Hukum Tetap'), 2),
+            array('0204/Pdt.G/2026/PA.Cth', 'Dikabulkan — Cerai Talak (Putusan e-Litigasi)', 'Cerai Talak', wp_date('Y-m-d', time() - 12 * 86400), array('doc_url' => '', 'majelis' => 'Majelis Hakim II', 'status_hukum' => 'Berkekuatan Hukum Tetap'), 3),
+        );
+        foreach ($putSeeds as $ps) {
+            $wpdb->insert($table, array(
+                'record_type' => 'putusan',
+                'title'       => $ps[0],
+                'subtitle'    => $ps[1],
+                'category'    => $ps[2],
+                'event_date'  => $ps[3],
+                'meta_json'   => wp_json_encode($ps[4]),
+                'sort_order'  => $ps[5],
+                'status'      => 'published',
+                'updated_at'  => $now,
+            ));
+        }
+    }
+
+    $inoCount = (int) $wpdb->get_var("SELECT COUNT(*) FROM `{$table}` WHERE record_type = 'inovasi'");
+    if ($inoCount === 0) {
+        $inoSeeds = array(
+            array('SIPANTAU — Pantau Antrean Sidang & PTSP', 'Pantauan antrean ruang sidang dan progres layanan PTSP secara real-time dari ponsel para pihak.', 'PTSP Digital', null, array('app_url' => home_url('/agenda-jadwal-persidangan/'), 'icon_url' => '', 'badge' => 'Real-Time'), 1),
+            array('SIAKTA Keliling — Pengambilan Akta Cerai Terjadwal', 'Layanan penjadwalan pengambilan atau pengantaran akta cerai & salinan putusan tanpa antre.', 'Layanan Keliling', null, array('app_url' => home_url('/prosedur-berperkara/'), 'icon_url' => '', 'badge' => 'PTSP Cepat'), 2),
+            array('E-PANJAR — Simulasi & Taksiran Panjar Biaya', 'Transparansi rincian radius wilayah serta estimasi panjar biaya perkara sesuai SK Ketua.', 'Transparansi Biaya', null, array('app_url' => home_url('/biaya-proses-berperkara/'), 'icon_url' => '', 'badge' => 'Akuntabel'), 3),
+            array('SI-RENTAN — Layanan Prioritas Disabilitas & Lansia', 'Pendampingan khusus, antrean prioritas, serta akses ramah difabel di seluruh area layanan.', 'Layanan Inklusif', null, array('app_url' => home_url('/disabilitas/'), 'icon_url' => '', 'badge' => 'Inklusif'), 4),
+        );
+        foreach ($inoSeeds as $is) {
+            $wpdb->insert($table, array(
+                'record_type' => 'inovasi',
+                'title'       => $is[0],
+                'subtitle'    => $is[1],
+                'category'    => $is[2],
+                'event_date'  => $is[3],
+                'meta_json'   => wp_json_encode($is[4]),
+                'sort_order'  => $is[5],
+                'status'      => 'published',
+                'updated_at'  => $now,
+            ));
+        }
+    }
+    update_option('pa_portal_v25_samples_seeded', '1', false);
+}
+
+add_action('init', static function () {
+    if (get_option('pa_portal_v25_samples_seeded') !== '1') {
+        pa_portal_seed_v25_samples();
+    }
+}, 25);
 
 function pa_portal_get_records(string $type, int $limit = 100): array {
     pa_portal_records_ensure_table();
@@ -1090,6 +1177,9 @@ add_shortcode('pa_jadwal_sidang', static function () {
     }
 
     ob_start();
+    if (function_exists('pa_portal_render_sipp_tracker')) {
+        echo pa_portal_render_sipp_tracker('Penelusuran Perkara Cepat', true);
+    }
     ?>
     <div class="pa-ops-wrap">
         <div class="pa-ops-toolbar">
@@ -1227,6 +1317,224 @@ add_shortcode('pa_statistik_perkara', static function () {
     </div>
     <?php
     return (string) ob_get_clean();
+});
+
+// Strip Ringkasan Kinerja (KPI Bar) 4 Indikator Utama
+function pa_portal_render_kpi_bar(string $title = ''): string {
+    $cfg      = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $rows     = pa_portal_get_records('statistik', 12);
+    $totIn    = 0;
+    $totOut   = 0;
+    foreach ($rows as $r) {
+        $m = json_decode((string) ($r['meta_json'] ?? ''), true);
+        if (!is_array($m)) {
+            $m = array();
+        }
+        $totIn  += (int) ($m['diterima'] ?? 0);
+        $totOut += (int) ($m['diputus'] ?? 0);
+    }
+    $ratio    = $totIn > 0 ? round(($totOut / $totIn) * 100, 1) : 0;
+    $skm      = trim((string) ($cfg['home_survey_skm'] ?? '4.00 / 4.00')) ?: '4.00 / 4.00';
+    $skmPer   = trim((string) ($cfg['home_survey_period'] ?? 'Triwulan III')) ?: 'Triwulan III';
+    $statUrl  = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('statistik-perkara') : home_url('/statistik-perkara/');
+    $survUrl  = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('survei-pelayanan') : home_url('/survei-pelayanan/');
+
+    ob_start();
+    ?>
+    <section class="pa-kpi-bar pa-hg-flush" aria-label="<?php echo esc_attr($title ?: 'Ringkasan Kinerja Pelayanan'); ?>">
+        <a class="pa-kpi-bar-item" href="<?php echo esc_url($statUrl); ?>">
+            <span class="pa-kb-lbl">Perkara Diterima</span>
+            <strong class="pa-kb-val"><?php echo esc_html(number_format($totIn, 0, ',', '.')); ?></strong>
+            <span class="pa-kb-sub">Akumulasi rekapitulasi</span>
+        </a>
+        <a class="pa-kpi-bar-item" href="<?php echo esc_url($statUrl); ?>">
+            <span class="pa-kb-lbl">Perkara Diputus</span>
+            <strong class="pa-kb-val"><?php echo esc_html(number_format($totOut, 0, ',', '.')); ?></strong>
+            <span class="pa-kb-sub">Putusan &amp; penetapan</span>
+        </a>
+        <a class="pa-kpi-bar-item is-highlight" href="<?php echo esc_url($statUrl); ?>">
+            <span class="pa-kb-lbl">Rasio Penyelesaian</span>
+            <strong class="pa-kb-val"><?php echo esc_html((string) $ratio); ?>%</strong>
+            <span class="pa-kb-sub">Kinerja penyelesaian perkara</span>
+        </a>
+        <a class="pa-kpi-bar-item" href="<?php echo esc_url($survUrl); ?>">
+            <span class="pa-kb-lbl">Indeks Kepuasan (SKM)</span>
+            <strong class="pa-kb-val"><?php echo esc_html($skm); ?></strong>
+            <span class="pa-kb-sub"><?php echo esc_html($skmPer); ?> · Mutu Pelayanan</span>
+        </a>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+}
+add_shortcode('pa_kpi_bar', static function ($atts = array()) {
+    $a = shortcode_atts(array('title' => 'Ringkasan Kinerja Pelayanan'), $atts, 'pa_kpi_bar');
+    return pa_portal_render_kpi_bar((string) $a['title']);
+});
+
+// Blok Khusus Inovasi Layanan Satker
+function pa_portal_render_inovasi_grid(string $title = 'Inovasi Layanan Satker', int $limit = 6): string {
+    $limit = max(2, min(12, $limit));
+    $rows  = pa_portal_get_records('inovasi', $limit);
+    ob_start();
+    ?>
+    <section class="pa-section-block pa-inovasi-sec pa-hg-flush" aria-label="<?php echo esc_attr($title ?: 'Inovasi Layanan Satker'); ?>">
+        <h2 class="pa-starter-heading"><?php echo esc_html(strtoupper($title ?: 'INOVASI LAYANAN SATKER')); ?> <span class="pa-hint-i" aria-hidden="true">i</span></h2>
+        <p class="pa-starter-sub">Inovasi Layanan Digital, Prioritas Rentan, &amp; Ciri Khas Pelayanan Satuan Kerja</p>
+        <?php if (empty($rows)) : ?>
+            <p class="pa-sched-empty">Belum ada daftar inovasi layanan. Tambahkan lewat WP Admin → SINOVA Hub → Publikasi → Inovasi Layanan.</p>
+        <?php else : ?>
+            <div class="pa-inovasi-grid">
+                <?php foreach ($rows as $r) :
+                    $m      = json_decode((string) ($r['meta_json'] ?? ''), true);
+                    $m      = is_array($m) ? $m : array();
+                    $appUrl = esc_url_raw((string) ($m['app_url'] ?? ''), array('http', 'https'));
+                    $icoUrl = esc_url_raw((string) ($m['icon_url'] ?? ''), array('http', 'https'));
+                    $badge  = trim((string) ($m['badge'] ?? ($r['category'] ?: 'Inovasi Satker')));
+                    $isExt  = ($appUrl !== '' && stripos($appUrl, home_url('/')) !== 0);
+                ?>
+                    <article class="pa-ino-card">
+                        <div class="pa-ino-top">
+                            <?php if ($icoUrl !== '') : ?>
+                                <img class="pa-ino-img" src="<?php echo esc_url($icoUrl); ?>" alt="" loading="lazy" decoding="async">
+                            <?php else : ?>
+                                <span class="pa-ino-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.6 5.3L20.5 8l-4.2 4.1L17.3 18 12 15.2 6.7 18l1-5.9L3.5 8l5.9-.7z"/></svg></span>
+                            <?php endif; ?>
+                            <span class="pa-ino-badge"><?php echo esc_html($badge); ?></span>
+                        </div>
+                        <h3><?php echo esc_html((string) $r['title']); ?></h3>
+                        <?php if (!empty($r['subtitle'])) : ?>
+                            <p><?php echo esc_html((string) $r['subtitle']); ?></p>
+                        <?php endif; ?>
+                        <?php if ($appUrl !== '') : ?>
+                            <a class="pa-ino-link" href="<?php echo esc_url($appUrl); ?>"<?php echo $isExt ? ' target="_blank" rel="noopener noreferrer"' : ''; ?>>Buka Layanan <?php echo $isExt ? '↗' : '→'; ?></a>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+}
+add_shortcode('pa_inovasi_satker', static function ($atts = array()) {
+    $a = shortcode_atts(array('title' => 'Inovasi Layanan Satker', 'limit' => 6), $atts, 'pa_inovasi_satker');
+    return pa_portal_render_inovasi_grid((string) $a['title'], (int) $a['limit']);
+});
+
+// Widget Penelusuran Perkara Cepat (SIPP + Data Portal Lokal + Pintasan)
+function pa_portal_render_sipp_tracker(string $title = 'Penelusuran Perkara Cepat (SIPP)', bool $compact = false): string {
+    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $sippUrl = trim((string) ($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'));
+    $sippBase = $sippUrl !== '' ? rtrim($sippUrl, '/') : '';
+    $ecourtU = trim((string) ($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'));
+    $dirputU = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('direktori-putusan') : home_url('/direktori-putusan/');
+    $schedU  = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('agenda-jadwal-persidangan') : home_url('/agenda-jadwal-persidangan/');
+    $uid     = 'pa-sipp-tr-' . substr(md5($title . ($compact ? 'c' : 'f')), 0, 6);
+
+    ob_start();
+    ?>
+    <section class="pa-sipp-tracker<?php echo $compact ? ' is-compact' : ''; ?> pa-hg-fullh" aria-label="<?php echo esc_attr($title); ?>" data-sipp-url="<?php echo esc_attr($sippUrl); ?>">
+        <div class="pa-st-head">
+            <div>
+                <span class="pa-st-kicker">LAYANAN INFORMASI PERKARA</span>
+                <h2 class="pa-st-title"><?php echo esc_html($title); ?></h2>
+            </div>
+            <div class="pa-st-links">
+                <?php if ($sippBase !== '') : ?>
+                    <a class="pa-st-pill" href="<?php echo esc_url($sippBase . '/list_perkara'); ?>" target="_blank" rel="noopener noreferrer">Daftar Perkara SIPP ↗</a>
+                    <a class="pa-st-pill" href="<?php echo esc_url($sippBase . '/jadwal_sidang'); ?>" target="_blank" rel="noopener noreferrer">Jadwal Sidang SIPP ↗</a>
+                <?php endif; ?>
+                <a class="pa-st-pill" href="<?php echo esc_url($ecourtU); ?>" target="_blank" rel="noopener noreferrer">e-Court ↗</a>
+                <?php if (!$compact) : ?>
+                    <a class="pa-st-pill" href="<?php echo esc_url($dirputU); ?>">Direktori Putusan →</a>
+                <?php else : ?>
+                    <a class="pa-st-pill" href="<?php echo esc_url($schedU); ?>">Refresh Jadwal</a>
+                <?php endif; ?>
+            </div>
+        </div>
+        <form class="pa-st-form" data-pa-case-tracker="1" data-results-id="<?php echo esc_attr($uid . '-res'); ?>" role="search">
+            <label class="screen-reader-text" for="<?php echo esc_attr($uid . '-q'); ?>">Cari nomor perkara, pihak, ruang sidang, atau amar putusan</label>
+            <input id="<?php echo esc_attr($uid . '-q'); ?>" type="search" class="pa-st-input" placeholder="Ketik nomor perkara (mis. 0101/Pdt.G), agenda sidang, atau nama pihak ghaib..." required minlength="2">
+            <button type="submit" class="pa-st-btn">Telusuri Perkara</button>
+        </form>
+        <div id="<?php echo esc_attr($uid . '-res'); ?>" class="pa-st-results" aria-live="polite" hidden></div>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+}
+add_shortcode('pa_penelusuran_perkara', static function ($atts = array()) {
+    $a = shortcode_atts(array('title' => 'Penelusuran Perkara Cepat (SIPP)'), $atts, 'pa_penelusuran_perkara');
+    return pa_portal_render_sipp_tracker((string) $a['title'], false);
+});
+
+add_action('rest_api_init', static function () {
+    register_rest_route('pa-portal/v1', '/case-lookup', array(
+        'methods'             => 'GET',
+        'permission_callback' => '__return_true',
+        'callback'            => static function (WP_REST_Request $req) {
+            if (function_exists('pa_starter_rate_limit') && !pa_starter_rate_limit('caselookup', 45, 60)) {
+                return new WP_Error('rate_limited', 'Terlalu banyak permintaan penelusuran perkara.', array('status' => 429));
+            }
+            pa_portal_records_ensure_table();
+            $q = trim(sanitize_text_field((string) $req->get_param('q')));
+            $q = function_exists('mb_substr') ? mb_substr($q, 0, 60, 'UTF-8') : substr($q, 0, 60);
+            if (strlen($q) < 2) {
+                return new WP_REST_Response(array('ok' => true, 'query' => $q, 'count' => 0, 'items' => array()), 200);
+            }
+
+            global $wpdb;
+            $rTable = pa_portal_records_table();
+            $like   = '%' . $wpdb->esc_like($q) . '%';
+            $rows   = $wpdb->get_results($wpdb->prepare(
+                "SELECT record_type, title, subtitle, category, event_date, meta_json FROM `{$rTable}` WHERE status = 'published' AND record_type IN ('jadwal', 'ghaib', 'putusan') AND (title LIKE %s OR subtitle LIKE %s OR category LIKE %s OR meta_json LIKE %s) ORDER BY event_date DESC, id DESC LIMIT 12",
+                $like, $like, $like, $like
+            ), ARRAY_A);
+
+            $typeLblMap = array(
+                'jadwal'  => 'Jadwal Sidang',
+                'ghaib'   => 'Panggilan Ghaib',
+                'putusan' => 'Putusan Satker',
+            );
+            $urlMap = array(
+                'jadwal'  => function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('agenda-jadwal-persidangan') : home_url('/agenda-jadwal-persidangan/'),
+                'ghaib'   => function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/'),
+                'putusan' => function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('direktori-putusan') : home_url('/direktori-putusan/'),
+            );
+
+            $items = array();
+            foreach ((array) $rows as $r) {
+                $rt = (string) ($r['record_type'] ?? 'jadwal');
+                $m  = json_decode((string) ($r['meta_json'] ?? ''), true);
+                $m  = is_array($m) ? $m : array();
+                $u  = (string) ($urlMap[$rt] ?? home_url('/'));
+                if (!empty($m['doc_url'])) {
+                    $u = esc_url_raw((string) $m['doc_url'], array('http', 'https')) ?: $u;
+                }
+                $extra = array_filter(array(
+                    (string) ($r['category'] ?? ''),
+                    (string) ($m['jam'] ?? ''),
+                    (string) ($m['pihak'] ?? ''),
+                    (string) ($m['status_hukum'] ?? ''),
+                ));
+                $items[] = array(
+                    'type'       => $rt,
+                    'type_label' => (string) ($typeLblMap[$rt] ?? ucfirst($rt)),
+                    'title'      => (string) ($r['title'] ?? ''),
+                    'subtitle'   => (string) ($r['subtitle'] ?? ''),
+                    'category'   => implode(' · ', $extra),
+                    'date'       => !empty($r['event_date']) ? wp_date('d M Y', strtotime((string) $r['event_date'])) : '',
+                    'url'        => $u,
+                );
+            }
+
+            return new WP_REST_Response(array(
+                'ok'    => true,
+                'query' => $q,
+                'count' => count($items),
+                'items' => $items,
+            ), 200);
+        },
+    ));
 });
 
 // Helper ringkas Statistik Perkara untuk blok Beranda 12 kolom (5/12 atau 12/12)

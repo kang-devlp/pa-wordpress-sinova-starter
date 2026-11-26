@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - UI Portal Resmi PA, Pencarian, Statistik Pengunjung, Sidebar Halaman Dalam & Aksesibilitas Lengkap
  * Description: Menyatukan palet Hijau Gelap (#056e4f) & Royal Gold (#C9A227) untuk Astra Free maupun tema blok WordPress, bebas istilah internal di tampilan publik, kotak pencarian header, statistik pengunjung privasi ter-hash, sidebar & breadcrumb halaman dalam, serta dock disabilitas dengan Pembaca Suara Bahasa Indonesia.
- * Version: 2.4.1-starter
+ * Version: 2.5.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -194,19 +194,36 @@ add_action('wp_head', static function () {
 
 // 3. Shortcode [pa_sinova_welcome_section]: Sambutan Pimpinan + Standar Maklumat Pelayanan PTSP
 add_shortcode('pa_sinova_welcome_section', static function () {
-    $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
-    $satker  = $cfg['satker_name'] ?? 'Pengadilan Agama';
-    $leader  = $cfg['leader_name'] ?? 'Ketua Pengadilan Agama';
-    $welcome = $cfg['leader_welcome'] ?? 'Selamat datang di portal keterbukaan informasi resmi satuan kerja Pengadilan Agama.';
-    $phone   = $cfg['phone'] ?? '0811-0000-0000';
-    $email   = $cfg['email'] ?? 'info@pengadilan.go.id';
+    $cfg         = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $satker      = $cfg['satker_name'] ?? 'Pengadilan Agama';
+    $leader      = $cfg['leader_name'] ?? 'Ketua Pengadilan Agama';
+    $leaderTitle = trim((string) ($cfg['leader_title'] ?? '')) ?: 'Ketua Pengadilan Agama';
+    $leaderPhoto = trim((string) ($cfg['leader_photo_url'] ?? ''));
+    if ($leaderPhoto === '' && function_exists('pa_sinova_asset_url')) {
+        $leaderPhoto = pa_sinova_asset_url('dummy-pimpinan.svg');
+    }
+    $leaderMotto = trim((string) ($cfg['leader_motto'] ?? ''));
+    $welcome     = $cfg['leader_welcome'] ?? 'Selamat datang di portal keterbukaan informasi resmi satuan kerja Pengadilan Agama.';
+    $phone       = $cfg['phone'] ?? '0811-0000-0000';
+    $email       = $cfg['email'] ?? 'info@pengadilan.go.id';
 
     ob_start();
     ?>
     <section class="pa-welcome-grid" aria-label="Sambutan Pimpinan dan Maklumat Pelayanan">
         <div class="pa-welcome-card">
             <span class="pa-wc-kicker">Sambutan Pimpinan</span>
-            <h3><?php echo esc_html($leader); ?> — <?php echo esc_html($satker); ?></h3>
+            <div class="pa-wc-profile">
+                <?php if ($leaderPhoto !== '') : ?>
+                    <img class="pa-wc-photo" src="<?php echo esc_url($leaderPhoto); ?>" alt="<?php echo esc_attr($leader); ?>" loading="lazy" decoding="async">
+                <?php endif; ?>
+                <div class="pa-wc-headtext">
+                    <h3><?php echo esc_html($leader); ?></h3>
+                    <span class="pa-wc-role"><?php echo esc_html($leaderTitle . ' · ' . $satker); ?></span>
+                    <?php if ($leaderMotto !== '') : ?>
+                        <p class="pa-wc-motto">"<?php echo esc_html($leaderMotto); ?>"</p>
+                    <?php endif; ?>
+                </div>
+            </div>
             <p class="pa-wc-body"><?php echo esc_html($welcome); ?></p>
             <div class="pa-wc-links">
                 <a href="./visi-dan-misi/">Visi &amp; Misi</a>
@@ -475,20 +492,62 @@ function pa_sinova_render_home_hero_or_slider(array $cfg, array $blk): string {
         return (string) ob_get_clean();
     }
 
+    $heroLayout  = sanitize_key((string) ($cfg['hero_layout'] ?? 'split'));
+    if (!in_array($heroLayout, array('split', 'classic'), true)) {
+        $heroLayout = 'split';
+    }
+    $heroPattern = sanitize_key((string) ($cfg['hero_pattern'] ?? 'islamic'));
+    if (!in_array($heroPattern, array('none', 'islamic', 'batik', 'songket'), true)) {
+        $heroPattern = 'islamic';
+    }
+    $heroPhoto = trim((string) ($cfg['hero_photo_url'] ?? ''));
+    if ($heroPhoto === '' && function_exists('pa_sinova_asset_url')) {
+        $heroPhoto = pa_sinova_asset_url('dummy-gedung-pa.svg');
+    }
+    $heroCap = trim((string) ($cfg['hero_photo_caption'] ?? ''));
+    $satker  = trim((string) ($cfg['satker_name'] ?? '')) ?: (get_bloginfo('name') ?: 'Pengadilan Agama');
+
     ob_start();
     ?>
-    <section class="pa-hero-banner" aria-label="Portal Resmi Pengadilan Agama">
-        <div class="pa-hero-content">
-            <?php if ($kicker !== '') : ?><span class="pa-hero-kicker"><?php echo esc_html($kicker); ?></span><?php endif; ?>
-            <h1 class="pa-hero-title"><?php echo esc_html($heroTitle); ?></h1>
-            <?php if ($heroLead !== '') : ?><p class="pa-hero-lead"><?php echo esc_html($heroLead); ?></p><?php endif; ?>
-            <div class="pa-hero-actions">
-                <a class="pa-btn-gold" href="<?php echo esc_url($u('agenda-jadwal-persidangan')); ?>" data-pa-tip="Agenda sidang harian &amp; SIPP">Jadwal Sidang &amp; SIPP</a>
-                <a class="pa-btn-outline" href="<?php echo esc_url($u('e-court')); ?>" data-pa-tip="Perkara elektronik">Layanan e-Court</a>
-                <a class="pa-btn-outline" href="<?php echo esc_url($u('direktori-putusan')); ?>" data-pa-tip="Putusan resmi MA RI">Direktori Putusan</a>
-                <a class="pa-btn-outline" href="<?php echo esc_url($u('survei-pelayanan')); ?>" data-pa-tip="SKM, SPAK, SPKP">Survei Pelayanan</a>
+    <section class="pa-hero-banner<?php echo $heroLayout === 'split' ? ' is-split' : ''; ?>" data-pa-pattern="<?php echo esc_attr($heroPattern); ?>" aria-label="Portal Resmi Pengadilan Agama">
+        <?php if ($heroLayout === 'split') : ?>
+            <div class="pa-hero-split">
+                <div class="pa-hero-content">
+                    <?php if ($kicker !== '') : ?><span class="pa-hero-kicker"><?php echo esc_html($kicker); ?></span><?php endif; ?>
+                    <h1 class="pa-hero-title"><?php echo esc_html($heroTitle); ?></h1>
+                    <?php if ($heroLead !== '') : ?><p class="pa-hero-lead"><?php echo esc_html($heroLead); ?></p><?php endif; ?>
+                    <div class="pa-hero-actions">
+                        <a class="pa-btn-gold" href="<?php echo esc_url($u('agenda-jadwal-persidangan')); ?>" data-pa-tip="Agenda sidang harian &amp; SIPP">Jadwal Sidang &amp; SIPP</a>
+                        <a class="pa-btn-outline" href="<?php echo esc_url($u('e-court')); ?>" data-pa-tip="Perkara elektronik">Layanan e-Court</a>
+                        <a class="pa-btn-outline" href="<?php echo esc_url($u('direktori-putusan')); ?>" data-pa-tip="Putusan resmi MA RI">Direktori Putusan</a>
+                        <a class="pa-btn-outline" href="<?php echo esc_url($u('survei-pelayanan')); ?>" data-pa-tip="SKM, SPAK, SPKP">Survei Pelayanan</a>
+                    </div>
+                </div>
+                <?php if ($heroPhoto !== '') : ?>
+                    <figure class="pa-hero-split-media">
+                        <div class="pa-hero-media-frame">
+                            <img src="<?php echo esc_url($heroPhoto); ?>" alt="<?php echo esc_attr('Gedung ' . $satker); ?>" fetchpriority="high" decoding="async">
+                            <span class="pa-hero-media-badge">WBK / WBBM · KIP</span>
+                        </div>
+                        <?php if ($heroCap !== '') : ?>
+                            <figcaption><?php echo esc_html($heroCap); ?></figcaption>
+                        <?php endif; ?>
+                    </figure>
+                <?php endif; ?>
             </div>
-        </div>
+        <?php else : ?>
+            <div class="pa-hero-content">
+                <?php if ($kicker !== '') : ?><span class="pa-hero-kicker"><?php echo esc_html($kicker); ?></span><?php endif; ?>
+                <h1 class="pa-hero-title"><?php echo esc_html($heroTitle); ?></h1>
+                <?php if ($heroLead !== '') : ?><p class="pa-hero-lead"><?php echo esc_html($heroLead); ?></p><?php endif; ?>
+                <div class="pa-hero-actions">
+                    <a class="pa-btn-gold" href="<?php echo esc_url($u('agenda-jadwal-persidangan')); ?>" data-pa-tip="Agenda sidang harian &amp; SIPP">Jadwal Sidang &amp; SIPP</a>
+                    <a class="pa-btn-outline" href="<?php echo esc_url($u('e-court')); ?>" data-pa-tip="Perkara elektronik">Layanan e-Court</a>
+                    <a class="pa-btn-outline" href="<?php echo esc_url($u('direktori-putusan')); ?>" data-pa-tip="Putusan resmi MA RI">Direktori Putusan</a>
+                    <a class="pa-btn-outline" href="<?php echo esc_url($u('survei-pelayanan')); ?>" data-pa-tip="SKM, SPAK, SPKP">Survei Pelayanan</a>
+                </div>
+            </div>
+        <?php endif; ?>
     </section>
     <?php
     return (string) ob_get_clean();
@@ -506,6 +565,19 @@ function pa_sinova_render_home_block_item(array $blk, array $cfg): string {
 
     if ($type === 'hero_slider') {
         return pa_sinova_render_home_hero_or_slider($cfg, $blk);
+    }
+
+    if ($type === 'kpi_bar') {
+        return function_exists('pa_portal_render_kpi_bar') ? pa_portal_render_kpi_bar($title) : '';
+    }
+
+    if ($type === 'sipp_tracker') {
+        return function_exists('pa_portal_render_sipp_tracker') ? pa_portal_render_sipp_tracker($title ?: 'Penelusuran Perkara Cepat (SIPP)', false) : '';
+    }
+
+    if ($type === 'inovasi') {
+        $cnt = !empty($bCfg['count']) ? (int) $bCfg['count'] : (!empty($bCfg['limit']) ? (int) $bCfg['limit'] : 4);
+        return function_exists('pa_portal_render_inovasi_grid') ? pa_portal_render_inovasi_grid($title ?: 'Inovasi Layanan Unggulan', $cnt) : '';
     }
 
     if ($type === 'services') {
@@ -972,11 +1044,14 @@ add_shortcode('pa_sinova_latest_posts', static function ($atts) {
             <a class="pa-news-all" href="<?php echo esc_url(function_exists('pa_sinova_news_archive_url') ? pa_sinova_news_archive_url() : home_url('/?post_type=post')); ?>" data-pa-tip="Lihat seluruh arsip berita satuan kerja.">Semua Berita →</a>
         </div>
         <div class="pa-news-grid">
-            <?php foreach ($posts as $p) :
+            <?php foreach ($posts as $pIdx => $p) :
                 $permalink = get_permalink($p);
                 $dateStr   = get_the_date('d M Y', $p);
                 $excerpt   = wp_trim_words(wp_strip_all_tags((string) ($p->post_excerpt ?: $p->post_content)), 20, '...');
                 $thumbUrl  = function_exists('pa_portal_extract_post_thumb') ? pa_portal_extract_post_thumb($p, 'medium_large') : (string) get_the_post_thumbnail_url($p->ID, 'medium_large');
+                if ($thumbUrl === '' && function_exists('pa_sinova_asset_url')) {
+                    $thumbUrl = pa_sinova_asset_url('dummy-berita-' . (($pIdx % 3) + 1) . '.svg');
+                }
             ?>
                 <article class="pa-news-card">
                     <a class="pa-news-thumb" href="<?php echo esc_url((string) $permalink); ?>" aria-hidden="true" tabindex="-1">
@@ -1095,15 +1170,18 @@ add_action('wp_head', static function () {
         return;
     }
     $cfg       = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
-    $isOrange  = (($cfg['accent_palette'] ?? 'gold') === 'badilag_orange');
-    $goldHex   = $isOrange ? '#ff9900' : '#C9A227';
-    $goldLight = $isOrange ? '#ffb84d' : '#E5C158';
+    $palette   = sanitize_key((string) ($cfg['accent_palette'] ?? 'gold'));
+    $greenHex  = ($palette === 'emerald_silver') ? '#043927' : '#056e4f';
+    $greenDk   = ($palette === 'emerald_silver') ? '#022c22' : '#043927';
+    $greenDeep = ($palette === 'emerald_silver') ? '#011e17' : '#022c22';
+    $goldHex   = ($palette === 'badilag_orange') ? '#ff9900' : (($palette === 'emerald_silver') ? '#94a3b8' : '#C9A227');
+    $goldLight = ($palette === 'badilag_orange') ? '#ffb84d' : (($palette === 'emerald_silver') ? '#e2e8f0' : '#E5C158');
     ?>
 <style id="pa-sinova-starter-ui-css">
 :root {
-    --pa-green: #056e4f;
-    --pa-green-dark: #043927;
-    --pa-green-deep: #022c22;
+    --pa-green: <?php echo esc_html($greenHex); ?>;
+    --pa-green-dark: <?php echo esc_html($greenDk); ?>;
+    --pa-green-deep: <?php echo esc_html($greenDeep); ?>;
     --pa-gold: <?php echo esc_html($goldHex); ?>;
     --pa-gold-light: <?php echo esc_html($goldLight); ?>;
 <?php if (!pa_sinova_is_adoption_mode()) : ?>
@@ -1946,7 +2024,41 @@ html[data-pa-theme="dark"] .pa-ticker-link { color: #E5C158 !important; }
     line-height: 1.5;
 }
 .pa-hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px; }
-.pa-btn-gold { display: inline-flex; align-items: center; padding: 11px 20px; border-radius: 10px; background: linear-gradient(135deg, #C9A227 0%, #E5C158 100%); color: #022c22 !important; font-weight: 800; font-size: 13.5px; text-decoration: none !important; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); transition: transform 0.16s ease, box-shadow 0.16s ease; }
+.pa-btn-gold { display: inline-flex; align-items: center; padding: 11px 20px; border-radius: 10px; background: linear-gradient(135deg, var(--pa-gold, #C9A227) 0%, var(--pa-gold-light, #E5C158) 100%); color: #022c22 !important; font-weight: 800; font-size: 13.5px; text-decoration: none !important; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); transition: transform 0.16s ease, box-shadow 0.16s ease; }
+.pa-hero-banner[data-pa-pattern="islamic"]::before {
+    background-image:
+        radial-gradient(circle at 82% 24%, rgba(229, 193, 88, 0.22), transparent 45%),
+        radial-gradient(circle at 14% 78%, rgba(16, 185, 129, 0.20), transparent 42%),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cpath d='M32 6 L39 25 L58 32 L39 39 L32 58 L25 39 L6 32 L25 25 Z' fill='none' stroke='%23E5C158' stroke-opacity='0.11' stroke-width='1.2'/%3E%3Ccircle cx='32' cy='32' r='16' fill='none' stroke='%23ffffff' stroke-opacity='0.06'/%3E%3C/svg%3E");
+    background-size: auto, auto, 64px 64px;
+}
+.pa-hero-banner[data-pa-pattern="batik"]::before {
+    background-image:
+        radial-gradient(circle at 82% 24%, rgba(229, 193, 88, 0.22), transparent 45%),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Ccircle cx='28' cy='14' r='12' fill='none' stroke='%23E5C158' stroke-opacity='0.12'/%3E%3Ccircle cx='28' cy='42' r='12' fill='none' stroke='%23E5C158' stroke-opacity='0.12'/%3E%3Ccircle cx='14' cy='28' r='12' fill='none' stroke='%23ffffff' stroke-opacity='0.07'/%3E%3Ccircle cx='42' cy='28' r='12' fill='none' stroke='%23ffffff' stroke-opacity='0.07'/%3E%3Ccircle cx='28' cy='28' r='3' fill='%23E5C158' fill-opacity='0.16'/%3E%3C/svg%3E");
+    background-size: auto, 56px 56px;
+}
+.pa-hero-banner[data-pa-pattern="songket"]::before {
+    background-image:
+        radial-gradient(circle at 82% 24%, rgba(229, 193, 88, 0.22), transparent 45%),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cpolygon points='24,3 45,24 24,45 3,24' fill='none' stroke='%23E5C158' stroke-opacity='0.12' stroke-width='1.2'/%3E%3Cpolygon points='24,12 36,24 24,36 12,24' fill='none' stroke='%23ffffff' stroke-opacity='0.07'/%3E%3C/svg%3E");
+    background-size: auto, 48px 48px;
+}
+.pa-hero-banner.is-split { text-align: left; padding: clamp(24px, 3.8vw, 40px) clamp(20px, 3.5vw, 36px); }
+.pa-hero-split { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 24px; align-items: center; }
+.pa-hero-banner.is-split .pa-hero-content { text-align: left; }
+.pa-hero-banner.is-split .pa-hero-lead { margin: 0 0 16px; max-width: 100%; }
+.pa-hero-banner.is-split .pa-hero-actions { justify-content: flex-start; }
+.pa-hero-split-media { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.pa-hero-media-frame { position: relative; border-radius: 14px; overflow: hidden; border: 2px solid rgba(229, 193, 88, 0.65); background: #012119; box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3); aspect-ratio: 16 / 10; }
+.pa-hero-media-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pa-hero-media-badge { position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 999px; background: rgba(2, 44, 34, 0.88); border: 1px solid #E5C158; color: #E5C158; font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; }
+.pa-hero-split-media figcaption { font-size: 11.5px; color: #a7f3d0; text-align: center; }
+@media (max-width: 860px) {
+    .pa-hero-split { grid-template-columns: 1fr; text-align: center; }
+    .pa-hero-banner.is-split .pa-hero-content { text-align: center; }
+    .pa-hero-banner.is-split .pa-hero-actions { justify-content: center; }
+}
 .pa-btn-gold:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0, 0, 0, 0.25); }
 .pa-btn-outline { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); border: 1.5px solid rgba(229, 193, 88, 0.55); color: #fff !important; font-weight: 700; font-size: 13.5px; text-decoration: none !important; transition: transform 0.16s ease, background-color 0.16s ease; }
 .pa-btn-outline:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
@@ -2536,8 +2648,13 @@ html[data-pa-theme="dark"] .pa-aco-btn:hover,
 html[data-pa-theme="dark"] .pa-aco-btn:focus-visible { background: #1e382b; border-color: #E5C158; }
 .pa-welcome-card { padding: 22px; border-radius: 16px; background: #f4faf7; border: 1.5px solid #d5e6dc; border-left: 5px solid #056e4f; transition: transform 0.18s ease, border-color 0.18s ease; }
 .pa-welcome-card:hover { transform: translateY(-2px); border-color: #C9A227; }
-.pa-wc-kicker { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
-.pa-welcome-card h3 { margin: 0 0 10px; color: #043927; font-size: 1.15rem; font-weight: 800; }
+.pa-wc-kicker { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #056e4f; color: #fff; font-size: 11px; font-weight: 800; margin-bottom: 10px; }
+.pa-wc-profile { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.pa-wc-photo { width: 72px; height: 84px; border-radius: 12px; object-fit: cover; border: 2px solid var(--pa-gold, #C9A227); background: #043927; flex-shrink: 0; box-shadow: 0 6px 16px rgba(2, 44, 34, 0.15); }
+.pa-wc-headtext { min-width: 0; flex: 1 1 0%; }
+.pa-welcome-card h3 { margin: 0 0 3px; color: #043927; font-size: 1.12rem; font-weight: 800; }
+.pa-wc-role { display: block; font-size: 12px; font-weight: 700; color: #056e4f; }
+.pa-wc-motto { margin: 4px 0 0; font-size: 12px; font-style: italic; color: #6e5204; }
 .pa-wc-body { margin: 0 0 14px; color: #334155; font-size: 0.92rem; line-height: 1.6; }
 .pa-wc-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .pa-wc-links a { padding: 6px 12px; border-radius: 8px; background: #ffffff; border: 1px solid #056e4f; color: #043927 !important; font-size: 12px; font-weight: 700; text-decoration: none !important; transition: background-color 0.15s ease, color 0.15s ease; }
@@ -2625,7 +2742,7 @@ html[data-pa-theme="dark"] .pa-dirput-scope { color: #cbd5e1; }
 
 /* Hover-First Clean UX: Keterangan Muncul Elegan Hanya Saat Hover/Fokus (CLS = 0) */
 @media (hover: hover) and (pointer: fine) {
-    html:not([data-pa-contrast="high"]) .pa-hero-lead {
+    html:not([data-pa-contrast="high"]) .pa-hero-banner:not(.is-split) .pa-hero-lead {
         position: absolute;
         left: 50%;
         top: 6px;
@@ -2645,8 +2762,8 @@ html[data-pa-theme="dark"] .pa-dirput-scope { color: #cbd5e1; }
         transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
         z-index: 30;
     }
-    html:not([data-pa-contrast="high"]) .pa-hero-title:hover + .pa-hero-lead,
-    html:not([data-pa-contrast="high"]) .pa-hero-kicker:hover ~ .pa-hero-lead {
+    html:not([data-pa-contrast="high"]) .pa-hero-banner:not(.is-split) .pa-hero-title:hover + .pa-hero-lead,
+    html:not([data-pa-contrast="high"]) .pa-hero-banner:not(.is-split) .pa-hero-kicker:hover ~ .pa-hero-lead {
         opacity: 1;
         visibility: visible;
         transform: translate(-50%, 0);
@@ -3220,6 +3337,75 @@ html[data-pa-nomotion="1"] #pa-aco-float.pa-aco-is-gif .pa-aco-float-static { di
     font-size: 11px !important;
     text-align: center !important;
 }
+
+/* KPI Bar, Inovasi Satker, Penelusuran Perkara SIPP, & Medsos Footer (v2.5) */
+.pa-kpi-bar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 860px) { .pa-kpi-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .pa-kpi-bar { grid-template-columns: 1fr; } }
+.pa-kpi-bar-item { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; border-radius: 14px; background: var(--pa-surface, #ffffff); border: 1.5px solid #d5e6dc; border-top: 3px solid var(--pa-gold, #C9A227); text-decoration: none !important; text-align: left; box-shadow: 0 4px 12px rgba(2, 44, 34, 0.05); transition: transform 0.16s ease, border-color 0.16s ease; }
+.pa-kpi-bar-item:hover { transform: translateY(-2px); border-color: #056e4f; }
+.pa-kb-lbl { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #056e4f; }
+.pa-kb-val { font-size: clamp(1.3rem, 2.1vw, 1.65rem); font-weight: 900; color: #043927; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.pa-kb-sub { font-size: 11.5px; color: #64748b; }
+.pa-kpi-bar-item.is-highlight { background: linear-gradient(135deg, #043927, #056e4f); border-color: #C9A227; }
+.pa-kpi-bar-item.is-highlight .pa-kb-lbl { color: #a7f3d0; }
+.pa-kpi-bar-item.is-highlight .pa-kb-val { color: #E5C158; }
+.pa-kpi-bar-item.is-highlight .pa-kb-sub { color: #d1fae5; }
+
+.pa-inovasi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)); gap: 14px; text-align: left; }
+.pa-ino-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 14px; background: var(--pa-surface, #ffffff); border: 1.5px solid #d5e6dc; border-bottom: 3px solid var(--pa-gold, #C9A227); box-shadow: 0 6px 16px rgba(2, 44, 34, 0.05); transition: transform 0.16s ease, border-color 0.16s ease; }
+.pa-ino-card:hover { transform: translateY(-3px); border-color: #056e4f; }
+.pa-ino-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.pa-ino-ico { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #043927, #056e4f); color: #E5C158; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pa-ino-ico svg { width: 19px; height: 19px; }
+.pa-ino-img { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; border: 1px solid #d5e6dc; flex-shrink: 0; }
+.pa-ino-badge { padding: 3px 9px; border-radius: 999px; background: #fef9e7; border: 1px solid #f3dfa0; color: #92400e; font-size: 10.5px; font-weight: 800; }
+.pa-ino-card h3 { margin: 2px 0 0; font-size: 14.5px; font-weight: 800; color: #043927; line-height: 1.35; overflow-wrap: anywhere; }
+.pa-ino-card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: #475569; flex: 1; }
+.pa-ino-link { font-size: 12px; font-weight: 800; color: #056e4f !important; text-decoration: none !important; margin-top: 2px; }
+.pa-ino-link:hover { text-decoration: underline !important; }
+
+.pa-sipp-tracker { padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, #f4faf7 0%, #ffffff 100%); border: 1.5px solid #d5e6dc; border-left: 5px solid var(--pa-gold, #C9A227); text-align: left; display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.pa-st-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.pa-st-kicker { display: block; font-size: 10.5px; font-weight: 800; letter-spacing: 0.05em; color: #056e4f; text-transform: uppercase; }
+.pa-st-title { margin: 2px 0 0 !important; font-size: 16.5px !important; font-weight: 800 !important; color: #043927 !important; border: 0 !important; padding: 0 !important; }
+.pa-st-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.pa-st-pill { padding: 5px 11px; border-radius: 999px; background: #ffffff; border: 1px solid #cbd5e1; color: #043927 !important; font-size: 11.5px; font-weight: 700; text-decoration: none !important; transition: background-color 0.15s, border-color 0.15s; }
+.pa-st-pill:hover { background: #056e4f; border-color: #056e4f; color: #ffffff !important; }
+.pa-st-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.pa-st-input { flex: 1 1 260px; min-width: 0; padding: 9px 13px; border-radius: 10px; border: 1.5px solid #cbd5e1; background: #ffffff; color: #0f172a; font-size: 13.5px; }
+.pa-st-btn { padding: 9px 18px; border-radius: 10px; border: 0; background: #043927; color: #E5C158; font-weight: 800; font-size: 13px; cursor: pointer; }
+.pa-st-btn:hover { background: #056e4f; color: #ffffff; }
+.pa-st-results { display: flex; flex-direction: column; gap: 8px; }
+.pa-st-results[hidden] { display: none !important; }
+.pa-st-res-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #ffffff; border: 1px solid #d5e6dc; text-decoration: none !important; color: inherit; }
+.pa-st-res-item:hover { border-color: #C9A227; }
+.pa-st-res-meta { min-width: 0; flex: 1 1 220px; }
+.pa-st-res-meta strong { display: block; font-size: 13.5px; color: #043927; }
+.pa-st-res-meta span { font-size: 12px; color: #475569; }
+.pa-st-res-tag { padding: 2px 9px; border-radius: 999px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #043927; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.pa-st-empty { padding: 10px 12px; border-radius: 10px; background: #fffbeb; border: 1px dashed #fcd34d; font-size: 12.5px; color: #78350f; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+
+.pa-footer-socials { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.pa-footer-soc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.09); border: 1px solid rgba(229, 193, 88, 0.32); color: #e2e8f0 !important; text-decoration: none !important; font-size: 11.5px; font-weight: 700; transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+.pa-footer-soc-btn:hover { background: #E5C158; border-color: #E5C158; color: #022c22 !important; }
+.pa-footer-soc-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+html[data-pa-theme="dark"] .pa-kpi-bar-item:not(.is-highlight),
+html[data-pa-theme="dark"] .pa-ino-card,
+html[data-pa-theme="dark"] .pa-sipp-tracker,
+html[data-pa-theme="dark"] .pa-st-res-item,
+html[data-pa-theme="dark"] .pa-st-pill { background: #14241c; border-color: #2c4c3b; color: #e6f4ee !important; }
+html[data-pa-theme="dark"] .pa-kb-val,
+html[data-pa-theme="dark"] .pa-ino-card h3,
+html[data-pa-theme="dark"] .pa-st-title,
+html[data-pa-theme="dark"] .pa-st-res-meta strong { color: #E5C158 !important; }
+html[data-pa-theme="dark"] .pa-kb-sub,
+html[data-pa-theme="dark"] .pa-ino-card p,
+html[data-pa-theme="dark"] .pa-st-res-meta span,
+html[data-pa-theme="dark"] .pa-wc-role { color: #cbd5e1; }
+html[data-pa-theme="dark"] .pa-wc-motto { color: #fde68a; }
+html[data-pa-theme="dark"] .pa-st-input { background: #0f1d16; border-color: #355241; color: #f8fafc; }
 
 /* Pencarian Terpadu (Modal Ctrl+K + Full-Site Submit) */
 .pa-cmdk-head-ico { width: 17px; height: 17px; color: #E5C158; flex-shrink: 0; }
@@ -3967,6 +4153,29 @@ add_action('wp_footer', static function () {
             <?php if (!empty($cfg['hearing_hours'])) : ?>
                 <p><strong>Jam Sidang:</strong> <?php echo esc_html($cfg['hearing_hours']); ?></p>
             <?php endif; ?>
+            <?php
+            $socLinks = array(
+                'instagram' => array('url' => trim((string) ($cfg['social_instagram'] ?? '')), 'label' => 'Instagram', 'svg' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>'),
+                'youtube'   => array('url' => trim((string) ($cfg['social_youtube'] ?? '')),   'label' => 'YouTube',   'svg' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>'),
+                'facebook'  => array('url' => trim((string) ($cfg['social_facebook'] ?? '')),  'label' => 'Facebook',  'svg' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>'),
+                'tiktok'    => array('url' => trim((string) ($cfg['social_tiktok'] ?? '')),    'label' => 'TikTok',    'svg' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/></svg>'),
+                'whatsapp'  => array('url' => trim((string) ($cfg['social_whatsapp'] ?? '')),  'label' => 'WhatsApp PTSP', 'svg' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>'),
+            );
+            $mapsUrl = trim((string) ($cfg['maps_url'] ?? ''));
+            $hasAnySoc = ($mapsUrl !== '');
+            foreach ($socLinks as $sl) {
+                if ($sl['url'] !== '') { $hasAnySoc = true; break; }
+            }
+            if ($hasAnySoc) : ?>
+                <div class="pa-footer-socials" aria-label="Kanal Resmi &amp; Lokasi Kantor">
+                    <?php foreach ($socLinks as $sl) : if ($sl['url'] === '') continue; ?>
+                        <a class="pa-footer-soc-btn" href="<?php echo esc_url($sl['url']); ?>" target="_blank" rel="noopener noreferrer" aria-label="<?php echo esc_attr($sl['label']); ?>" title="<?php echo esc_attr($sl['label']); ?>"><?php echo $sl['svg']; ?></a>
+                    <?php endforeach; ?>
+                    <?php if ($mapsUrl !== '') : ?>
+                        <a class="pa-footer-soc-btn" href="<?php echo esc_url($mapsUrl); ?>" target="_blank" rel="noopener noreferrer">📍 Peta Kantor ↗</a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         </div>
         <div class="pa-footer-col">
             <h4>Transparansi Publik</h4>
@@ -4005,7 +4214,7 @@ add_action('wp_footer', static function () {
         </div>
     </div>
 <?php
-    $starterVer    = defined('PA_SINOVA_STARTER_VERSION') ? (string) PA_SINOVA_STARTER_VERSION : '2.4.1';
+    $starterVer    = defined('PA_SINOVA_STARTER_VERSION') ? (string) PA_SINOVA_STARTER_VERSION : '2.5.0';
     $starterRepo   = defined('PA_SINOVA_GITHUB_REPO') ? ('https://github.com/' . ltrim((string) PA_SINOVA_GITHUB_REPO, '/')) : 'https://github.com/kang-devlp/pa-wordpress-sinova-starter';
     $creditMain    = trim((string) ($cfg['footer_credit_text'] ?? 'Pengadilan Agama Devlpr Community')) ?: 'Pengadilan Agama Devlpr Community';
     $creditSuffix  = trim((string) ($cfg['footer_credit_suffix'] ?? 'Portal Keterbukaan Informasi Publik'));
@@ -5162,6 +5371,75 @@ add_action('wp_footer', static function () {
             var targetUrl = 'https://putusan3.mahkamahagung.go.id/search.html?q=' + encodeURIComponent(finalQ);
             if(hash){ targetUrl += '&court=' + encodeURIComponent(hash); }
             window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        });
+    });
+
+    document.querySelectorAll('.pa-st-form[data-pa-case-tracker="1"]').forEach(function(form){
+        form.addEventListener('submit', function(e){
+            e.preventDefault();
+            var qInp = form.querySelector('.pa-st-input');
+            var resId = form.getAttribute('data-results-id');
+            var resBox = resId ? document.getElementById(resId) : null;
+            if(!qInp || !resBox) return;
+            var q = (qInp.value || '').trim();
+            if(q.length < 2) return;
+            var sec = form.closest('.pa-sipp-tracker');
+            var sippBase = (sec ? (sec.getAttribute('data-sipp-url') || '') : '').replace(/\/+$/, '');
+            resBox.hidden = false;
+            var loading = document.createElement('div');
+            loading.className = 'pa-st-empty';
+            loading.textContent = 'Menelusuri perkara "' + q + '"...';
+            resBox.replaceChildren(loading);
+            fetch(<?php echo wp_json_encode(rest_url('pa-portal/v1/case-lookup')); ?> + '?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+                .then(function(r){ return r.ok ? r.json() : null; })
+                .then(function(d){
+                    var frag = document.createDocumentFragment();
+                    if(d && Array.isArray(d.items) && d.items.length){
+                        d.items.forEach(function(it){
+                            var a = document.createElement('a');
+                            a.className = 'pa-st-res-item';
+                            a.setAttribute('href', safeHref(it.url));
+                            var left = document.createElement('div');
+                            left.className = 'pa-st-res-meta';
+                            var st = document.createElement('strong');
+                            st.textContent = it.title || '';
+                            var sp = document.createElement('span');
+                            var parts = [it.subtitle, it.category, it.date].filter(Boolean);
+                            sp.textContent = parts.join(' · ');
+                            left.appendChild(st);
+                            left.appendChild(sp);
+                            var tag = document.createElement('span');
+                            tag.className = 'pa-st-res-tag';
+                            tag.textContent = it.type_label || 'Perkara';
+                            a.appendChild(left);
+                            a.appendChild(tag);
+                            frag.appendChild(a);
+                        });
+                    } else {
+                        var emp = document.createElement('div');
+                        emp.className = 'pa-st-empty';
+                        var msg = document.createElement('span');
+                        msg.textContent = 'Belum ditemukan di agenda/putusan lokal portal. Lanjutkan pencarian langsung di SIPP Satker.';
+                        emp.appendChild(msg);
+                        if(sippBase){
+                            var lk = document.createElement('a');
+                            lk.className = 'pa-st-pill';
+                            lk.setAttribute('href', safeHref(sippBase + '/list_perkara'));
+                            lk.setAttribute('target', '_blank');
+                            lk.setAttribute('rel', 'noopener noreferrer');
+                            lk.textContent = 'Buka SIPP Satker ↗';
+                            emp.appendChild(lk);
+                        }
+                        frag.appendChild(emp);
+                    }
+                    resBox.replaceChildren(frag);
+                })
+                .catch(function(){
+                    var err = document.createElement('div');
+                    err.className = 'pa-st-empty';
+                    err.textContent = 'Gagal menghubungi layanan pencarian portal.';
+                    resBox.replaceChildren(err);
+                });
         });
     });
 

@@ -2,12 +2,12 @@
 /**
  * Plugin Name: PA SINOVA Starter - Konfigurasi, Seeder 1-Klik SK 2722/2026, RBAC & Panel Kepatuhan WP Admin
  * Description: Pengaturan dinamis Satker, RBAC peran operator, generator Secret Key HMAC-SHA256, Seeder 1-Klik 6 Menu Baku SK Dirjen Badilag 2722/2026, Dashboard Kepatuhan 35 Kriteria + Migrasi & Adopsi, Data Operasional, Upload Dokumen (Edit & Hapus Massal), & Audit Keamanan + MFA di WP Admin.
- * Version: 2.4.1-starter
+ * Version: 2.5.0-starter
  */
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.4.1');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.5.0');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -79,6 +79,19 @@ function pa_sinova_get_settings(): array {
         'home_survey_skm'           => '4.00 / 4.00',
         'home_survey_spak'          => '4.00 / 4.00',
         'home_survey_spkp'          => '4.00 / 4.00',
+        'hero_layout'               => 'split',
+        'hero_photo_url'            => '',
+        'hero_photo_caption'        => 'Gedung Pelayanan Terpadu Satu Pintu (PTSP) & Ruang Sidang',
+        'hero_pattern'              => 'islamic',
+        'leader_title'              => 'Ketua Pengadilan Agama',
+        'leader_photo_url'          => '',
+        'leader_motto'              => 'Melayani dengan Integritas, Profesionalitas, dan Transparansi',
+        'social_instagram'          => '',
+        'social_youtube'            => '',
+        'social_facebook'           => '',
+        'social_tiktok'             => '',
+        'social_whatsapp'           => '',
+        'maps_url'                  => '',
     );
     $saved = get_option('pa_sinova_starter_settings', array());
     if (!is_array($saved)) {
@@ -112,6 +125,42 @@ function pa_sinova_get_settings(): array {
     }
 
     return $merged;
+}
+
+/**
+ * Mengembalikan URL relatif/aman untuk aset bawaan starter kit (GIF ACO, foto dummy gedung/pimpinan/berita).
+ */
+function pa_sinova_asset_url(string $filename): string {
+    $safe = basename($filename);
+    if ($safe === '') {
+        return '';
+    }
+    $resolved = '';
+    if (defined('PA_SINOVA_ASSETS_DIR') && defined('PA_SINOVA_ASSETS_URL') && file_exists(rtrim((string) PA_SINOVA_ASSETS_DIR, '/\\') . '/' . $safe)) {
+        $resolved = rtrim((string) PA_SINOVA_ASSETS_URL, '/') . '/' . $safe;
+    } elseif (file_exists(__DIR__ . '/assets/' . $safe)) {
+        if (defined('WPMU_PLUGIN_DIR') && defined('WPMU_PLUGIN_URL') && realpath(__DIR__) === realpath(WPMU_PLUGIN_DIR)) {
+            $resolved = rtrim((string) WPMU_PLUGIN_URL, '/') . '/assets/' . $safe;
+        } elseif (defined('WP_PLUGIN_DIR') && defined('WP_PLUGIN_URL') && strpos((string) wp_normalize_path(__DIR__), (string) wp_normalize_path(WP_PLUGIN_DIR)) === 0) {
+            $relDir   = ltrim(substr((string) wp_normalize_path(__DIR__), strlen((string) wp_normalize_path(WP_PLUGIN_DIR))), '/');
+            $resolved = rtrim((string) WP_PLUGIN_URL, '/') . '/' . $relDir . '/assets/' . $safe;
+        } else {
+            $resolved = content_url('/mu-plugins/assets/' . $safe);
+        }
+    } elseif (defined('WPMU_PLUGIN_DIR') && defined('WPMU_PLUGIN_URL') && file_exists(rtrim((string) WPMU_PLUGIN_DIR, '/\\') . '/assets/' . $safe)) {
+        $resolved = rtrim((string) WPMU_PLUGIN_URL, '/') . '/assets/' . $safe;
+    } elseif (defined('WP_PLUGIN_DIR') && defined('WP_PLUGIN_URL') && file_exists(rtrim((string) WP_PLUGIN_DIR, '/\\') . '/pa-sinova-starter/wordpress-mu-plugins/assets/' . $safe)) {
+        $resolved = rtrim((string) WP_PLUGIN_URL, '/') . '/pa-sinova-starter/wordpress-mu-plugins/assets/' . $safe;
+    } else {
+        $resolved = add_query_arg('pa_sinova_asset', rawurlencode($safe), home_url('/'));
+    }
+
+    $homeHost = strtolower((string) parse_url(home_url('/'), PHP_URL_HOST));
+    $imgHost  = strtolower((string) parse_url($resolved, PHP_URL_HOST));
+    if ($imgHost === '' || ($homeHost !== '' && $imgHost === $homeHost)) {
+        $resolved = wp_make_link_relative($resolved);
+    }
+    return $resolved;
 }
 
 // ============================================================================
@@ -1565,9 +1614,12 @@ function pa_sinova_run_starter_seeder(?bool $forcePreserve = null, bool $rebuild
 function pa_sinova_home_block_catalog(): array {
     return array(
         'hero_slider'   => array('label' => 'Slider Utama / Hero', 'default_w' => 12, 'default_h' => 1, 'icon' => '🖼'),
+        'kpi_bar'       => array('label' => 'Strip Ringkasan Kinerja (KPI)', 'default_w' => 12, 'default_h' => 1, 'icon' => '📈'),
         'services'      => array('label' => 'Pintasan Layanan Utama', 'default_w' => 12, 'default_h' => 1, 'icon' => '⊞'),
+        'sipp_tracker'  => array('label' => 'Penelusuran Perkara (SIPP)', 'default_w' => 12, 'default_h' => 1, 'icon' => '🔎'),
         'schedule'      => array('label' => 'Jadwal Sidang & Live SIPP', 'default_w' => 7, 'default_h' => 1, 'icon' => '📅'),
         'stats'         => array('label' => 'Statistik Perkara', 'default_w' => 5, 'default_h' => 1, 'icon' => '📊'),
+        'inovasi'       => array('label' => 'Inovasi Layanan Satker', 'default_w' => 12, 'default_h' => 1, 'icon' => '✨'),
         'announcements' => array('label' => 'Pengumuman & Panggilan Ghaib', 'default_w' => 5, 'default_h' => 1, 'icon' => '📢'),
         'news'          => array('label' => 'Berita & Publikasi Satker', 'default_w' => 7, 'default_h' => 1, 'icon' => '📰'),
         'welcome'       => array('label' => 'Sambutan Pimpinan & Maklumat', 'default_w' => 12, 'default_h' => 1, 'icon' => '🏛'),
@@ -1590,16 +1642,19 @@ function pa_sinova_home_block_catalog(): array {
 function pa_sinova_default_home_blocks(): array {
     return array(
         array('id' => 'blk_hero', 'type' => 'hero_slider', 'title' => 'Slider Utama / Hero', 'x' => 1, 'y' => 1, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_services', 'type' => 'services', 'title' => 'Pintasan Layanan Utama', 'x' => 1, 'y' => 2, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_schedule', 'type' => 'schedule', 'title' => 'Jadwal Sidang & Live SIPP', 'x' => 1, 'y' => 3, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('height' => 480)),
-        array('id' => 'blk_stats', 'type' => 'stats', 'title' => 'Statistik Perkara', 'x' => 8, 'y' => 3, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_ann', 'type' => 'announcements', 'title' => 'Pengumuman & Panggilan Ghaib', 'x' => 1, 'y' => 4, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array('limit' => 5)),
-        array('id' => 'blk_news', 'type' => 'news', 'title' => 'Berita Pelayanan & Inovasi Satker', 'x' => 6, 'y' => 4, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('count' => 3)),
-        array('id' => 'blk_dirput', 'type' => 'dirput', 'title' => 'Direktori Putusan Terbaru', 'x' => 1, 'y' => 5, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('count' => 6)),
-        array('id' => 'blk_welcome', 'type' => 'welcome', 'title' => 'Sambutan Pimpinan & Maklumat', 'x' => 1, 'y' => 6, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_zi', 'type' => 'zi', 'title' => 'Zona Integritas (6 Area)', 'x' => 1, 'y' => 7, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_survey', 'type' => 'survey', 'title' => 'Indeks Kepuasan & Integritas Pelayanan', 'x' => 1, 'y' => 8, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_directory', 'type' => 'directory', 'title' => 'Direktori Dokumen Publik', 'x' => 6, 'y' => 8, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_kpi', 'type' => 'kpi_bar', 'title' => 'Ringkasan Kinerja Pelayanan', 'x' => 1, 'y' => 2, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_services', 'type' => 'services', 'title' => 'Pintasan Layanan Utama', 'x' => 1, 'y' => 3, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_tracker', 'type' => 'sipp_tracker', 'title' => 'Penelusuran Perkara Cepat (SIPP)', 'x' => 1, 'y' => 4, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_schedule', 'type' => 'schedule', 'title' => 'Jadwal Sidang & Live SIPP', 'x' => 1, 'y' => 5, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('height' => 480)),
+        array('id' => 'blk_stats', 'type' => 'stats', 'title' => 'Statistik Perkara', 'x' => 8, 'y' => 5, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_inovasi', 'type' => 'inovasi', 'title' => 'Inovasi Layanan Unggulan', 'x' => 1, 'y' => 6, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('count' => 4)),
+        array('id' => 'blk_ann', 'type' => 'announcements', 'title' => 'Pengumuman & Panggilan Ghaib', 'x' => 1, 'y' => 7, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array('limit' => 5)),
+        array('id' => 'blk_news', 'type' => 'news', 'title' => 'Berita Pelayanan & Inovasi Satker', 'x' => 6, 'y' => 7, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('count' => 3)),
+        array('id' => 'blk_dirput', 'type' => 'dirput', 'title' => 'Direktori Putusan Terbaru', 'x' => 1, 'y' => 8, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('count' => 6)),
+        array('id' => 'blk_welcome', 'type' => 'welcome', 'title' => 'Sambutan Pimpinan & Maklumat', 'x' => 1, 'y' => 9, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_zi', 'type' => 'zi', 'title' => 'Zona Integritas (6 Area)', 'x' => 1, 'y' => 10, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_survey', 'type' => 'survey', 'title' => 'Indeks Kepuasan & Integritas Pelayanan', 'x' => 1, 'y' => 11, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_directory', 'type' => 'directory', 'title' => 'Direktori Dokumen Publik', 'x' => 6, 'y' => 11, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array()),
     );
 }
 
@@ -1917,6 +1972,11 @@ function pa_sinova_github_apply_update(): array {
         'wordpress-mu-plugins/pa-ui-performance-a11y.php'     => $targetDir . '/pa-ui-performance-a11y.php',
         'wordpress-mu-plugins/pa-security-hardening.php'      => $targetDir . '/pa-security-hardening.php',
         'wordpress-mu-plugins/assets/cctv-aco.gif'            => $targetDir . '/assets/cctv-aco.gif',
+        'wordpress-mu-plugins/assets/dummy-gedung-pa.svg'     => $targetDir . '/assets/dummy-gedung-pa.svg',
+        'wordpress-mu-plugins/assets/dummy-pimpinan.svg'      => $targetDir . '/assets/dummy-pimpinan.svg',
+        'wordpress-mu-plugins/assets/dummy-berita-1.svg'      => $targetDir . '/assets/dummy-berita-1.svg',
+        'wordpress-mu-plugins/assets/dummy-berita-2.svg'      => $targetDir . '/assets/dummy-berita-2.svg',
+        'wordpress-mu-plugins/assets/dummy-berita-3.svg'      => $targetDir . '/assets/dummy-berita-3.svg',
     );
     if (defined('PA_SINOVA_RUNTIME_MODE') && PA_SINOVA_RUNTIME_MODE === 'plugin' && defined('PA_SINOVA_PLUGIN_FILE') && is_writable((string) PA_SINOVA_PLUGIN_FILE)) {
         $allowMap['wordpress-plugin-wrapper/pa-sinova-starter.php'] = (string) PA_SINOVA_PLUGIN_FILE;
@@ -1945,6 +2005,10 @@ function pa_sinova_github_apply_update(): array {
         } elseif ($ext === 'gif') {
             if (strlen($body) < 100 || strpos($body, 'GIF8') !== 0) {
                 return array('ok' => false, 'message' => 'Gagal validasi aset GIF ' . basename($remoteRel) . '. Pembaruan dibatalkan.');
+            }
+        } elseif ($ext === 'svg') {
+            if (strlen($body) < 100 || stripos($body, '<svg') === false || stripos($body, '<script') !== false) {
+                return array('ok' => false, 'message' => 'Gagal validasi aset SVG ' . basename($remoteRel) . '. Pembaruan dibatalkan.');
             }
         }
         $staged[$destPath] = $body;
@@ -2601,9 +2665,11 @@ function pa_sinova_delete_docs_by_ids(array $rawIds, array $allowedSlugs = array
 function pa_sinova_record_types_catalog(): array {
     return array(
         'jadwal'     => 'Jadwal Sidang',
+        'putusan'    => 'Putusan Pilihan (SIPP)',
         'pegawai'    => 'Pejabat & Pegawai',
         'ghaib'      => 'Panggilan Ghaib',
         'statistik'  => 'Statistik Perkara',
+        'inovasi'    => 'Inovasi Layanan Satker',
         'slider'     => 'Slider Beranda',
         'video'      => 'Galeri Video',
         'ucapan'     => 'Ucapan & Belasungkawa',
@@ -2648,6 +2714,18 @@ function pa_sinova_build_record_payload(array $input): array {
         $metaArr = array('pihak' => ($recM1 !== '' ? $recM1 : $recSub), 'doc_url' => esc_url_raw($recM2, array('http', 'https')));
     } elseif ($recType === 'statistik') {
         $metaArr = array('diterima' => (int) $recM1, 'diputus' => (int) $recM2, 'sisa' => (int) $recM3);
+    } elseif ($recType === 'putusan') {
+        $metaArr = array(
+            'doc_url'      => esc_url_raw($recM1, array('http', 'https')),
+            'majelis'      => $recM2,
+            'status_hukum' => ($recM3 !== '' ? $recM3 : 'Berkekuatan Hukum Tetap'),
+        );
+    } elseif ($recType === 'inovasi') {
+        $metaArr = array(
+            'app_url'  => esc_url_raw($recM1, array('http', 'https')),
+            'icon_url' => esc_url_raw($recM2, array('http', 'https')),
+            'badge'    => ($recM3 !== '' ? $recM3 : ($recCat ?: 'Inovasi Satker')),
+        );
     } elseif ($recType === 'slider') {
         $metaArr = array(
             'image_url' => esc_url_raw($recM1, array('http', 'https')),
@@ -2751,8 +2829,16 @@ function pa_sinova_render_admin_page(): void {
             $activeTab = 'settings';
             $cur = pa_sinova_get_settings();
             $palette = sanitize_key((string) ($_POST['accent_palette'] ?? ($cur['accent_palette'] ?? 'gold')));
-            if (!in_array($palette, array('gold', 'badilag_orange'), true)) {
+            if (!in_array($palette, array('gold', 'badilag_orange', 'emerald_silver'), true)) {
                 $palette = 'gold';
+            }
+            $heroLayout = sanitize_key((string) ($_POST['hero_layout'] ?? ($cur['hero_layout'] ?? 'split')));
+            if (!in_array($heroLayout, array('split', 'classic'), true)) {
+                $heroLayout = 'split';
+            }
+            $heroPattern = sanitize_key((string) ($_POST['hero_pattern'] ?? ($cur['hero_pattern'] ?? 'islamic')));
+            if (!in_array($heroPattern, array('none', 'islamic', 'batik', 'songket'), true)) {
+                $heroPattern = 'islamic';
             }
             $cspMode = sanitize_key((string) ($_POST['csp_mode'] ?? ($cur['csp_mode'] ?? 'strict')));
             if (!in_array($cspMode, array('strict', 'compat', 'off'), true)) {
@@ -2822,7 +2908,20 @@ function pa_sinova_render_admin_page(): void {
                 'email'                    => sanitize_email(wp_unslash((string) ($_POST['email'] ?? $cur['email']))),
                 'hearing_hours'            => sanitize_text_field(wp_unslash((string) ($_POST['hearing_hours'] ?? $cur['hearing_hours']))),
                 'leader_name'              => sanitize_text_field(wp_unslash((string) ($_POST['leader_name'] ?? $cur['leader_name']))),
+                'leader_title'             => sanitize_text_field(wp_unslash((string) ($_POST['leader_title'] ?? ($cur['leader_title'] ?? 'Ketua Pengadilan Agama')))),
+                'leader_photo_url'         => esc_url_raw(wp_unslash((string) ($_POST['leader_photo_url'] ?? ''))),
+                'leader_motto'             => sanitize_text_field(wp_unslash((string) ($_POST['leader_motto'] ?? ($cur['leader_motto'] ?? '')))),
                 'leader_welcome'           => sanitize_textarea_field(wp_unslash((string) ($_POST['leader_welcome'] ?? $cur['leader_welcome']))),
+                'hero_layout'              => $heroLayout,
+                'hero_pattern'             => $heroPattern,
+                'hero_photo_url'           => esc_url_raw(wp_unslash((string) ($_POST['hero_photo_url'] ?? ''))),
+                'hero_photo_caption'       => sanitize_text_field(wp_unslash((string) ($_POST['hero_photo_caption'] ?? ($cur['hero_photo_caption'] ?? '')))),
+                'social_instagram'         => esc_url_raw(wp_unslash((string) ($_POST['social_instagram'] ?? ''))),
+                'social_youtube'           => esc_url_raw(wp_unslash((string) ($_POST['social_youtube'] ?? ''))),
+                'social_facebook'          => esc_url_raw(wp_unslash((string) ($_POST['social_facebook'] ?? ''))),
+                'social_tiktok'            => esc_url_raw(wp_unslash((string) ($_POST['social_tiktok'] ?? ''))),
+                'social_whatsapp'          => esc_url_raw(wp_unslash((string) ($_POST['social_whatsapp'] ?? ''))),
+                'maps_url'                 => esc_url_raw(wp_unslash((string) ($_POST['maps_url'] ?? ''))),
                 'sipp_url'                 => esc_url_raw(wp_unslash((string) ($_POST['sipp_url'] ?? ''))),
                 'sipp_slide_url'           => $sippSlideSave,
                 'ecourt_url'               => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
@@ -2934,12 +3033,27 @@ function pa_sinova_render_admin_page(): void {
                 // Sinkronkan pengaturan Hero/Ticker/Survei/SIPP jika ikut dikirim dari modal/panel
                 $cur = pa_sinova_get_settings();
                 $patch = array();
-                foreach (array('home_ticker_label', 'home_ticker_text', 'home_hero_kicker', 'home_hero_title', 'home_hero_lead', 'home_survey_period', 'home_survey_grade', 'home_survey_skm', 'home_survey_spak', 'home_survey_spkp') as $hk) {
+                foreach (array('home_ticker_label', 'home_ticker_text', 'home_hero_kicker', 'home_hero_title', 'home_hero_lead', 'hero_photo_caption', 'home_survey_period', 'home_survey_grade', 'home_survey_skm', 'home_survey_spak', 'home_survey_spkp') as $hk) {
                     if (isset($_POST[$hk])) {
                         $patch[$hk] = ($hk === 'home_hero_lead' || $hk === 'home_ticker_text')
                             ? sanitize_textarea_field(wp_unslash((string) $_POST[$hk]))
                             : sanitize_text_field(wp_unslash((string) $_POST[$hk]));
                     }
+                }
+                if (isset($_POST['hero_layout'])) {
+                    $hl = sanitize_key((string) wp_unslash($_POST['hero_layout']));
+                    if (in_array($hl, array('split', 'classic'), true)) {
+                        $patch['hero_layout'] = $hl;
+                    }
+                }
+                if (isset($_POST['hero_pattern'])) {
+                    $hp = sanitize_key((string) wp_unslash($_POST['hero_pattern']));
+                    if (in_array($hp, array('none', 'islamic', 'batik', 'songket'), true)) {
+                        $patch['hero_pattern'] = $hp;
+                    }
+                }
+                if (isset($_POST['hero_photo_url'])) {
+                    $patch['hero_photo_url'] = esc_url_raw(wp_unslash((string) $_POST['hero_photo_url']));
                 }
                 if (isset($_POST['home_show_ticker'])) {
                     $patch['home_show_ticker'] = !empty($_POST['home_show_ticker']) ? '1' : '0';
@@ -3672,6 +3786,7 @@ function pa_sinova_render_admin_page(): void {
                 <?php if (in_array('data', $allowedTabs, true)) : ?>
                     <div class="pa-adm-grp-lbl">Publikasi</div>
                     <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=slider'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'slider') ? 'is-active' : ''; ?>"><span>Slider Beranda</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=inovasi'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'inovasi') ? 'is-active' : ''; ?>"><span>Inovasi Layanan</span></a>
                     <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=video'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'video') ? 'is-active' : ''; ?>"><span>Galeri Video</span></a>
                     <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=ucapan'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'ucapan') ? 'is-active' : ''; ?>"><span>Ucapan &amp; Belasungkawa</span></a>
                 <?php endif; ?>
@@ -3684,6 +3799,7 @@ function pa_sinova_render_admin_page(): void {
                 <?php if (in_array('data', $allowedTabs, true)) : ?>
                     <div class="pa-adm-grp-lbl">Kepaniteraan</div>
                     <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=jadwal'); ?>" class="<?php echo ($activeTab === 'data' && ($curRecType === 'jadwal' || $curRecType === '')) ? 'is-active' : ''; ?>"><span>Jadwal Sidang</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=putusan'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'putusan') ? 'is-active' : ''; ?>"><span>Putusan Pilihan</span></a>
                     <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=ghaib'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'ghaib') ? 'is-active' : ''; ?>"><span>Panggilan Ghaib</span></a>
                     <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=statistik'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'statistik') ? 'is-active' : ''; ?>"><span>Statistik Perkara</span></a>
 
@@ -3704,7 +3820,7 @@ function pa_sinova_render_admin_page(): void {
                     <span class="pa-adm-tip" tabindex="0" data-tip="Panel operator khusus standar SK Dirjen Badilag 2722/2026. Istilah teknis SINOVA tidak tampil di website publik." aria-label="Info panel">i</span>
                 </h1>
                 <div class="pa-adm-top-actions">
-                    <span class="pa-adm-ver">v<?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?> · <?php echo esc_html(PA_SINOVA_RUNTIME_MODE === 'plugin' ? 'Plugin' : 'MU'); ?></span>
+                    <span class="pa-adm-ver" title="Mode runtime: <?php echo esc_attr(PA_SINOVA_RUNTIME_MODE === 'plugin' ? 'Plugin Standar' : 'Must-Use (mu-plugins)'); ?>">PA Plugin · v<?php echo esc_html(PA_SINOVA_STARTER_VERSION); ?></span>
                     <a class="button" href="<?php echo esc_url(home_url('/')); ?>" target="_blank" rel="noopener noreferrer">Lihat Situs ↗</a>
                     <form method="post" style="margin:0;">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
@@ -4266,6 +4382,16 @@ function pa_sinova_render_admin_page(): void {
                 $formRecM1 = (string) ($editMeta['pihak'] ?? '');
                 $formRecM2 = (string) ($editMeta['doc_url'] ?? '');
                 $formRecM3 = $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
+            } elseif ($isEditingRec && $formRecType === 'putusan') {
+                $formRecM1 = (string) ($editMeta['doc_url'] ?? '');
+                $formRecM2 = (string) ($editMeta['majelis'] ?? '');
+                $formRecM3 = (string) ($editMeta['status_hukum'] ?? '');
+                $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
+            } elseif ($isEditingRec && $formRecType === 'inovasi') {
+                $formRecM1 = (string) ($editMeta['app_url'] ?? '');
+                $formRecM2 = (string) ($editMeta['icon_url'] ?? '');
+                $formRecM3 = (string) ($editMeta['badge'] ?? '');
+                $formRecM4 = $formRecM5 = $formRecM6 = $formRecM7 = '';
             } elseif ($isEditingRec && $formRecType === 'statistik') {
                 $formRecM1 = (string) ($editMeta['diterima'] ?? '');
                 $formRecM2 = (string) ($editMeta['diputus'] ?? '');
@@ -4376,9 +4502,11 @@ function pa_sinova_render_admin_page(): void {
                             if (!sel) return;
                             var map = {
                                 jadwal:     ['Nomor Perkara', 'Agenda Sidang', 'Ruang Sidang', 'Jam (WIB)', 'Catatan', 'Opsional'],
+                                putusan:    ['Nomor Perkara / Judul Putusan', 'Amar / Ringkasan Putusan', 'Jenis Perkara', 'URL Salinan PDF / Putusan3 (HTTPS)', 'Majelis Hakim (Opsional)', 'Status Hukum (BHT / Kasasi)'],
                                 pegawai:    ['Nama Lengkap', 'Jabatan', 'Kelompok (Pimpinan/Hakim/dll)', 'NIP', 'Pangkat / Golongan', 'Pendidikan Terakhir'],
                                 ghaib:      ['Nomor Perkara', 'Status Pihak', 'Keterangan Pasal 27', 'Nama Pihak Dipanggil', 'URL Relaas PDF/Drive', 'Opsional'],
                                 statistik:  ['Periode (Bulan Tahun)', 'Keterangan', 'Tahun', 'Jumlah Diterima', 'Jumlah Diputus', 'Jumlah Sisa'],
+                                inovasi:    ['Nama Aplikasi / Inovasi', 'Deskripsi Singkat Manfaat', 'Kategori (PTSP / Antrean / dll)', 'URL Aplikasi / Layanan (HTTPS)', 'URL Ikon / Gambar (Opsional)', 'Label Badge (mis. Unggulan)'],
                                 slider:     ['Judul Slide', 'Subjudul Singkat', 'Label Atas (Kicker)', 'URL Gambar Slide (HTTPS)', 'URL Tombol (Opsional)', 'Label Tombol'],
                                 video:      ['Judul Video', 'Deskripsi Singkat', 'Kategori Video', 'URL YouTube / Drive (HTTPS)', 'URL Thumbnail (Opsional)', 'Durasi (mis. 03:45)'],
                                 ucapan:     ['Judul Ucapan / Nama', 'Pesan Singkat', 'Ucapan Selamat / Belasungkawa', 'URL Foto / Poster (Opsional)', 'Pengirim', 'Label Badge'],
@@ -4693,6 +4821,10 @@ function pa_sinova_render_admin_page(): void {
                 'home_hero_kicker'   => (string) ($cfg['home_hero_kicker'] ?? ''),
                 'home_hero_title'    => (string) ($cfg['home_hero_title'] ?? ''),
                 'home_hero_lead'     => (string) ($cfg['home_hero_lead'] ?? ''),
+                'hero_layout'        => (string) ($cfg['hero_layout'] ?? 'split'),
+                'hero_pattern'       => (string) ($cfg['hero_pattern'] ?? 'islamic'),
+                'hero_photo_url'     => (string) ($cfg['hero_photo_url'] ?? ''),
+                'hero_photo_caption' => (string) ($cfg['hero_photo_caption'] ?? 'Gedung Pelayanan Terpadu Satu Pintu (PTSP) & Ruang Sidang'),
                 'home_survey_period' => (string) ($cfg['home_survey_period'] ?? 'Triwulan III'),
                 'home_survey_grade'  => (string) ($cfg['home_survey_grade'] ?? '★ Mutu A (Sangat Baik)'),
                 'home_survey_skm'    => (string) ($cfg['home_survey_skm'] ?? '4.00 / 4.00'),
@@ -4748,6 +4880,10 @@ function pa_sinova_render_admin_page(): void {
                         <input type="hidden" name="home_hero_kicker" id="pa-gb-h-kicker" value="<?php echo esc_attr($homeGlobals['home_hero_kicker']); ?>">
                         <input type="hidden" name="home_hero_title" id="pa-gb-h-title" value="<?php echo esc_attr($homeGlobals['home_hero_title']); ?>">
                         <input type="hidden" name="home_hero_lead" id="pa-gb-h-lead" value="<?php echo esc_attr($homeGlobals['home_hero_lead']); ?>">
+                        <input type="hidden" name="hero_layout" id="pa-gb-h-layout" value="<?php echo esc_attr($homeGlobals['hero_layout']); ?>">
+                        <input type="hidden" name="hero_pattern" id="pa-gb-h-pattern" value="<?php echo esc_attr($homeGlobals['hero_pattern']); ?>">
+                        <input type="hidden" name="hero_photo_url" id="pa-gb-h-photo" value="<?php echo esc_attr($homeGlobals['hero_photo_url']); ?>">
+                        <input type="hidden" name="hero_photo_caption" id="pa-gb-h-pcap" value="<?php echo esc_attr($homeGlobals['hero_photo_caption']); ?>">
                         <input type="hidden" name="home_survey_period" id="pa-gb-h-sper" value="<?php echo esc_attr($homeGlobals['home_survey_period']); ?>">
                         <input type="hidden" name="home_survey_grade" id="pa-gb-h-sgrd" value="<?php echo esc_attr($homeGlobals['home_survey_grade']); ?>">
                         <input type="hidden" name="home_survey_skm" id="pa-gb-h-skm" value="<?php echo esc_attr($homeGlobals['home_survey_skm']); ?>">
@@ -4799,6 +4935,32 @@ function pa_sinova_render_admin_page(): void {
                     <div id="pa-ed-sec-hero" hidden>
                         <div class="pa-dlg-field"><label><input type="checkbox" id="pa-ed-show-ticker" value="1"> Tampilkan Pita Ticker Info</label></div>
                         <div class="pa-dlg-field"><label for="pa-ed-ticker">Teks Ticker</label><textarea id="pa-ed-ticker" rows="2"></textarea></div>
+                        <div class="pa-dlg-grid4" style="grid-template-columns:1fr 1fr;">
+                            <div class="pa-dlg-field">
+                                <label for="pa-ed-hlayout">Gaya Tampilan Hero</label>
+                                <select id="pa-ed-hlayout">
+                                    <option value="split">Split Modern + Foto Gedung</option>
+                                    <option value="classic">Klasik Rata Tengah</option>
+                                </select>
+                            </div>
+                            <div class="pa-dlg-field">
+                                <label for="pa-ed-hpattern">Motif Watermark Daerah</label>
+                                <select id="pa-ed-hpattern">
+                                    <option value="islamic">Geometris Islami</option>
+                                    <option value="batik">Ornamen Batik Kawung</option>
+                                    <option value="songket">Ornamen Tenun Songket</option>
+                                    <option value="none">Polos Minimalis</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="pa-dlg-field">
+                            <label for="pa-ed-hphoto">Foto Gedung Kantor Satker (Hero Split · kosongkan untuk gambar dummy bawaan)</label>
+                            <div style="display:flex;gap:6px;">
+                                <input type="url" id="pa-ed-hphoto" placeholder="Kosongkan untuk pakai foto gedung dummy">
+                                <button type="button" class="button pa-media-pick-btn" data-target="pa-ed-hphoto">Pilih Media</button>
+                            </div>
+                        </div>
+                        <div class="pa-dlg-field"><label for="pa-ed-hpcap">Keterangan Foto Gedung</label><input type="text" id="pa-ed-hpcap"></div>
                         <div class="pa-dlg-field"><label for="pa-ed-kicker">Label Atas Hero</label><input type="text" id="pa-ed-kicker"></div>
                         <div class="pa-dlg-field"><label for="pa-ed-htitle">Judul Utama Hero</label><input type="text" id="pa-ed-htitle"></div>
                         <div class="pa-dlg-field"><label for="pa-ed-hlead">Deskripsi Hero</label><textarea id="pa-ed-hlead" rows="2"></textarea></div>
@@ -4947,6 +5109,10 @@ function pa_sinova_render_admin_page(): void {
                         document.getElementById('pa-ed-sec-hero').hidden = false;
                         document.getElementById('pa-ed-show-ticker').checked = (globals.home_show_ticker !== '0');
                         document.getElementById('pa-ed-ticker').value = globals.home_ticker_text || '';
+                        document.getElementById('pa-ed-hlayout').value = globals.hero_layout || 'split';
+                        document.getElementById('pa-ed-hpattern').value = globals.hero_pattern || 'islamic';
+                        document.getElementById('pa-ed-hphoto').value = globals.hero_photo_url || '';
+                        document.getElementById('pa-ed-hpcap').value = globals.hero_photo_caption || '';
                         document.getElementById('pa-ed-kicker').value = globals.home_hero_kicker || '';
                         document.getElementById('pa-ed-htitle').value = globals.home_hero_title || '';
                         document.getElementById('pa-ed-hlead').value = globals.home_hero_lead || '';
@@ -4962,7 +5128,7 @@ function pa_sinova_render_admin_page(): void {
                         document.getElementById('pa-ed-skm').value  = globals.home_survey_skm || '';
                         document.getElementById('pa-ed-spak').value = globals.home_survey_spak || '';
                         document.getElementById('pa-ed-spkp').value = globals.home_survey_spkp || '';
-                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings' || b.type === 'dirput') {
+                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings' || b.type === 'dirput' || b.type === 'inovasi') {
                         document.getElementById('pa-ed-sec-count').hidden = false;
                         document.getElementById('pa-ed-count').value = b.config.count || b.config.limit || (b.type === 'dirput' ? 6 : (b.type === 'news' ? 3 : 4));
                     } else if (b.type === 'custom') {
@@ -5049,6 +5215,10 @@ function pa_sinova_render_admin_page(): void {
                         globals.home_ticker_text = document.getElementById('pa-ed-ticker').value.trim();
                         if (topShowChk) topShowChk.checked = (globals.home_show_ticker !== '0');
                         if (topTickTxt) topTickTxt.value = globals.home_ticker_text;
+                        globals.hero_layout        = document.getElementById('pa-ed-hlayout').value || 'split';
+                        globals.hero_pattern       = document.getElementById('pa-ed-hpattern').value || 'islamic';
+                        globals.hero_photo_url     = document.getElementById('pa-ed-hphoto').value.trim();
+                        globals.hero_photo_caption = document.getElementById('pa-ed-hpcap').value.trim();
                         globals.home_hero_kicker = document.getElementById('pa-ed-kicker').value.trim();
                         globals.home_hero_title  = document.getElementById('pa-ed-htitle').value.trim();
                         globals.home_hero_lead   = document.getElementById('pa-ed-hlead').value.trim();
@@ -5064,7 +5234,7 @@ function pa_sinova_render_admin_page(): void {
                         globals.home_survey_skm    = document.getElementById('pa-ed-skm').value.trim();
                         globals.home_survey_spak   = document.getElementById('pa-ed-spak').value.trim();
                         globals.home_survey_spkp   = document.getElementById('pa-ed-spkp').value.trim();
-                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings' || b.type === 'dirput') {
+                    } else if (b.type === 'news' || b.type === 'announcements' || b.type === 'videos' || b.type === 'greetings' || b.type === 'dirput' || b.type === 'inovasi') {
                         var cnt = clamp(parseInt(document.getElementById('pa-ed-count').value, 10) || 3, 1, 12);
                         b.config.count = cnt;
                         b.config.limit = cnt;
@@ -5278,9 +5448,13 @@ function pa_sinova_render_admin_page(): void {
                         document.getElementById('pa-gb-h-show-ticker').value = topShowChk ? (topShowChk.checked ? '1' : '0') : (globals.home_show_ticker || '1');
                         document.getElementById('pa-gb-h-ticker-lbl').value  = topTickLbl ? (topTickLbl.value.trim() || 'INFO LAYANAN') : (globals.home_ticker_label || 'INFO LAYANAN');
                         document.getElementById('pa-gb-h-ticker').value      = topTickTxt ? topTickTxt.value.trim() : (globals.home_ticker_text || '');
-                        document.getElementById('pa-gb-h-kicker').value = globals.home_hero_kicker || '';
-                        document.getElementById('pa-gb-h-title').value  = globals.home_hero_title || '';
-                        document.getElementById('pa-gb-h-lead').value   = globals.home_hero_lead || '';
+                        document.getElementById('pa-gb-h-kicker').value  = globals.home_hero_kicker || '';
+                        document.getElementById('pa-gb-h-title').value   = globals.home_hero_title || '';
+                        document.getElementById('pa-gb-h-lead').value    = globals.home_hero_lead || '';
+                        document.getElementById('pa-gb-h-layout').value  = globals.hero_layout || 'split';
+                        document.getElementById('pa-gb-h-pattern').value = globals.hero_pattern || 'islamic';
+                        document.getElementById('pa-gb-h-photo').value   = globals.hero_photo_url || '';
+                        document.getElementById('pa-gb-h-pcap').value    = globals.hero_photo_caption || '';
                         document.getElementById('pa-gb-h-sper').value   = globals.home_survey_period || '';
                         document.getElementById('pa-gb-h-sgrd').value   = globals.home_survey_grade || '';
                         document.getElementById('pa-gb-h-skm').value    = globals.home_survey_skm || '';
@@ -5297,10 +5471,14 @@ function pa_sinova_render_admin_page(): void {
             $seededOption = get_option('pa_sinova_seeded_pages', array());
             $seededCount  = is_array($seededOption) ? count($seededOption) : 0;
             $dirputPrev   = function_exists('pa_portal_dirput_resolve_urls') ? pa_portal_dirput_resolve_urls() : array();
-            $acoLogoNow   = trim((string) ($cfg['aco_logo_url'] ?? ''));
-            $logoNow      = trim((string) ($cfg['logo_url'] ?? ''));
-            $faviconNow   = trim((string) ($cfg['favicon_url'] ?? ''));
-            $favPrevSrc   = $faviconNow !== '' ? $faviconNow : ($logoNow !== '' ? $logoNow : wp_make_link_relative(home_url('/favicon.svg')));
+            $acoLogoNow     = trim((string) ($cfg['aco_logo_url'] ?? ''));
+            $logoNow        = trim((string) ($cfg['logo_url'] ?? ''));
+            $faviconNow     = trim((string) ($cfg['favicon_url'] ?? ''));
+            $favPrevSrc     = $faviconNow !== '' ? $faviconNow : ($logoNow !== '' ? $logoNow : wp_make_link_relative(home_url('/favicon.svg')));
+            $heroPhotoNow   = trim((string) ($cfg['hero_photo_url'] ?? ''));
+            $heroPrevSrc    = $heroPhotoNow !== '' ? $heroPhotoNow : pa_sinova_asset_url('dummy-gedung-pa.svg');
+            $leaderPhotoNow = trim((string) ($cfg['leader_photo_url'] ?? ''));
+            $leaderPrevSrc  = $leaderPhotoNow !== '' ? $leaderPhotoNow : pa_sinova_asset_url('dummy-pimpinan.svg');
         ?>
             <?php if ($isAdoption) : ?>
                 <div class="notice notice-info inline" style="margin:0 0 16px;padding:10px 14px;">
@@ -5335,13 +5513,47 @@ function pa_sinova_render_admin_page(): void {
                                 <select name="accent_palette" class="regular-text">
                                     <option value="gold" <?php selected($cfg['accent_palette'] ?? 'gold', 'gold'); ?>>Hijau Institusional &amp; Royal Gold (#056e4f / #C9A227)</option>
                                     <option value="badilag_orange" <?php selected($cfg['accent_palette'] ?? 'gold', 'badilag_orange'); ?>>Hijau Badilag &amp; Aksen Oranye (#056e4f / #ff9900)</option>
+                                    <option value="emerald_silver" <?php selected($cfg['accent_palette'] ?? 'gold', 'emerald_silver'); ?>>Hijau Zamrud &amp; Aksen Perak Modern (#043927 / #cbd5e1)</option>
                                 </select>
+                            </td></tr>
+                            <tr><th>Gaya Hero &amp; Motif Daerah <?php echo pa_sinova_info_tip('Pilih gaya Hero Beranda (Split Modern menampilkan Foto Gedung satker di sisi kanan) serta motif watermark SVG ringan khas Nusantara.', 'Info Hero & Motif'); ?></th><td>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                    <select name="hero_layout" aria-label="Gaya Hero Beranda">
+                                        <option value="split" <?php selected($cfg['hero_layout'] ?? 'split', 'split'); ?>>Hero Split Modern + Foto Gedung</option>
+                                        <option value="classic" <?php selected($cfg['hero_layout'] ?? 'split', 'classic'); ?>>Hero Klasik Rata Tengah</option>
+                                    </select>
+                                    <select name="hero_pattern" aria-label="Motif Watermark Daerah">
+                                        <option value="islamic" <?php selected($cfg['hero_pattern'] ?? 'islamic', 'islamic'); ?>>Motif Geometris Islami</option>
+                                        <option value="batik" <?php selected($cfg['hero_pattern'] ?? 'islamic', 'batik'); ?>>Ornamen Batik Kawung</option>
+                                        <option value="songket" <?php selected($cfg['hero_pattern'] ?? 'islamic', 'songket'); ?>>Ornamen Tenun / Songket</option>
+                                        <option value="none" <?php selected($cfg['hero_pattern'] ?? 'islamic', 'none'); ?>>Polos Minimalis</option>
+                                    </select>
+                                </div>
+                            </td></tr>
+                            <tr><th>Foto Gedung Kantor (Hero) <?php echo pa_sinova_info_tip('Tampil pada Hero Split Modern di Beranda. Kosongkan untuk menampilkan ilustrasi gedung dummy bawaan yang rapi.', 'Info Foto Gedung'); ?></th><td>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                                    <span class="pa-media-preview"><img id="pa-set-hero-preview" src="<?php echo esc_url($heroPrevSrc); ?>" alt="Pratinjau Foto Gedung"></span>
+                                    <input type="url" id="pa-set-hero-photo" name="hero_photo_url" class="regular-text" value="<?php echo esc_attr($heroPhotoNow); ?>" placeholder="Kosongkan untuk foto gedung dummy">
+                                    <button type="button" class="button pa-media-pick-btn" data-target="pa-set-hero-photo" data-preview="pa-set-hero-preview">Pilih / Upload Foto Gedung</button>
+                                </div>
+                                <input type="text" name="hero_photo_caption" class="regular-text" value="<?php echo esc_attr($cfg['hero_photo_caption'] ?? 'Gedung Pelayanan Terpadu Satu Pintu (PTSP) & Ruang Sidang'); ?>" placeholder="Keterangan di bawah foto gedung">
                             </td></tr>
                             <tr><th>Alamat Kantor</th><td><input type="text" name="address" class="regular-text" value="<?php echo esc_attr($cfg['address']); ?>"></td></tr>
                             <tr><th>Telepon / WA PTSP</th><td><input type="text" name="phone" class="regular-text" value="<?php echo esc_attr($cfg['phone']); ?>"></td></tr>
                             <tr><th>Email Resmi</th><td><input type="email" name="email" class="regular-text" value="<?php echo esc_attr($cfg['email']); ?>"></td></tr>
                             <tr><th>Jam Sidang</th><td><input type="text" name="hearing_hours" class="regular-text" value="<?php echo esc_attr($cfg['hearing_hours'] ?? ''); ?>"></td></tr>
-                            <tr><th>Nama Pimpinan</th><td><input type="text" name="leader_name" class="regular-text" value="<?php echo esc_attr($cfg['leader_name']); ?>"></td></tr>
+                            <tr><th>Nama &amp; Jabatan Pimpinan</th><td>
+                                <input type="text" name="leader_name" class="regular-text" value="<?php echo esc_attr($cfg['leader_name']); ?>" placeholder="Nama Ketua Pengadilan Agama"><br>
+                                <input type="text" name="leader_title" class="regular-text" value="<?php echo esc_attr($cfg['leader_title'] ?? 'Ketua Pengadilan Agama'); ?>" placeholder="Jabatan (mis. Ketua Pengadilan Agama Sumedang)" style="margin-top:4px;">
+                            </td></tr>
+                            <tr><th>Foto Pimpinan (Sambutan) <?php echo pa_sinova_info_tip('Foto potret pimpinan yang tampil di kartu Sambutan Beranda. Kosongkan untuk ilustrasi potret dummy bawaan.', 'Info Foto Pimpinan'); ?></th><td>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                                    <span class="pa-media-preview"><img id="pa-set-leader-preview" src="<?php echo esc_url($leaderPrevSrc); ?>" alt="Pratinjau Foto Pimpinan"></span>
+                                    <input type="url" id="pa-set-leader-photo" name="leader_photo_url" class="regular-text" value="<?php echo esc_attr($leaderPhotoNow); ?>" placeholder="Kosongkan untuk foto dummy pimpinan">
+                                    <button type="button" class="button pa-media-pick-btn" data-target="pa-set-leader-photo" data-preview="pa-set-leader-preview">Pilih / Upload Foto</button>
+                                </div>
+                                <input type="text" name="leader_motto" class="regular-text" value="<?php echo esc_attr($cfg['leader_motto'] ?? 'Melayani dengan Integritas, Profesionalitas, dan Transparansi'); ?>" placeholder="Motto singkat pimpinan (opsional)">
+                            </td></tr>
                             <tr><th>Sambutan Pimpinan</th><td><textarea name="leader_welcome" rows="3" class="large-text"><?php echo esc_textarea($cfg['leader_welcome']); ?></textarea></td></tr>
                             <tr><th>URL SIPP</th><td><input type="url" name="sipp_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_url']); ?>"></td></tr>
                             <tr><th>URL Slide Jadwal Sidang SIPP <?php echo pa_sinova_info_tip('Tempel tautan Slide_sidang SIPP satker (HTTPS) untuk tampil sebagai panel jadwal sidang live di Beranda & izin frame-src otomatis.', 'Info slide SIPP'); ?></th><td><input type="url" name="sipp_slide_url" class="regular-text" value="<?php echo esc_attr($cfg['sipp_slide_url'] ?? ''); ?>" placeholder="https://sipp.pa-sumedang.go.id/Slide_sidang"></td></tr>
@@ -5397,6 +5609,16 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>Subteks Footer <?php echo pa_sinova_info_tip('Opsional: ditampilkan setelah tanda titik tengah, misal Portal Keterbukaan Informasi Publik.', 'Info subteks footer'); ?></th><td><input type="text" name="footer_credit_suffix" class="regular-text" value="<?php echo esc_attr($cfg['footer_credit_suffix'] ?? 'Portal Keterbukaan Informasi Publik'); ?>"></td></tr>
                             <tr><th>Teks Sorot Versi <?php echo pa_sinova_info_tip('Muncul saat bagian versi di footer disorot/fokus. Simbol ♥ atau {love} otomatis diganti ikon hati merah.', 'Info sorot versi'); ?></th><td><input type="text" name="footer_hover_text" class="regular-text" value="<?php echo esc_attr($cfg['footer_hover_text'] ?? 'Developed with ♥ by PA Devlpr Community'); ?>"></td></tr>
                             <tr><th>URL Tautan Versi</th><td><input type="url" name="footer_credit_url" class="regular-text" value="<?php echo esc_attr($cfg['footer_credit_url'] ?? ''); ?>" placeholder="https://github.com/kang-devlp/pa-wordpress-sinova-starter"></td></tr>
+
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Media Sosial Resmi &amp; Peta Kantor (Footer)</th></tr>
+                            <tr><th>Tautan Medsos &amp; Maps <?php echo pa_sinova_info_tip('Tampil otomatis sebagai ikon vektor ringan di Footer kolom 1 (tanpa skrip pelacak eksternal). Kosongkan yang belum dimiliki.', 'Info Medsos & Maps'); ?></th><td>
+                                <input type="url" name="social_instagram" class="regular-text" value="<?php echo esc_attr($cfg['social_instagram'] ?? ''); ?>" placeholder="URL Instagram (https://instagram.com/pa_...)" style="margin-bottom:4px;"><br>
+                                <input type="url" name="social_youtube" class="regular-text" value="<?php echo esc_attr($cfg['social_youtube'] ?? ''); ?>" placeholder="URL YouTube Resmi" style="margin-bottom:4px;"><br>
+                                <input type="url" name="social_facebook" class="regular-text" value="<?php echo esc_attr($cfg['social_facebook'] ?? ''); ?>" placeholder="URL Facebook Resmi" style="margin-bottom:4px;"><br>
+                                <input type="url" name="social_tiktok" class="regular-text" value="<?php echo esc_attr($cfg['social_tiktok'] ?? ''); ?>" placeholder="URL TikTok Resmi" style="margin-bottom:4px;"><br>
+                                <input type="url" name="social_whatsapp" class="regular-text" value="<?php echo esc_attr($cfg['social_whatsapp'] ?? ''); ?>" placeholder="URL WhatsApp PTSP (https://wa.me/628...)" style="margin-bottom:4px;"><br>
+                                <input type="url" name="maps_url" class="regular-text" value="<?php echo esc_attr($cfg['maps_url'] ?? ''); ?>" placeholder="URL Google Maps Lokasi Kantor (https://maps.app.goo.gl/...)">
+                            </td></tr>
 
                             <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Ekosistem, Informasi Serta-Merta &amp; Keamanan</th></tr>
                             <tr><th>URL SIWAS &amp; SP4N-LAPOR!</th><td>
@@ -5744,7 +5966,9 @@ function pa_sinova_render_admin_page(): void {
             [
                 { inp: 'pa-set-logo-url', prv: 'pa-set-logo-preview' },
                 { inp: 'pa-set-favicon-url', prv: 'pa-set-favicon-preview' },
-                { inp: 'pa-set-aco-logo', prv: 'pa-set-aco-preview' }
+                { inp: 'pa-set-aco-logo', prv: 'pa-set-aco-preview' },
+                { inp: 'pa-set-hero-photo', prv: 'pa-set-hero-preview' },
+                { inp: 'pa-set-leader-photo', prv: 'pa-set-leader-preview' }
             ].forEach(function(pair){
                 var el = document.getElementById(pair.inp);
                 var pv = document.getElementById(pair.prv);

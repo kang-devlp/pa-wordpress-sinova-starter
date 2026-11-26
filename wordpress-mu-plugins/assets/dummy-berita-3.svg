@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img" aria-label="Ilustrasi Berita Zona Integritas WBK WBBM">
+  <defs>
+    <linearGradient id="b3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#022c22"/>
+      <stop offset="50%" stop-color="#044e3a"/>
+      <stop offset="100%" stop-color="#056e4f"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" fill="url(#b3)"/>
+  <circle cx="400" cy="218" r="158" fill="#E5C158" opacity="0.1"/>
+  <path d="M400 84 L518 128 V226 C518 308 466 364 400 392 C334 364 282 308 282 226 V128 Z" fill="#012119" stroke="#C9A227" stroke-width="5"/>
+  <path d="M400 108 L496 144 V224 C496 290 454 338 400 364 C346 338 304 290 304 224 V144 Z" fill="#056e4f"/>
+  <path d="M362 228 L390 256 L444 194" fill="none" stroke="#E5C158" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="296" y="138" width="208" height="28" rx="14" fill="#C9A227"/>
+  <text x="400" y="157" text-anchor="middle" fill="#022c22" font-family="system-ui,sans-serif" font-size="13" font-weight="900" letter-spacing="1">ZONA INTEGRITAS</text>
+  <text x="400" y="446" text-anchor="middle" fill="#d1fae5" font-family="system-ui,sans-serif" font-size="15" font-weight="700">Kabar Satuan Kerja · Unggah Foto Kegiatan di Editor Berita WordPress</text>
+</svg>

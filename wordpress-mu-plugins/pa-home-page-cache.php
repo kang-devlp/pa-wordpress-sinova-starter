@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - Safe Page HTML Cache (Early-Serve + Stale-While-Revalidate)
  * Description: Menyajikan cache HTML beranda & halaman publik statis sejak fase mu-plugins dengan TTL segar 30 menit, Stale-While-Revalidate 24 jam, dan shortcode [waktu_render] real-time.
- * Version: 2.4.1-starter
+ * Version: 2.5.0-starter
  */
 
 defined('ABSPATH') || exit;

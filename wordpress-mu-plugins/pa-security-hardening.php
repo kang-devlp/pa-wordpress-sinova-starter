@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - Security Hardening, Anti-Judol WAF, Rate Limiter, TOTP MFA & Hidden Login
  * Description: Pengamanan berlapis portal Pengadilan Agama: Brute-Force Rate Limiter, TOTP MFA RFC 6238 bawaan, idle timeout 60 menit, kebijakan password kuat, Hidden Login URL 404, OWASP Headers, proteksi folder .htaccess, Anti-Judol WAF, & CAPTCHA login.
- * Version: 2.4.1-starter
+ * Version: 2.5.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -205,34 +205,53 @@ add_action('wp_loaded', static function () {
         exit;
     }
 
+    $assetName = '';
     if ($path === 'pa-aco-cctv.gif' || !empty($_GET['pa_aco_asset'])) {
+        $assetName = 'cctv-aco.gif';
+    } elseif (!empty($_GET['pa_sinova_asset'])) {
+        $reqAsset = basename(sanitize_file_name((string) wp_unslash($_GET['pa_sinova_asset'])));
+        $allowedAssets = array(
+            'cctv-aco.gif',
+            'dummy-gedung-pa.svg',
+            'dummy-pimpinan.svg',
+            'dummy-berita-1.svg',
+            'dummy-berita-2.svg',
+            'dummy-berita-3.svg',
+        );
+        if (in_array($reqAsset, $allowedAssets, true)) {
+            $assetName = $reqAsset;
+        }
+    }
+
+    if ($assetName !== '') {
         $candidates = array();
         if (defined('PA_SINOVA_ASSETS_DIR')) {
-            $candidates[] = rtrim((string) PA_SINOVA_ASSETS_DIR, '/\\') . '/cctv-aco.gif';
+            $candidates[] = rtrim((string) PA_SINOVA_ASSETS_DIR, '/\\') . '/' . $assetName;
         }
-        $candidates[] = __DIR__ . '/assets/cctv-aco.gif';
+        $candidates[] = __DIR__ . '/assets/' . $assetName;
         if (defined('WPMU_PLUGIN_DIR')) {
-            $candidates[] = rtrim((string) WPMU_PLUGIN_DIR, '/\\') . '/assets/cctv-aco.gif';
+            $candidates[] = rtrim((string) WPMU_PLUGIN_DIR, '/\\') . '/assets/' . $assetName;
         }
         if (defined('WP_PLUGIN_DIR')) {
-            $candidates[] = rtrim((string) WP_PLUGIN_DIR, '/\\') . '/pa-sinova-starter/wordpress-mu-plugins/assets/cctv-aco.gif';
+            $candidates[] = rtrim((string) WP_PLUGIN_DIR, '/\\') . '/pa-sinova-starter/wordpress-mu-plugins/assets/' . $assetName;
         }
-        $gifPath = '';
+        $assetPath = '';
         foreach ($candidates as $cand) {
             if (is_file($cand) && is_readable($cand)) {
-                $gifPath = $cand;
+                $assetPath = $cand;
                 break;
             }
         }
-        if ($gifPath !== '') {
-            $mtime = (int) (@filemtime($gifPath) ?: time());
-            $size  = (int) (@filesize($gifPath) ?: 0);
-            $etag  = '"' . md5($mtime . ':' . $size) . '"';
+        if ($assetPath !== '') {
+            $mtime = (int) (@filemtime($assetPath) ?: time());
+            $size  = (int) (@filesize($assetPath) ?: 0);
+            $etag  = '"' . md5($mtime . ':' . $size . ':' . $assetName) . '"';
+            $isSvg = (strtolower((string) pathinfo($assetName, PATHINFO_EXTENSION)) === 'svg');
             if (!headers_sent()) {
                 if (function_exists('pa_starter_emit_security_headers')) {
                     pa_starter_emit_security_headers(false);
                 }
-                header('Content-Type: image/gif');
+                header('Content-Type: ' . ($isSvg ? 'image/svg+xml; charset=UTF-8' : 'image/gif'));
                 header('Cache-Control: public, max-age=604800');
                 header('ETag: ' . $etag);
             }
@@ -247,7 +266,7 @@ add_action('wp_loaded', static function () {
                     header('Content-Length: ' . $size);
                 }
             }
-            @readfile($gifPath);
+            @readfile($assetPath);
             exit;
         }
     }

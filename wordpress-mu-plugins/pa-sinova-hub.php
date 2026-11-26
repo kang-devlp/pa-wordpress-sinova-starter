@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PA SINOVA Starter - Document Hub & HMAC Sync API
  * Description: Penyimpanan dokumen terstruktur 23 modul SINOVA (Rumah s.d. 2027), Shortcode SSR Hijau Gelap–Gold SK 2722/2026, serta REST API HMAC-SHA256 untuk sinkronisasi dengan portal internal (Portal Internal Laravel).
- * Version: 2.4.1-starter
+ * Version: 2.5.0-starter
  */
 
 defined('ABSPATH') || exit;
@@ -521,6 +521,88 @@ add_action('rest_api_init', static function () {
             return new WP_REST_Response(array(
                 'ok'        => true,
                 'date'      => $targetDate,
+                'inserted'  => $inserted,
+                'pushed_at' => $pushedAt,
+            ), 200);
+        },
+    ));
+
+    // Endpoint Push Putusan Pilihan / Salinan dari SIPP lokal (HMAC-SHA256)
+    register_rest_route('pa-sinova/v1', '/sipp/push-decisions', array(
+        'methods'             => 'POST',
+        'permission_callback' => 'pa_sinova_verify_hmac',
+        'callback'            => static function (WP_REST_Request $req) {
+            if (!function_exists('pa_portal_records_ensure_table') || !function_exists('pa_portal_records_table')) {
+                return new WP_Error('sinova_records_unavailable', 'Modul data operasional belum aktif.', array('status' => 503));
+            }
+            pa_portal_records_ensure_table();
+            $body = json_decode((string) $req->get_body(), true);
+            if (!is_array($body)) {
+                return new WP_Error('sinova_bad_json', 'Body JSON tidak valid.', array('status' => 400));
+            }
+            $replaceAll = !empty($body['replace_all']);
+            $rawItems   = isset($body['items']) && is_array($body['items']) ? array_slice($body['items'], 0, 100) : array();
+
+            global $wpdb;
+            $rTable = pa_portal_records_table();
+            if ($replaceAll) {
+                $wpdb->query("DELETE FROM `{$rTable}` WHERE record_type = 'putusan'");
+            }
+            $now      = current_time('mysql');
+            $inserted = 0;
+            foreach ($rawItems as $idx => $it) {
+                if (!is_array($it)) {
+                    continue;
+                }
+                $nomor = sanitize_text_field((string) ($it['nomor'] ?? ($it['title'] ?? '')));
+                if ($nomor === '') {
+                    continue;
+                }
+                $amar   = sanitize_text_field((string) ($it['amar'] ?? ($it['subtitle'] ?? 'Putusan Terpublikasi')));
+                $jenis  = sanitize_text_field((string) ($it['jenis'] ?? ($it['category'] ?? 'Perkara Perdata Agama')));
+                $dtRaw  = sanitize_text_field((string) ($it['tanggal'] ?? ($it['date'] ?? wp_date('Y-m-d'))));
+                $dt     = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dtRaw) ? $dtRaw : wp_date('Y-m-d');
+                $docUrl = esc_url_raw((string) ($it['doc_url'] ?? ($it['url'] ?? '')), array('http', 'https'));
+                $majelis = sanitize_text_field((string) ($it['majelis'] ?? ''));
+                $statusH = sanitize_text_field((string) ($it['status'] ?? 'Berkekuatan Hukum Tetap'));
+
+                $existingId = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM `{$rTable}` WHERE record_type = 'putusan' AND title = %s LIMIT 1",
+                    $nomor
+                ));
+                $rowPayload = array(
+                    'record_type' => 'putusan',
+                    'title'       => $nomor,
+                    'subtitle'    => $amar,
+                    'category'    => $jenis,
+                    'event_date'  => $dt,
+                    'meta_json'   => wp_json_encode(array(
+                        'doc_url'      => $docUrl,
+                        'majelis'      => $majelis,
+                        'status_hukum' => $statusH,
+                        'source'       => 'sipp_push',
+                    )) ?: '{}',
+                    'sort_order'  => $idx + 1,
+                    'status'      => 'published',
+                    'updated_at'  => $now,
+                );
+                if ($existingId > 0) {
+                    $wpdb->update($rTable, $rowPayload, array('id' => $existingId));
+                    $inserted++;
+                } elseif ($wpdb->insert($rTable, $rowPayload)) {
+                    $inserted++;
+                }
+            }
+            $pushedAt = wp_date('d-m-Y H:i') . ' WIB';
+            update_option('pa_sipp_last_decision_push_at', $pushedAt, false);
+            if (function_exists('pa_sinova_purge_html_cache_files')) {
+                pa_sinova_purge_html_cache_files();
+            } elseif (function_exists('pa_home_page_cache_mark_stale')) {
+                pa_home_page_cache_mark_stale();
+            }
+
+            return new WP_REST_Response(array(
+                'ok'        => true,
                 'inserted'  => $inserted,
                 'pushed_at' => $pushedAt,
             ), 200);
