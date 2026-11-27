@@ -4,7 +4,7 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 
 - **Tanpa Elementor & tanpa plugin berbayar** — ringan, cepat, dan ramah operator non-IT.
 - **Editor Grid Beranda 12 Kolom (*Drag & Resize*)** — seret kotak, tarik sudut atur lebar (`2–12` kolom), edit isi langsung lewat popup modal (Slider Foto, Jadwal Sidang & Live SIPP, Statistik Perkara, **Direktori Putusan MA RI per Satker via RSS**, Pengumuman, Berita, Galeri Video, Ucapan & Belasungkawa, hingga Konten Bebas/Sematan).
-- **Auto-Sync Jadwal Sidang SIPP Web (`list_jadwal_sidang`)** — tarik otomatis berkala setiap 30 menit lewat WP-Cron + tombol **Sinkronkan dari SIPP Web** (cukup isi URL SIPP di *Identitas & Seeder*), mendukung Push API HMAC & *fallback* input manual opsional.
+- **Auto-Sync Jadwal Sidang SIPP Web (`list_jadwal_sidang`) & Sinkronisasi Pegawai SIMTEPA/SIKEP** — jadwal sidang ditarik otomatis tiap 30 menit lewat WP-Cron (+ Push API HMAC & *fallback* manual), serta direktori **Profil Pejabat & Pegawai** elegan yang mendukung sinkronisasi **SIMTEPA/SIKEP** (URL API/JSON + WP-Cron harian, Impor CSV ekspor SIMTEPA, Push API HMAC) maupun input manual + pilih foto Media Library.
 - **Update 1-Klik + Rollback + Notifikasi WP Admin** — perbarui langsung dari GitHub di WP Admin dengan cadangan otomatis (*Batalkan Pembaruan Terakhir*) dan tombol **Bersihkan Cache** 1-klik.
 - 👉 **Unduh Plugin Siap Pakai (v2.5.0):** **[Download `pa-sinova-starter.zip`](https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip)**
 
@@ -69,9 +69,9 @@ Paket *starter* **gratis & open source** (Lisensi MIT) untuk membangun dan menat
 |---|---|
 | ![Jadwal Sidang & SIPP](docs/screenshots/admin-jadwal-sidang.png) | ![Keamanan & Update](docs/screenshots/admin-keamanan-login.png) |
 
-| Migrasi & Adopsi Situs Lama (Non-Destruktif) | |
+| Direktori Profil Pejabat & Pegawai + SIMTEPA (v2.5.0) | Migrasi & Adopsi Situs Lama (Non-Destruktif) |
 |---|---|
-| ![Migrasi & Adopsi Situs Lama](docs/screenshots/admin-migrasi-adopsi.png) | |
+| ![Profil Pejabat & Pegawai](docs/screenshots/profil-pegawai.png) | ![Migrasi & Adopsi Situs Lama](docs/screenshots/admin-migrasi-adopsi.png) |
 
 ---
 

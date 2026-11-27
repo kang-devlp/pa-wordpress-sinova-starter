@@ -2187,21 +2187,41 @@ html[data-pa-theme="dark"] .pa-ticker-link { color: #E5C158 !important; }
 .pa-ucapan-card p { margin: 0; font-size: 12.5px; color: #475569; line-height: 1.45; }
 .pa-ucapan-card small { font-size: 11.5px; color: #64748b; font-weight: 600; }
 .pa-custom-body { font-size: 13.5px; line-height: 1.6; color: #334155; }
-.pa-peg-detail-btn { margin-top: 6px; padding: 4px 11px; border-radius: 999px; border: 1px solid #056e4f; background: #ecfdf5; color: #043927; font-size: 11.5px; font-weight: 700; cursor: pointer; }
-.pa-peg-detail-btn:hover { background: #056e4f; color: #fff; }
-dialog.pa-peg-dlg { border: 1px solid #cbd5e1; border-top: 4px solid var(--pa-gold, #C9A227); border-radius: 16px; padding: 0; width: min(520px, 94vw); max-height: 86vh; box-shadow: 0 24px 60px rgba(2, 44, 34, 0.35); background: #fff; color: #0f172a; }
+.pa-peg-detail-btn {
+    inline-size: 100%;
+    padding: 9px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(5, 110, 79, 0.28);
+    background: #f3faf6;
+    color: #043927;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.pa-peg-detail-btn:hover,
+.pa-peg-detail-btn:focus-visible { background: #056e4f; color: #ffffff; border-color: #056e4f; }
+dialog.pa-peg-dlg { border: 1px solid #cbd5e1; border-block-start: 4px solid var(--pa-gold, #C9A227); border-radius: 18px; padding: 0; inline-size: min(540px, 94vw); max-block-size: 86dvh; box-shadow: 0 24px 64px rgba(2, 44, 34, 0.34); background: #fff; color: #0f172a; }
 dialog.pa-peg-dlg[open] { display: flex; flex-direction: column; }
 dialog.pa-peg-dlg:modal { overscroll-behavior: contain; }
-dialog.pa-peg-dlg::backdrop { background: rgba(2, 44, 34, 0.56); backdrop-filter: blur(2px); overflow: hidden; overscroll-behavior: contain; }
-.pa-peg-dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: #043927; color: #fff; }
-.pa-peg-dlg-head h1 { margin: 0 !important; font-size: 16px !important; font-weight: 800 !important; color: #fff !important; border: 0 !important; padding: 0 !important; }
-.pa-peg-dlg-close { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.12); color: #fff; cursor: pointer; font-weight: 800; }
-.pa-peg-dlg-body { padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; }
-.pa-peg-dlg-row { display: flex; align-items: center; gap: 14px; }
-.pa-peg-dlg-avatar { width: 68px; height: 68px; border-radius: 14px; object-fit: cover; background: #056e4f; color: #E5C158; font-weight: 900; font-size: 22px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.pa-peg-dlg-kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+dialog.pa-peg-dlg::backdrop { background: rgba(2, 44, 34, 0.56); backdrop-filter: blur(3px); overflow: hidden; overscroll-behavior: contain; }
+.pa-peg-dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, #022c22, #056e4f); color: #fff; }
+.pa-peg-dlg-head h1 { margin: 0 !important; font-size: 16.5px !important; font-weight: 800 !important; color: #fff !important; border: 0 !important; padding: 0 !important; line-height: 1.35 !important; }
+.pa-peg-dlg-close { inline-size: 32px; block-size: 32px; border-radius: 9px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.12); color: #fff; cursor: pointer; font-weight: 800; flex-shrink: 0; }
+.pa-peg-dlg-body { padding: 20px; overflow-y: auto; scrollbar-gutter: stable; display: flex; flex-direction: column; gap: 14px; font-size: 13.5px; }
+.pa-peg-dlg-row { display: flex; align-items: center; gap: 16px; }
+.pa-peg-dlg-avatar { inline-size: 74px; block-size: 74px; aspect-ratio: 1 / 1; border-radius: 16px; object-fit: cover; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background: linear-gradient(135deg, #022c22, #056e4f); color: #E5C158; font-weight: 900; font-size: 24px; border: 2px solid rgba(201, 162, 39, 0.45); box-shadow: 0 6px 16px rgba(2, 44, 34, 0.16); }
+.pa-peg-dlg-kv { display: grid; grid-template-columns: minmax(115px, 140px) minmax(0, 1fr); gap: 8px 14px; font-size: 13px; border-block-start: 1px solid #e2e8f0; padding-block-start: 14px; margin: 0; }
 .pa-peg-dlg-kv dt { font-weight: 700; color: #475569; }
-.pa-peg-dlg-kv dd { margin: 0; color: #0f172a; }
+.pa-peg-dlg-kv dd { margin: 0; color: #0f172a; font-variant-numeric: tabular-nums; overflow-wrap: break-word; }
+html[data-pa-theme="dark"] .pa-peg-detail-btn { background: rgba(16, 185, 129, 0.12); border-color: rgba(110, 231, 183, 0.3); color: #a7f3d0; }
+html[data-pa-theme="dark"] .pa-peg-detail-btn:hover,
+html[data-pa-theme="dark"] .pa-peg-detail-btn:focus-visible { background: #056e4f; color: #ffffff; border-color: #10b981; }
+html[data-pa-theme="dark"] .pa-peg-dlg-kv { border-block-start-color: #2c4637; }
 html[data-pa-theme="dark"] .pa-grid-panel,
 html[data-pa-theme="dark"] dialog.pa-peg-dlg { background: #14241c; border-color: #355241; color: #e6f4ee; }
 html[data-pa-theme="dark"] .pa-gp-head { border-color: #2c4637; }
@@ -3673,42 +3693,210 @@ html[data-pa-theme="dark"] .pa-cmdk-foot kbd { background: #182a20; border-color
     cursor: pointer;
 }
 .pa-ops-tab.is-active, .pa-ops-tab:hover { background: #056e4f; color: #ffffff; border-color: #056e4f; }
-.pa-pegawai-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 14px; }
-.pa-pegawai-card {
-    background: var(--pa-surface, #ffffff);
-    border: 1px solid var(--pa-border, #e2e8f0);
-    border-top: 3px solid #C9A227;
-    border-radius: 14px;
-    padding: 14px;
+.pa-peg-toolbar {
     display: flex;
-    gap: 12px;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 16px;
+    margin-block-end: 18px;
+}
+.pa-peg-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    flex-wrap: balance;
+    gap: 8px;
+    margin: 0 !important;
+}
+.pa-peg-tabs .pa-ops-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    font-size: 13px;
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.pa-peg-tab-cnt {
+    font-size: 11px;
+    font-weight: 800;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(5, 110, 79, 0.1);
+    color: inherit;
+    font-variant-numeric: tabular-nums;
+}
+.pa-peg-tabs .pa-ops-tab.is-active .pa-peg-tab-cnt,
+.pa-peg-tabs .pa-ops-tab:hover .pa-peg-tab-cnt {
+    background: rgba(255, 255, 255, 0.22);
+}
+.pa-peg-tools-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    flex: 1 1 240px;
+    justify-content: flex-end;
+}
+.pa-peg-search {
+    min-inline-size: 220px;
+    max-inline-size: 320px;
+    inline-size: 100%;
+    padding: 8px 13px;
+    font-size: 13px;
+}
+.pa-pegawai-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 18px;
+}
+.pa-pegawai-card {
+    container: pegcard / inline-size;
+    background: var(--pa-surface, #ffffff);
+    border: 1px solid var(--pa-border, #dce6df);
+    border-block-start: 3px solid var(--pa-gold, #C9A227);
+    border-radius: 16px;
+    padding: 18px;
+    grid-row: span 3;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    grid-template-rows: subgrid;
+    row-gap: 14px;
+    box-shadow: 0 4px 16px rgba(2, 44, 34, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     position: relative;
 }
+.pa-pegawai-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(2, 44, 34, 0.11);
+    border-color: rgba(5, 110, 79, 0.35);
+}
 .pa-pegawai-card.is-hidden { display: none; }
+.pa-peg-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+}
 .pa-pegawai-avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
+    inline-size: 64px;
+    block-size: 64px;
+    border-radius: 16px;
     background: linear-gradient(135deg, #022c22, #056e4f);
     color: #E5C158;
     font-weight: 900;
+    font-size: 20px;
+    letter-spacing: 0.03em;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: clip;
+    border: 2px solid rgba(201, 162, 39, 0.42);
+    box-shadow: 0 6px 14px rgba(2, 44, 34, 0.14);
 }
-.pa-pegawai-info { flex: 1 1 0%; min-width: 0; overflow-wrap: anywhere; }
-.pa-pegawai-cat { font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: #b45309; letter-spacing: 0.04em; }
-.pa-pegawai-info h3 { margin: 3px 0 4px; font-size: 14.5px; line-height: 1.3; }
-.pa-pegawai-role { margin: 0; font-size: 12.5px; color: var(--pa-muted, #475569); }
-.pa-pegawai-hover-meta {
-    margin-top: 6px;
-    font-size: 11.5px;
+.pa-pegawai-avatar img {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    object-position: center top;
+}
+.pa-pegawai-info {
+    min-inline-size: 0;
+}
+.pa-pegawai-cat {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: #fef3c7;
+    color: #92400e;
+    margin-block-end: 6px;
+}
+.pa-pegawai-cat.is-grp-hakim { background: #ecfdf5; color: #065f46; }
+.pa-pegawai-cat.is-grp-kepaniteraan { background: #e0f2fe; color: #075985; }
+.pa-pegawai-cat.is-grp-kesekretariatan { background: #f1f5f9; color: #334155; }
+.pa-pegawai-cat.is-grp-ppnpn { background: #f3e8ff; color: #6b21a8; }
+.pa-pegawai-info h3 {
+    margin: 0 0 4px !important;
+    font-size: 15.5px !important;
+    font-weight: 800 !important;
+    line-height: 1.35 !important;
+    color: var(--pa-ink, #0f172a) !important;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+.pa-pegawai-role {
+    margin: 0 !important;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.42;
+    color: #056e4f;
+    overflow-wrap: break-word;
+}
+.pa-peg-meta {
+    margin: 0;
+    padding: 12px 0 0;
+    border-block-start: 1px dashed var(--pa-border, #e2e8f0);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-size: 12.5px;
+}
+.pa-peg-meta-row {
+    display: grid;
+    grid-template-columns: 98px minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+}
+.pa-peg-meta-row dt {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
     color: var(--pa-muted, #64748b);
-    opacity: 0.85;
 }
-.pa-pegawai-hover-meta small { display: block; line-height: 1.45; }
+.pa-peg-meta-row dd {
+    margin: 0;
+    color: var(--pa-ink, #1e293b);
+    font-weight: 500;
+    line-height: 1.42;
+    overflow-wrap: break-word;
+}
+.pa-peg-nip {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}
+.pa-peg-foot {
+    align-self: end;
+    padding-block-start: 4px;
+}
+.pa-peg-empty {
+    margin: 18px 0 0;
+    padding: 20px;
+    text-align: center;
+    border-radius: 12px;
+    background: var(--pa-surface, #f8fafc);
+    border: 1px dashed var(--pa-border, #cbd5e1);
+    color: var(--pa-muted, #475569);
+    font-size: 13.5px;
+}
+@container pegcard (inline-size < 275px) {
+    .pa-peg-head {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        text-align: center;
+    }
+    .pa-peg-meta-row {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+}
 .pa-ops-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
 .pa-ops-search {
     min-width: 240px;
@@ -3778,8 +3966,17 @@ html[data-pa-theme="dark"] .pa-ops-table td,
 html[data-pa-theme="dark"] .pa-table-scroll { border-color: #2c4637; }
 html[data-pa-theme="dark"] .pa-feed-title { color: #e6f4ee; }
 html[data-pa-theme="dark"] .pa-feed-date { background: #262010; border-color: #5c4818; color: #fde68a; }
-html[data-pa-theme="dark"] .pa-pegawai-role,
-html[data-pa-theme="dark"] .pa-pegawai-hover-meta,
+html[data-pa-theme="dark"] .pa-pegawai-info h3 { color: #f0fdf4 !important; }
+html[data-pa-theme="dark"] .pa-pegawai-role { color: #6ee7b7; }
+html[data-pa-theme="dark"] .pa-peg-meta { border-block-start-color: #2c4637; }
+html[data-pa-theme="dark"] .pa-peg-meta-row dt { color: #94a3b8; }
+html[data-pa-theme="dark"] .pa-peg-meta-row dd { color: #e2e8f0; }
+html[data-pa-theme="dark"] .pa-pegawai-cat { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+html[data-pa-theme="dark"] .pa-pegawai-cat.is-grp-hakim { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+html[data-pa-theme="dark"] .pa-pegawai-cat.is-grp-kepaniteraan { background: rgba(14, 165, 233, 0.2); color: #7dd3fc; }
+html[data-pa-theme="dark"] .pa-pegawai-cat.is-grp-kesekretariatan { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+html[data-pa-theme="dark"] .pa-pegawai-cat.is-grp-ppnpn { background: rgba(168, 85, 247, 0.22); color: #d8b4fe; }
+html[data-pa-theme="dark"] .pa-peg-empty { background: #14241c; border-color: #355241; color: #cbd5e1; }
 html[data-pa-theme="dark"] .pa-cmdk-item small,
 html[data-pa-theme="dark"] .pa-kpi-box span { color: #cbd5e1; }
 html[data-pa-theme="dark"] .pa-kpi-box strong,
@@ -4872,27 +5069,41 @@ add_action('wp_footer', static function () {
     }
     syncState();
 
-    // Filter Tab Pegawai (ARIA + Keyboard) & Tabel Data Operasional
+    // Filter Tab Pegawai (ARIA + Keyboard) + Pencarian Langsung & Tabel Data Operasional
     var pegBoard = document.getElementById('pa-pegawai-board');
     if(pegBoard){
         var pegTabs = Array.prototype.slice.call(pegBoard.querySelectorAll('.pa-ops-tab'));
         var pegStatus = document.getElementById('pa-pegawai-status');
+        var pegSearch = document.getElementById('pa-pegawai-search');
+        var pegEmpty = document.getElementById('pa-pegawai-empty');
+        var activePegGroup = 'semua';
+        var activePegLabel = 'Semua';
+
+        function applyPegFilter(){
+            var q = pegSearch ? (pegSearch.value || '').trim().toLowerCase() : '';
+            var shown = 0;
+            pegBoard.querySelectorAll('.pa-pegawai-card').forEach(function(c){
+                var g = (c.getAttribute('data-group') || '').toLowerCase();
+                var hay = (c.getAttribute('data-search') || c.textContent || '').toLowerCase();
+                var matchGrp = (activePegGroup === 'semua') || (g.indexOf(activePegGroup) !== -1);
+                var matchQ = !q || (hay.indexOf(q) !== -1);
+                var hide = !(matchGrp && matchQ);
+                c.classList.toggle('is-hidden', hide);
+                if(!hide) shown++;
+            });
+            if(pegEmpty){ pegEmpty.hidden = (shown > 0); }
+            if(pegStatus){ pegStatus.textContent = 'Menampilkan ' + shown + ' profil pegawai pada kelompok ' + activePegLabel; }
+        }
         function activatePegTab(tab){
-            var f = (tab.getAttribute('data-pegawai-filter') || 'Semua').toLowerCase();
+            activePegGroup = (tab.getAttribute('data-pegawai-filter') || 'Semua').toLowerCase();
+            activePegLabel = (tab.getAttribute('data-pegawai-filter') || 'Semua');
             pegTabs.forEach(function(t){
                 var on = t === tab;
                 t.classList.toggle('is-active', on);
                 t.setAttribute('aria-selected', on ? 'true' : 'false');
                 t.setAttribute('tabindex', on ? '0' : '-1');
             });
-            var shown = 0;
-            pegBoard.querySelectorAll('.pa-pegawai-card').forEach(function(c){
-                var g = (c.getAttribute('data-group') || '').toLowerCase();
-                var hide = f !== 'semua' && g.indexOf(f) === -1;
-                c.classList.toggle('is-hidden', hide);
-                if(!hide) shown++;
-            });
-            if(pegStatus){ pegStatus.textContent = 'Menampilkan ' + shown + ' data kelompok ' + (tab.textContent || ''); }
+            applyPegFilter();
         }
         pegTabs.forEach(function(tab, idx){
             tab.addEventListener('click', function(){ activatePegTab(tab); });
@@ -4909,6 +5120,9 @@ add_action('wp_footer', static function () {
                 }
             });
         });
+        if(pegSearch){
+            pegSearch.addEventListener('input', applyPegFilter);
+        }
     }
     document.querySelectorAll('.pa-ops-search[data-ops-table]').forEach(function(inp){
         inp.addEventListener('input', function(){

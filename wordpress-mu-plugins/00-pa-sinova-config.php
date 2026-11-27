@@ -26,6 +26,9 @@ function pa_sinova_get_settings(): array {
         'sipp_url'                 => 'https://sipp.pa-contoh.go.id/',
         'sipp_web_autosync'        => '1',
         'sipp_slide_url'           => '',
+        'simtepa_url'              => '',
+        'simtepa_token'            => '',
+        'simtepa_autosync'         => '1',
         'ecourt_url'               => 'https://ecourt.mahkamahagung.go.id/',
         'direktori_url'            => 'https://putusan3.mahkamahagung.go.id/',
         'dirput_rss_url'           => '',
@@ -947,10 +950,14 @@ function pa_sinova_wp_compliance_report(): array {
                         $sippPush    = ($recType === 'jadwal') ? (string) get_option('pa_sipp_last_push_at', '') : '';
                         $sippWebStat = ($recType === 'jadwal' && function_exists('pa_portal_get_sipp_web_sync_status')) ? pa_portal_get_sipp_web_sync_status() : array();
                         $sippWebOk   = (($sippWebStat['status'] ?? '') === 'ok' && !empty($sippWebStat['synced_at']));
+                        $simtepaStat = ($recType === 'pegawai' && function_exists('pa_portal_get_simtepa_sync_status')) ? pa_portal_get_simtepa_sync_status() : array();
+                        $simtepaOk   = (($simtepaStat['status'] ?? '') === 'ok' && !empty($simtepaStat['synced_at']));
                         if ($sippWebOk) {
                             $note = "Auto-Sync SIPP Web aktif ({$recCnt} entri · terakhir {$sippWebStat['synced_at']}).";
                         } elseif ($sippPush !== '') {
                             $note = "Dikirim otomatis dari SIPP ({$recCnt} entri · terakhir {$sippPush}).";
+                        } elseif ($simtepaOk) {
+                            $note = "Tersinkron SIMTEPA/SIKEP ({$recCnt} pegawai · terakhir {$simtepaStat['synced_at']}).";
                         } else {
                             $note = "Halaman & data terstruktur aktif ({$recCnt} entri terpublikasi).";
                         }
@@ -2932,6 +2939,9 @@ function pa_sinova_render_admin_page(): void {
                 'sipp_url'                 => esc_url_raw(wp_unslash((string) ($_POST['sipp_url'] ?? ''))),
                 'sipp_web_autosync'        => isset($_POST['sipp_web_autosync']) ? (!empty($_POST['sipp_web_autosync']) ? '1' : '0') : ((string) ($cur['sipp_web_autosync'] ?? '1')),
                 'sipp_slide_url'           => $sippSlideSave,
+                'simtepa_url'              => isset($_POST['simtepa_url']) ? esc_url_raw(wp_unslash((string) $_POST['simtepa_url'])) : ((string) ($cur['simtepa_url'] ?? '')),
+                'simtepa_token'            => (string) ($cur['simtepa_token'] ?? ''),
+                'simtepa_autosync'         => isset($_POST['simtepa_autosync']) ? (!empty($_POST['simtepa_autosync']) ? '1' : '0') : ((string) ($cur['simtepa_autosync'] ?? '1')),
                 'ecourt_url'               => esc_url_raw(wp_unslash((string) ($_POST['ecourt_url'] ?? ''))),
                 'direktori_url'            => esc_url_raw(wp_unslash((string) ($_POST['direktori_url'] ?? ''))),
                 'dirput_rss_url'           => $rssDirCheck['url'],
@@ -3191,6 +3201,61 @@ function pa_sinova_render_admin_page(): void {
             $notice = $enabled === '1'
                 ? 'Auto-Sync Jadwal Sidang SIPP Web via WP-Cron (tiap 30 menit) berhasil diaktifkan.'
                 : 'Auto-Sync Jadwal Sidang SIPP Web via WP-Cron dinonaktifkan.';
+        } elseif (($action === 'sync_simtepa' || $action === 'save_simtepa_settings') && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            $curCfg    = pa_sinova_get_settings();
+            $simUrl    = esc_url_raw(trim(wp_unslash((string) ($_POST['simtepa_url'] ?? ($curCfg['simtepa_url'] ?? '')))));
+            $simTokIn  = trim(sanitize_text_field(wp_unslash((string) ($_POST['simtepa_token'] ?? ''))));
+            $simTok    = !empty($_POST['clear_simtepa_token']) ? '' : ($simTokIn !== '' ? $simTokIn : (string) ($curCfg['simtepa_token'] ?? ''));
+            $simAuto   = !empty($_POST['simtepa_autosync']) ? '1' : '0';
+            $curCfg['simtepa_url']      = $simUrl;
+            $curCfg['simtepa_token']    = $simTok;
+            $curCfg['simtepa_autosync'] = $simAuto;
+            update_option('pa_sinova_starter_settings', $curCfg, false);
+            if (function_exists('pa_portal_maybe_schedule_simtepa_sync')) {
+                pa_portal_maybe_schedule_simtepa_sync();
+            }
+            if ($action === 'sync_simtepa') {
+                if (function_exists('pa_portal_sync_simtepa_remote')) {
+                    $syncRes = pa_portal_sync_simtepa_remote(true);
+                    $notice  = (string) ($syncRes['message'] ?? 'Sinkronisasi SIMTEPA selesai.');
+                } else {
+                    $notice = 'Gagal: Modul sinkronisasi SIMTEPA belum dimuat.';
+                }
+            } else {
+                $notice = 'Pengaturan sinkronisasi SIMTEPA & jadwal WP-Cron harian berhasil disimpan.';
+            }
+        } elseif ($action === 'import_simtepa_csv' && in_array('data', $allowedTabs, true)) {
+            $activeTab = 'data';
+            if (empty($_FILES['simtepa_csv']['tmp_name']) || !is_uploaded_file((string) $_FILES['simtepa_csv']['tmp_name'])) {
+                $notice = 'Gagal: Pilih berkas CSV hasil ekspor SIMTEPA / SIKEP terlebih dahulu.';
+            } elseif ((int) ($_FILES['simtepa_csv']['size'] ?? 0) > 2097152) {
+                $notice = 'Gagal: Ukuran berkas CSV maksimal 2 MB.';
+            } else {
+                $origName = strtolower((string) ($_FILES['simtepa_csv']['name'] ?? ''));
+                if (substr($origName, -4) !== '.csv') {
+                    $notice = 'Gagal: Format berkas harus .csv (simpan ekspor Excel SIMTEPA sebagai CSV UTF-8).';
+                } elseif (function_exists('pa_portal_parse_simtepa_csv') && function_exists('pa_portal_upsert_simtepa_records')) {
+                    $rawCsv = (string) file_get_contents((string) $_FILES['simtepa_csv']['tmp_name']);
+                    $parsed = pa_portal_parse_simtepa_csv($rawCsv, 250);
+                    if (($parsed['status'] ?? '') === 'ok' && !empty($parsed['items'])) {
+                        $replaceOld = !empty($_POST['replace_old_simtepa']);
+                        $savedCnt   = pa_portal_upsert_simtepa_records($parsed['items'], 'simtepa_csv', $replaceOld);
+                        $nowLbl     = wp_date('d-m-Y H:i') . ' WIB';
+                        update_option('pa_simtepa_sync_status', array(
+                            'status'     => 'ok',
+                            'count'      => $savedCnt,
+                            'source_url' => 'Impor CSV SIMTEPA (' . sanitize_file_name($origName) . ')',
+                            'synced_at'  => $nowLbl,
+                            'timestamp'  => time(),
+                            'message'    => "Berhasil mengimpor {$savedCnt} profil pegawai dari berkas CSV SIMTEPA.",
+                        ), false);
+                        $notice = "Berhasil mengimpor {$savedCnt} profil pejabat & pegawai dari CSV SIMTEPA.";
+                    } else {
+                        $notice = 'Gagal: ' . (string) ($parsed['message'] ?? 'Berkas CSV tidak dapat diproses.');
+                    }
+                }
+            }
         } elseif ($action === 'delete_sample_records' && in_array('data', $allowedTabs, true)) {
             $activeTab = 'data';
             if (function_exists('pa_portal_delete_sample_records')) {
@@ -4492,11 +4557,30 @@ function pa_sinova_render_admin_page(): void {
             </div>
 
             <?php
-            $isJadwalSection = ($filterRecType === 'jadwal' || ($filterRecType === 'all' && $formRecType === 'jadwal' && !$isEditingRec));
+            $isJadwalSection  = ($filterRecType === 'jadwal' || ($filterRecType === 'all' && $formRecType === 'jadwal' && !$isEditingRec));
+            $isPegawaiSection = ($filterRecType === 'pegawai');
             $sippResolved    = function_exists('pa_portal_sipp_resolve_schedule_urls') ? pa_portal_sipp_resolve_schedule_urls() : array('valid' => false, 'primary_url' => '', 'reason' => '');
             $sippWebStatus   = function_exists('pa_portal_get_sipp_web_sync_status') ? pa_portal_get_sipp_web_sync_status() : array();
             $sippAutoOn      = (($cfg['sipp_web_autosync'] ?? '1') !== '0');
             $nextSippCron    = wp_next_scheduled('pa_sipp_web_cron_sync');
+            $simtepaStatus   = function_exists('pa_portal_get_simtepa_sync_status') ? pa_portal_get_simtepa_sync_status() : array();
+            $simtepaUrlNow   = trim((string) ($cfg['simtepa_url'] ?? ''));
+            $simtepaHasTok   = trim((string) ($cfg['simtepa_token'] ?? '')) !== '';
+            $simtepaAutoOn   = (($cfg['simtepa_autosync'] ?? '1') !== '0');
+            $nextSimCron     = wp_next_scheduled('pa_simtepa_cron_sync');
+            $simStCode       = (string) ($simtepaStatus['status'] ?? '');
+            $simBadgeBg      = '#f1f5f9';
+            $simBadgeClr     = '#334155';
+            $simBadgeTxt     = $simtepaUrlNow !== '' ? ($simtepaAutoOn ? 'WP-Cron Harian Aktif' : 'Manual Sync') : 'Siap Disinkronkan';
+            if ($simStCode === 'ok') {
+                $simBadgeBg  = '#ecfdf5';
+                $simBadgeClr = '#043927';
+                $simBadgeTxt = 'Sinkron: ' . (int) ($simtepaStatus['count'] ?? 0) . ' pegawai';
+            } elseif ($simStCode === 'auth_required' || $simStCode === 'blocked' || $simStCode === 'error') {
+                $simBadgeBg  = '#fffbeb';
+                $simBadgeClr = '#92400e';
+                $simBadgeTxt = 'Gunakan Token / Impor CSV';
+            }
             $sippStCode      = (string) ($sippWebStatus['status'] ?? '');
             $sippBadgeBg     = '#f1f5f9';
             $sippBadgeClr    = '#334155';
@@ -4521,6 +4605,93 @@ function pa_sinova_render_admin_page(): void {
             ?>
             <div class="pa-adm-cols-2">
                 <div style="display:flex;flex-direction:column;gap:16px;">
+                    <?php if ($isPegawaiSection) : ?>
+                    <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                            <h2 style="margin:0;color:#056e4f;">
+                                Sinkronisasi Pegawai (SIMTEPA / SIKEP)
+                                <span class="pa-adm-tip" tabindex="0" data-tip="Mendukung 3 jalur resmi: (1) Tarik otomatis dari endpoint JSON/API SIMTEPA/SIKEP satker (.go.id / badilag.net) via WP-Cron harian, (2) Impor cepat berkas CSV hasil ekspor SIMTEPA/SIKEP, dan (3) Push API HMAC POST /wp-json/pa-sinova/v1/simtepa/push-staff." aria-label="Info Sinkronisasi SIMTEPA">i</span>
+                            </h2>
+                            <span style="background:<?php echo esc_attr($simBadgeBg); ?>;color:<?php echo esc_attr($simBadgeClr); ?>;border:1px solid #cbd5e1;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;"><?php echo esc_html($simBadgeTxt); ?></span>
+                        </div>
+
+                        <?php if (!empty($simtepaStatus['synced_at'])) : ?>
+                            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12.5px;line-height:1.5;color:#334155;">
+                                <strong>Status Terakhir (<?php echo esc_html((string) $simtepaStatus['synced_at']); ?>):</strong>
+                                <?php echo esc_html((string) ($simtepaStatus['message'] ?? '')); ?>
+                                <?php if ($nextSimCron) : ?>
+                                    <div style="margin-top:3px;color:#64748b;">WP-Cron harian berikutnya: <?php echo esc_html(wp_date('d-m-Y H:i', (int) $nextSimCron)); ?> WIB</div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <form method="post" action="<?php echo esc_url($dataViewUrl); ?>" style="margin-bottom:14px;">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <table class="form-table" style="margin:0 0 10px;">
+                                <tr>
+                                    <th style="padding:6px 0;width:140px;">URL SIMTEPA / API</th>
+                                    <td style="padding:6px 0;"><input type="url" name="simtepa_url" class="regular-text" style="width:100%;" value="<?php echo esc_attr($simtepaUrlNow); ?>" placeholder="https://webservice.mahkamahagung.go.id/... atau URL JSON/HTML satker"></td>
+                                </tr>
+                                <tr>
+                                    <th style="padding:6px 0;">Token API (Opsional)</th>
+                                    <td style="padding:6px 0;">
+                                        <input type="password" name="simtepa_token" class="regular-text" style="width:100%;" value="" autocomplete="new-password" placeholder="<?php echo $simtepaHasTok ? 'Token tersimpan (kosongkan bila tetap)' : 'Opsional: isi Bearer/Token SIKEP/SIMTEPA bila diminta'; ?>">
+                                        <?php if ($simtepaHasTok) : ?>
+                                            <label style="display:inline-flex;align-items:center;gap:5px;margin-top:4px;font-size:11.5px;color:#64748b;"><input type="checkbox" name="clear_simtepa_token" value="1"> Hapus token tersimpan</label>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            </table>
+                            <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12.5px;font-weight:600;color:#0f172a;cursor:pointer;">
+                                <input type="checkbox" name="simtepa_autosync" value="1" <?php checked($simtepaAutoOn); ?>>
+                                Aktifkan Auto-Sync harian via WP-Cron (bila URL SIMTEPA diisi)
+                            </label>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                                <button type="submit" name="pa_sinova_action" value="sync_simtepa" class="button button-primary">Simpan &amp; Sinkronkan SIMTEPA</button>
+                                <button type="submit" name="pa_sinova_action" value="save_simtepa_settings" class="button button-secondary">Simpan Pengaturan</button>
+                            </div>
+                        </form>
+
+                        <div style="border-top:1px dashed #cbd5e1;padding-top:12px;">
+                            <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:4px;">Impor Cepat CSV dari Ekspor SIMTEPA / SIKEP</div>
+                            <p style="margin:0 0 9px;font-size:12px;color:#64748b;line-height:1.45;">Karena SIMTEPA memakai SSO Badilag, cara tercepat tanpa akses API adalah ekspor daftar pegawai dari SIMTEPA/Excel ke format <code>.csv</code> lalu unggah di sini (otomatis mengelompokkan Pimpinan, Hakim, Kepaniteraan, Kesekretariatan, &amp; PPNPN).</p>
+                            <form method="post" action="<?php echo esc_url($dataViewUrl); ?>" enctype="multipart/form-data">
+                                <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                                <input type="hidden" name="pa_sinova_action" value="import_simtepa_csv">
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+                                    <input type="file" name="simtepa_csv" accept=".csv,text/csv" required style="max-width:260px;">
+                                    <button type="submit" class="button button-secondary">Impor CSV SIMTEPA</button>
+                                    <button type="button" id="pa-dl-simtepa-tpl" class="button">Unduh Template CSV</button>
+                                </div>
+                                <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#475569;cursor:pointer;">
+                                    <input type="checkbox" name="replace_old_simtepa" value="1" checked>
+                                    Perbarui seluruh hasil impor CSV SIMTEPA sebelumnya (entri manual tetap aman)
+                                </label>
+                            </form>
+                            <script>
+                                (function(){
+                                    var btn = document.getElementById('pa-dl-simtepa-tpl');
+                                    if (!btn) return;
+                                    btn.addEventListener('click', function(){
+                                        var csv = '\uFEFFNama,Jabatan,Kelompok,NIP,Pangkat_Golongan,Pendidikan,TMT,Foto_URL,Riwayat_Pendidikan,Riwayat_Jabatan\n'
+                                            + '"Dr. H. Ahmad Sumedang, S.H., M.H.","Ketua Pengadilan Agama","Pimpinan","19700101 199503 1 001","Pembina Utama Muda (IV/c)","S3 Ilmu Hukum","01-04-2024","","S1 Syariah; S2 Ilmu Hukum; S3 Ilmu Hukum","Ketua PA (2024)"\n'
+                                            + '"Dra. Hj. Siti Rahmah, M.H.","Wakil Ketua Pengadilan Agama","Pimpinan","19720512 199803 2 002","Pembina Tk. I (IV/b)","S2 Hukum Islam","01-04-2024","","S1 Syariah; S2 Hukum Islam","Wakil Ketua PA (2024)"\n';
+                                        var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+                                        var url = URL.createObjectURL(blob);
+                                        var a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = 'template-pegawai-simtepa.csv';
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                        setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+                                    });
+                                })();
+                            </script>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <?php if ($isJadwalSection) : ?>
                     <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
@@ -4591,13 +4762,16 @@ function pa_sinova_render_admin_page(): void {
                     <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid <?php echo $isEditingRec ? '#056e4f' : '#C9A227'; ?>;border-radius:10px;padding:18px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
                             <h2 style="margin:0;color:#056e4f;">
-                                <?php echo $isEditingRec ? 'Edit Entri' : 'Tambah Entri'; ?>
-                                <span class="pa-adm-tip" tabindex="0" data-tip="Entri langsung tampil di halaman terkait dan blok Beranda 12 kolom. Untuk sinkronisasi SIPP otomatis gunakan Auto-Sync SIPP Web atau endpoint POST /wp-json/pa-sinova/v1/sipp/push-hearings (HMAC-SHA256)." aria-label="Info entri">i</span>
+                                <?php echo $isPegawaiSection ? ($isEditingRec ? 'Edit Profil Pegawai (Manual)' : 'Input Manual Pejabat & Pegawai') : ($isEditingRec ? 'Edit Entri' : 'Tambah Entri'); ?>
+                                <span class="pa-adm-tip" tabindex="0" data-tip="Entri langsung tampil di halaman terkait dan blok Beranda 12 kolom. Untuk sinkronisasi SIPP/SIMTEPA otomatis gunakan panel sinkronisasi di atas atau endpoint Push API HMAC-SHA256." aria-label="Info entri">i</span>
                             </h2>
                             <?php if ($isEditingRec) : ?>
                                 <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Edit #<?php echo esc_html((string) $editRec['id']); ?></span>
                             <?php endif; ?>
                         </div>
+                        <?php if ($isPegawaiSection && !$isEditingRec) : ?>
+                            <p style="margin:0 0 10px;font-size:12px;color:#64748b;">Tambahkan atau lengkapi foto, NIP, pangkat, dan riwayat pegawai secara manual kapan saja (tidak tertimpa oleh impor CSV/SIMTEPA).</p>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <form method="post" action="<?php echo esc_url($dataViewUrl); ?>">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
@@ -4615,11 +4789,25 @@ function pa_sinova_render_admin_page(): void {
                             </td></tr>
                             <tr><th id="pa-lbl-title">Judul / Nama</th><td><input type="text" name="rec_title" class="regular-text" required value="<?php echo esc_attr($formRecTitle); ?>"></td></tr>
                             <tr><th id="pa-lbl-sub">Subjudul / Jabatan</th><td><input type="text" name="rec_subtitle" class="regular-text" value="<?php echo esc_attr($formRecSub); ?>"></td></tr>
-                            <tr><th id="pa-lbl-cat">Kategori / Ruang</th><td><input type="text" name="rec_category" class="regular-text" value="<?php echo esc_attr($formRecCat); ?>"></td></tr>
+                            <tr><th id="pa-lbl-cat">Kategori / Ruang</th><td>
+                                <input type="text" name="rec_category" class="regular-text" list="pa-peg-groups-list" value="<?php echo esc_attr($formRecCat); ?>" placeholder="<?php echo $formRecType === 'pegawai' ? 'Pimpinan / Hakim / Kepaniteraan / Kesekretariatan / PPNPN' : ''; ?>">
+                                <datalist id="pa-peg-groups-list">
+                                    <option value="Pimpinan"></option>
+                                    <option value="Hakim"></option>
+                                    <option value="Kepaniteraan"></option>
+                                    <option value="Kesekretariatan"></option>
+                                    <option value="PPNPN"></option>
+                                </datalist>
+                            </td></tr>
                             <tr><th id="pa-lbl-m1">Meta 1</th><td><input type="text" name="rec_meta_1" class="regular-text" value="<?php echo esc_attr($formRecM1); ?>"></td></tr>
                             <tr><th id="pa-lbl-m2">Meta 2</th><td><input type="text" name="rec_meta_2" class="regular-text" value="<?php echo esc_attr($formRecM2); ?>"></td></tr>
                             <tr><th id="pa-lbl-m3">Meta 3</th><td><input type="text" name="rec_meta_3" class="regular-text" value="<?php echo esc_attr($formRecM3); ?>"></td></tr>
-                            <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>URL Foto Pegawai</th><td><input type="url" name="rec_meta_4" class="regular-text" value="<?php echo esc_attr($formRecM4); ?>" placeholder="https://.../foto.jpg"></td></tr>
+                            <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>Foto Pegawai</th><td>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <input type="url" id="pa-rec-peg-photo" name="rec_meta_4" class="regular-text" style="flex:1;min-width:180px;" value="<?php echo esc_attr($formRecM4); ?>" placeholder="Kosongkan untuk monogram inisial">
+                                    <button type="button" class="button pa-media-pick-btn" data-target="pa-rec-peg-photo">Pilih / Upload Foto</button>
+                                </div>
+                            </td></tr>
                             <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>TMT / Pangkat</th><td><input type="text" name="rec_meta_5" class="regular-text" value="<?php echo esc_attr($formRecM5); ?>" placeholder="01-04-2024"></td></tr>
                             <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>Riwayat Pendidikan</th><td><textarea name="rec_meta_6" rows="2" class="regular-text" placeholder="S1 Syariah (2005); S2 Ilmu Hukum (2012)"><?php echo esc_textarea($formRecM6); ?></textarea></td></tr>
                             <tr class="pa-peg-extra" <?php echo $formRecType !== 'pegawai' ? 'style="display:none;"' : ''; ?>><th>Riwayat Jabatan / Diklat</th><td><textarea name="rec_meta_7" rows="2" class="regular-text" placeholder="Hakim PA A (2018); Wakil Ketua PA B (2023)"><?php echo esc_textarea($formRecM7); ?></textarea></td></tr>
@@ -4717,6 +4905,17 @@ function pa_sinova_render_admin_page(): void {
                                             $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#e0f2fe;color:#0369a1;font-size:10.5px;font-weight:700;">SIPP Web</span>';
                                         } elseif ($srcKey === 'sipp_push') {
                                             $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#ecfdf5;color:#043927;font-size:10.5px;font-weight:700;">Push SIPP</span>';
+                                        } else {
+                                            $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:10.5px;font-weight:600;">Manual</span>';
+                                        }
+                                    } elseif (($rr['record_type'] ?? '') === 'pegawai') {
+                                        $srcKey = is_array($rrMeta) ? (string) ($rrMeta['source'] ?? '') : '';
+                                        if ($srcKey === 'simtepa') {
+                                            $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#ecfdf5;color:#043927;font-size:10.5px;font-weight:700;">SIMTEPA</span>';
+                                        } elseif ($srcKey === 'simtepa_csv') {
+                                            $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#e0f2fe;color:#0369a1;font-size:10.5px;font-weight:700;">CSV SIMTEPA</span>';
+                                        } elseif ($srcKey === 'simtepa_push') {
+                                            $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#ecfdf5;color:#043927;font-size:10.5px;font-weight:700;">Push SIMTEPA</span>';
                                         } else {
                                             $rrSrcTag = '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:10.5px;font-weight:600;">Manual</span>';
                                         }

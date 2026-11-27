@@ -1032,63 +1032,777 @@ function pa_portal_get_records(string $type, int $limit = 100): array {
     return is_array($rows) ? $rows : array();
 }
 
+// ============================================================================
+// 2A. SINKRONISASI PEJABAT & PEGAWAI (SIMTEPA / SIKEP: API/URL + CSV + PUSH)
+// ============================================================================
+
+function pa_portal_simtepa_infer_group(string $jabatan, string $rawGroup = ''): string {
+    $g = strtolower(trim($rawGroup));
+    if ($g !== '') {
+        if (strpos($g, 'pimpin') !== false || strpos($g, 'ketua') !== false) {
+            return 'Pimpinan';
+        }
+        if (strpos($g, 'hakim') !== false) {
+            return 'Hakim';
+        }
+        if (strpos($g, 'panit') !== false || strpos($g, 'jurusita') !== false) {
+            return 'Kepaniteraan';
+        }
+        if (strpos($g, 'sekret') !== false || strpos($g, 'kasub') !== false || strpos($g, 'kesek') !== false || strpos($g, 'umum') !== false || strpos($g, 'ptip') !== false || strpos($g, 'kepeg') !== false) {
+            return 'Kesekretariatan';
+        }
+        if (strpos($g, 'ppnpn') !== false || strpos($g, 'pppk') !== false || strpos($g, 'honorer') !== false || strpos($g, 'non') !== false) {
+            return 'PPNPN';
+        }
+    }
+    $j = strtolower(trim($jabatan));
+    if (preg_match('/^(?:ketua|wakil\s+ketua)\b/i', $j) || strpos($j, 'ketua pengadilan') !== false) {
+        return 'Pimpinan';
+    }
+    if (strpos($j, 'hakim') !== false) {
+        return 'Hakim';
+    }
+    if (preg_match('/panitera|jurusita|juru\s*sita|pp\b|kepaniteraan/i', $j)) {
+        return 'Kepaniteraan';
+    }
+    if (preg_match('/ppnpn|pramubakti|satpam|pengemudi|supir|tenaga\s+kontrak|cleaning|security/i', $j)) {
+        return 'PPNPN';
+    }
+    return 'Kesekretariatan';
+}
+
+function pa_portal_simtepa_normalize_row(array $raw, string $baseUrl = ''): ?array {
+    $lower = array();
+    foreach ($raw as $k => $v) {
+        $normKey = strtolower(preg_replace('/[^a-z0-9]+/i', '_', trim((string) $k)));
+        $normKey = trim((string) $normKey, '_');
+        if ($normKey !== '' && !isset($lower[$normKey])) {
+            $lower[$normKey] = $v;
+        }
+    }
+    $pick = static function (array $keys) use ($lower): string {
+        foreach ($keys as $k) {
+            if (!isset($lower[$k])) {
+                continue;
+            }
+            $val = $lower[$k];
+            if (is_array($val)) {
+                $flat = array();
+                foreach ($val as $sub) {
+                    if (is_scalar($sub) && trim((string) $sub) !== '') {
+                        $flat[] = trim((string) $sub);
+                    }
+                }
+                if (!empty($flat)) {
+                    return implode('; ', $flat);
+                }
+                continue;
+            }
+            $s = trim((string) $val);
+            if ($s !== '' && $s !== '-' && strtolower($s) !== 'null') {
+                return $s;
+            }
+        }
+        return '';
+    };
+
+    $name = $pick(array('nama_lengkap', 'namalengkap', 'nama_pegawai', 'nama', 'name', 'full_name'));
+    if ($name !== '') {
+        $gd = $pick(array('gelar_depan', 'gelardepan'));
+        $gb = $pick(array('gelar_belakang', 'gelarbelakang'));
+        if ($gd !== '' && stripos($name, $gd) !== 0) {
+            $name = rtrim($gd) . ' ' . $name;
+        }
+        if ($gb !== '' && stripos($name, $gb) === false) {
+            $name = rtrim($name, ', ') . ', ' . ltrim($gb, ', ');
+        }
+    }
+    $name = sanitize_text_field($name);
+    if ($name === '' || strlen($name) < 2) {
+        return null;
+    }
+
+    $jabatan = sanitize_text_field($pick(array('nama_jabatan_lengkap', 'namajabatanlengkap', 'nama_jabatan', 'jabatan', 'role', 'position', 'subtitle')));
+    $rawGrp  = $pick(array('kelompok', 'group', 'unit', 'unit_kerja', 'bagian', 'category', 'kategori'));
+    $group   = pa_portal_simtepa_infer_group($jabatan, $rawGrp);
+
+    $nip     = sanitize_text_field($pick(array('nip_baru', 'nipbaru', 'nip', 'nrp', 'nik')));
+    $gol     = sanitize_text_field($pick(array('pangkat_golongan', 'pangkatgolongan', 'pangkat_gol', 'gol_ruang', 'golongan', 'gol')));
+    $pangkat = sanitize_text_field($pick(array('pangkat', 'nama_pangkat')));
+    if ($pangkat !== '' && $gol !== '' && stripos($gol, $pangkat) === false) {
+        $gol = $pangkat . ' (' . $gol . ')';
+    } elseif ($gol === '' && $pangkat !== '') {
+        $gol = $pangkat;
+    }
+
+    $edu  = sanitize_text_field($pick(array('pendidikan_terakhir', 'pendidikanterakhir', 'pendidikan', 'tingkat_pendidikan', 'edu')));
+    $tmt  = sanitize_text_field($pick(array('tmt_jabatan', 'tmtjabatan', 'tmt_pangkat', 'tmt')));
+    $rEdu = sanitize_textarea_field($pick(array('riwayat_pendidikan', 'riwayatpendidikan')));
+    $rJab = sanitize_textarea_field($pick(array('riwayat_jabatan', 'riwayatjabatan', 'riwayat_diklat')));
+
+    $photoRaw = $pick(array('foto_url', 'url_foto', 'foto', 'photo', 'photo_url', 'avatar', 'gambar'));
+    $photo    = '';
+    if ($photoRaw !== '') {
+        if (preg_match('#^https?://#i', $photoRaw)) {
+            $photo = esc_url_raw($photoRaw, array('http', 'https'));
+        } elseif ($baseUrl !== '') {
+            $bp = parse_url($baseUrl);
+            if (!empty($bp['scheme']) && !empty($bp['host'])) {
+                $org   = $bp['scheme'] . '://' . $bp['host'] . (!empty($bp['port']) ? ':' . $bp['port'] : '');
+                $photo = (strpos($photoRaw, '/') === 0)
+                    ? esc_url_raw($org . $photoRaw, array('http', 'https'))
+                    : esc_url_raw(rtrim($baseUrl, '/') . '/' . ltrim($photoRaw, '/'), array('http', 'https'));
+            }
+        }
+    }
+
+    return array(
+        'title'    => $name,
+        'subtitle' => $jabatan !== '' ? $jabatan : 'Aparatur Pengadilan',
+        'category' => $group,
+        'meta'     => array(
+            'nip'                => $nip,
+            'gol'                => $gol,
+            'edu'                => $edu,
+            'photo'              => $photo,
+            'tmt'                => $tmt,
+            'riwayat_pendidikan' => $rEdu,
+            'riwayat_jabatan'    => $rJab,
+        ),
+    );
+}
+
+function pa_portal_parse_simtepa_payload(string $body, string $baseUrl = '', int $limit = 200): array {
+    $raw = trim($body);
+    if ($raw === '') {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Respons dari endpoint SIMTEPA kosong.');
+    }
+
+    // 1. Coba parse JSON (Web Service SIKEP/SIMTEPA MA RI atau bridge JSON satker).
+    $firstCh = substr($raw, 0, 1);
+    if ($firstCh === '{' || $firstCh === '[') {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            $rows = array();
+            if (array_keys($decoded) === range(0, count($decoded) - 1)) {
+                $rows = $decoded;
+            } else {
+                foreach (array('data', 'pegawai', 'items', 'results', 'rows', 'list') as $listKey) {
+                    if (isset($decoded[$listKey]) && is_array($decoded[$listKey])) {
+                        $rows = $decoded[$listKey];
+                        break;
+                    }
+                }
+            }
+            $items = array();
+            $seen  = array();
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $norm = pa_portal_simtepa_normalize_row($row, $baseUrl);
+                if ($norm === null) {
+                    continue;
+                }
+                $dk = strtolower(($norm['meta']['nip'] !== '' ? $norm['meta']['nip'] : $norm['title']));
+                if (isset($seen[$dk])) {
+                    continue;
+                }
+                $seen[$dk] = true;
+                $items[]   = $norm;
+                if (count($items) >= $limit) {
+                    break;
+                }
+            }
+            if (!empty($items)) {
+                return array(
+                    'status'  => 'ok',
+                    'items'   => $items,
+                    'message' => 'Berhasil membaca ' . count($items) . ' profil pegawai (JSON SIMTEPA/SIKEP).',
+                );
+            }
+            return array(
+                'status'  => 'empty',
+                'items'   => array(),
+                'message' => 'Endpoint JSON SIMTEPA terhubung tetapi daftar pegawai kosong atau struktur kolom tidak dikenali.',
+            );
+        }
+    }
+
+    // 2. Deteksi halaman login SSO Badilag / Cloudflare tanpa mencoba melewati autentikasi.
+    if (
+        stripos($raw, 'cf-browser-verification') !== false ||
+        stripos($raw, 'challenges.cloudflare.com') !== false ||
+        (stripos($raw, '<title>Just a moment') !== false && stripos($raw, 'nip') === false)
+    ) {
+        return array(
+            'status'  => 'blocked',
+            'items'   => array(),
+            'message' => 'URL SIMTEPA diblokir verifikasi Cloudflare/WAF. Gunakan Impor CSV ekspor SIMTEPA atau Push API HMAC.',
+        );
+    }
+    if (
+        preg_match('/<input[^>]+type=["\']password["\']/i', $raw) &&
+        stripos($raw, '<table') === false
+    ) {
+        return array(
+            'status'  => 'auth_required',
+            'items'   => array(),
+            'message' => 'URL SIMTEPA memerlukan login SSO Badilag. Gunakan endpoint JSON/Token satker, Push API HMAC, atau Impor CSV dari ekspor SIMTEPA.',
+        );
+    }
+
+    // 3. Fallback parse tabel HTML publik (halaman profil pegawai satker / bridge HTML SIMTEPA).
+    if (!class_exists('DOMDocument')) {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Ekstensi PHP DOMDocument tidak aktif.');
+    }
+    $prevErr = libxml_use_internal_errors(true);
+    $dom     = new DOMDocument();
+    $loaded  = @$dom->loadHTML('<?xml encoding="utf-8" ?>' . $raw, LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR);
+    libxml_clear_errors();
+    libxml_use_internal_errors($prevErr);
+    if (!$loaded) {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Gagal membaca dokumen HTML SIMTEPA.');
+    }
+
+    $xpath  = new DOMXPath($dom);
+    $tables = $xpath->query('//table');
+    $items  = array();
+    $seen   = array();
+    if ($tables && $tables->length > 0) {
+        foreach ($tables as $tbl) {
+            $trs = $xpath->query('.//tr', $tbl);
+            if (!$trs || $trs->length < 2) {
+                continue;
+            }
+            $colMap    = array();
+            $headerIdx = -1;
+            for ($ri = 0; $ri < min(3, $trs->length); $ri++) {
+                $cells = $xpath->query('./th|./td', $trs->item($ri));
+                if (!$cells || $cells->length < 2) {
+                    continue;
+                }
+                $tmp = array();
+                for ($ci = 0; $ci < $cells->length; $ci++) {
+                    $ht = strtolower(trim(preg_replace('/\s+/', ' ', (string) $cells->item($ci)->textContent)));
+                    if (preg_match('/nama/', $ht)) {
+                        $tmp['nama'] = $ci;
+                    } elseif (preg_match('/jabatan/', $ht)) {
+                        $tmp['jabatan'] = $ci;
+                    } elseif (preg_match('/\bnip\b/', $ht)) {
+                        $tmp['nip'] = $ci;
+                    } elseif (preg_match('/pangkat|gol/', $ht)) {
+                        $tmp['pangkat_gol'] = $ci;
+                    } elseif (preg_match('/pendidikan/', $ht)) {
+                        $tmp['pendidikan'] = $ci;
+                    } elseif (preg_match('/kelompok|unit|bagian/', $ht)) {
+                        $tmp['kelompok'] = $ci;
+                    } elseif (preg_match('/tmt/', $ht)) {
+                        $tmp['tmt'] = $ci;
+                    } elseif (preg_match('/foto|photo/', $ht)) {
+                        $tmp['foto'] = $ci;
+                    }
+                }
+                if (isset($tmp['nama']) && (isset($tmp['jabatan']) || isset($tmp['nip']))) {
+                    $colMap    = $tmp;
+                    $headerIdx = $ri;
+                    break;
+                }
+            }
+            if (empty($colMap)) {
+                continue;
+            }
+            for ($ri = $headerIdx + 1; $ri < $trs->length; $ri++) {
+                $tr    = $trs->item($ri);
+                $cells = $xpath->query('./td', $tr);
+                if (!$cells || $cells->length < 2) {
+                    continue;
+                }
+                $rowArr = array();
+                foreach ($colMap as $field => $ci) {
+                    if ($ci >= $cells->length) {
+                        continue;
+                    }
+                    if ($field === 'foto') {
+                        $imgs = $xpath->query('.//img[@src]', $cells->item($ci));
+                        if ($imgs && $imgs->length > 0) {
+                            $rowArr['foto'] = trim((string) $imgs->item(0)->getAttribute('src'));
+                        }
+                    } else {
+                        $rowArr[$field] = trim(preg_replace('/\s+/', ' ', (string) $cells->item($ci)->textContent));
+                    }
+                }
+                if (empty($rowArr['foto'])) {
+                    $imgs = $xpath->query('.//img[@src]', $tr);
+                    if ($imgs && $imgs->length > 0) {
+                        $rowArr['foto'] = trim((string) $imgs->item(0)->getAttribute('src'));
+                    }
+                }
+                $norm = pa_portal_simtepa_normalize_row($rowArr, $baseUrl);
+                if ($norm === null) {
+                    continue;
+                }
+                $dk = strtolower(($norm['meta']['nip'] !== '' ? $norm['meta']['nip'] : $norm['title']));
+                if (isset($seen[$dk])) {
+                    continue;
+                }
+                $seen[$dk] = true;
+                $items[]   = $norm;
+                if (count($items) >= $limit) {
+                    break 2;
+                }
+            }
+        }
+    }
+
+    if (!empty($items)) {
+        return array(
+            'status'  => 'ok',
+            'items'   => $items,
+            'message' => 'Berhasil membaca ' . count($items) . ' profil pegawai dari tabel HTML SIMTEPA.',
+        );
+    }
+
+    return array(
+        'status'  => 'error',
+        'items'   => array(),
+        'message' => 'Format data pegawai SIMTEPA tidak dikenali (bukan JSON/tabel profil standar). Gunakan Impor CSV ekspor SIMTEPA atau Input Manual.',
+    );
+}
+
+function pa_portal_parse_simtepa_csv(string $csvContent, int $limit = 250): array {
+    $raw = preg_replace('/^\xEF\xBB\xBF/', '', $csvContent);
+    $raw = str_replace(array("\r\n", "\r"), "\n", (string) $raw);
+    $lines = array_values(array_filter(explode("\n", $raw), static function ($l) {
+        return trim($l) !== '';
+    }));
+    if (count($lines) < 2) {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Berkas CSV kosong atau hanya berisi header tanpa baris pegawai.');
+    }
+
+    $firstLine = $lines[0];
+    $delim     = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
+    $headers   = array_map('trim', str_getcsv($firstLine, $delim));
+    if (count($headers) < 2) {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Kolom CSV tidak terbaca. Pastikan pemisah koma (,) atau titik koma (;).');
+    }
+
+    $items = array();
+    $seen  = array();
+    for ($i = 1; $i < count($lines); $i++) {
+        $cols = str_getcsv($lines[$i], $delim);
+        if (empty($cols)) {
+            continue;
+        }
+        $assoc = array();
+        foreach ($headers as $idx => $hName) {
+            if ($hName !== '' && array_key_exists($idx, $cols)) {
+                $assoc[$hName] = trim((string) $cols[$idx]);
+            }
+        }
+        $norm = pa_portal_simtepa_normalize_row($assoc, '');
+        if ($norm === null) {
+            continue;
+        }
+        $dk = strtolower(($norm['meta']['nip'] !== '' ? $norm['meta']['nip'] : $norm['title']));
+        if (isset($seen[$dk])) {
+            continue;
+        }
+        $seen[$dk] = true;
+        $items[]   = $norm;
+        if (count($items) >= $limit) {
+            break;
+        }
+    }
+
+    if (empty($items)) {
+        return array('status' => 'error', 'items' => array(), 'message' => 'Tidak ada baris pegawai valid di CSV. Pastikan terdapat kolom "Nama" dan "Jabatan".');
+    }
+
+    return array(
+        'status'  => 'ok',
+        'items'   => $items,
+        'message' => 'Berhasil membaca ' . count($items) . ' data pegawai dari berkas CSV SIMTEPA.',
+    );
+}
+
+function pa_portal_upsert_simtepa_records(array $items, string $source = 'simtepa', bool $replaceOldSync = true): int {
+    if (empty($items)) {
+        return 0;
+    }
+    pa_portal_records_ensure_table();
+    global $wpdb;
+    $rTable = pa_portal_records_table();
+    $nowSql = current_time('mysql');
+
+    // Bersihkan data pegawai contoh bawaan (Ahmad Contoh / Siti Amanah / Budi Santoso) saat sinkronisasi berhasil.
+    $wpdb->query(
+        "DELETE FROM `{$rTable}` WHERE record_type = 'pegawai' AND (title LIKE '%Ahmad Contoh%' OR title LIKE '%Siti Amanah%' OR meta_json LIKE '%19700101 199503 1 001%' OR meta_json LIKE '%19720512 199803 2 002%' OR meta_json LIKE '%19750817 200003 1 003%')"
+    );
+    if ($replaceOldSync) {
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM `{$rTable}` WHERE record_type = 'pegawai' AND meta_json LIKE %s",
+            '%"source":"' . $wpdb->esc_like($source) . '"%'
+        ));
+    }
+
+    $groupRank = array(
+        'Pimpinan'        => 10,
+        'Hakim'           => 20,
+        'Kepaniteraan'    => 30,
+        'Kesekretariatan' => 40,
+        'PPNPN'           => 50,
+    );
+
+    $saved = 0;
+    foreach ($items as $idx => $it) {
+        $meta           = is_array($it['meta'] ?? null) ? $it['meta'] : array();
+        $meta['source'] = $source;
+        $grp            = (string) ($it['category'] ?? 'Kesekretariatan');
+        $sort           = (int) ($groupRank[$grp] ?? 60) * 100 + ($idx + 1);
+        $title          = (string) ($it['title'] ?? '');
+        $nip            = (string) ($meta['nip'] ?? '');
+
+        $existingId = 0;
+        if (!$replaceOldSync) {
+            if ($nip !== '') {
+                $existingId = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM `{$rTable}` WHERE record_type = 'pegawai' AND meta_json LIKE %s LIMIT 1",
+                    '%"nip":"' . $wpdb->esc_like($nip) . '"%'
+                ));
+            }
+            if ($existingId <= 0) {
+                $existingId = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM `{$rTable}` WHERE record_type = 'pegawai' AND title = %s LIMIT 1",
+                    $title
+                ));
+            }
+        }
+
+        $rowPayload = array(
+            'record_type' => 'pegawai',
+            'title'       => $title,
+            'subtitle'    => (string) ($it['subtitle'] ?? 'Aparatur Pengadilan'),
+            'category'    => $grp,
+            'event_date'  => wp_date('Y-m-d'),
+            'meta_json'   => wp_json_encode($meta) ?: '{}',
+            'sort_order'  => $sort,
+            'status'      => 'published',
+            'updated_at'  => $nowSql,
+        );
+
+        if ($existingId > 0) {
+            $wpdb->update($rTable, $rowPayload, array('id' => $existingId));
+            $saved++;
+        } elseif ($wpdb->insert($rTable, $rowPayload)) {
+            $saved++;
+        }
+    }
+
+    if (function_exists('pa_sinova_purge_html_cache_files')) {
+        pa_sinova_purge_html_cache_files();
+    } elseif (function_exists('pa_home_page_cache_mark_stale')) {
+        pa_home_page_cache_mark_stale();
+    }
+    return $saved;
+}
+
+function pa_portal_get_simtepa_sync_status(): array {
+    $st = get_option('pa_simtepa_sync_status', array());
+    return is_array($st) ? $st : array();
+}
+
+function pa_portal_sync_simtepa_remote(bool $manual = false): array {
+    $cfg      = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $url      = trim((string) ($cfg['simtepa_url'] ?? ''));
+    $token    = trim((string) ($cfg['simtepa_token'] ?? ''));
+    $nowLabel = wp_date('d-m-Y H:i') . ' WIB';
+
+    if ($url === '') {
+        $payload = array(
+            'status'     => 'unconfigured',
+            'count'      => 0,
+            'source_url' => '',
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => 'URL endpoint SIMTEPA/SIKEP belum diisi. Anda dapat mengisi URL API/JSON SIMTEPA, memakai Impor CSV ekspor SIMTEPA, atau mengisi secara manual.',
+        );
+        update_option('pa_simtepa_sync_status', $payload, false);
+        return $payload;
+    }
+
+    $parts  = parse_url($url);
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    $host   = strtolower((string) ($parts['host'] ?? ''));
+    $allowed = array('mahkamahagung.go.id', 'badilag.net', 'go.id');
+    $hostOk  = false;
+    foreach ($allowed as $sfx) {
+        if ($host === $sfx || (strlen($host) > strlen($sfx) && substr($host, -strlen($sfx) - 1) === '.' . $sfx)) {
+            $hostOk = true;
+            break;
+        }
+    }
+    if (!in_array($scheme, array('http', 'https'), true) || !$hostOk) {
+        $payload = array(
+            'status'     => 'error',
+            'count'      => 0,
+            'source_url' => $url,
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => 'URL SIMTEPA ditolak pelindung SSRF: wajib memakai domain resmi .go.id atau badilag.net.',
+        );
+        update_option('pa_simtepa_sync_status', $payload, false);
+        return $payload;
+    }
+
+    $ips = @gethostbynamel($host);
+    if (!is_array($ips) || empty($ips)) {
+        $payload = array(
+            'status'     => 'error',
+            'count'      => 0,
+            'source_url' => $url,
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => 'Host SIMTEPA tidak dapat diresolusi dari server hosting.',
+        );
+        update_option('pa_simtepa_sync_status', $payload, false);
+        return $payload;
+    }
+    foreach ($ips as $ip) {
+        if (!pa_portal_is_public_ip((string) $ip)) {
+            $payload = array(
+                'status'     => 'error',
+                'count'      => 0,
+                'source_url' => $url,
+                'synced_at'  => $nowLabel,
+                'timestamp'  => time(),
+                'message'    => 'IP privat/lokal ditolak pelindung SSRF.',
+            );
+            update_option('pa_simtepa_sync_status', $payload, false);
+            return $payload;
+        }
+    }
+
+    $headers = array(
+        'Accept' => 'application/json, text/html;q=0.9',
+    );
+    if ($token !== '') {
+        $headers['Authorization'] = 'Bearer ' . $token;
+        $headers['token']         = $token;
+    }
+
+    $resp = wp_remote_get($url, array(
+        'timeout'             => 12,
+        'redirection'         => 2,
+        'limit_response_size' => 2097152,
+        'user-agent'          => 'PA-SINOVA-SIMTEPA/2.5',
+        'headers'             => $headers,
+    ));
+    if (is_wp_error($resp)) {
+        $payload = array(
+            'status'     => 'error',
+            'count'      => 0,
+            'source_url' => $url,
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => 'Gagal menghubungi endpoint SIMTEPA: ' . $resp->get_error_message(),
+        );
+        update_option('pa_simtepa_sync_status', $payload, false);
+        return $payload;
+    }
+
+    $code = (int) wp_remote_retrieve_response_code($resp);
+    $body = (string) wp_remote_retrieve_body($resp);
+    if ($code === 401 || $code === 403) {
+        $payload = array(
+            'status'     => 'auth_required',
+            'count'      => 0,
+            'source_url' => $url,
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => "Endpoint SIMTEPA mengembalikan HTTP {$code} (butuh token otorisasi / IP whitelist). Gunakan Impor CSV ekspor SIMTEPA atau Push API HMAC.",
+        );
+        update_option('pa_simtepa_sync_status', $payload, false);
+        return $payload;
+    }
+    if ($code !== 200 || trim($body) === '') {
+        $payload = array(
+            'status'     => 'error',
+            'count'      => 0,
+            'source_url' => $url,
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => "Endpoint SIMTEPA mengembalikan HTTP {$code}.",
+        );
+        update_option('pa_simtepa_sync_status', $payload, false);
+        return $payload;
+    }
+
+    $parsed = pa_portal_parse_simtepa_payload($body, $url, 200);
+    if (($parsed['status'] ?? '') === 'ok' && !empty($parsed['items'])) {
+        $saved   = pa_portal_upsert_simtepa_records($parsed['items'], 'simtepa', true);
+        $payload = array(
+            'status'     => 'ok',
+            'count'      => $saved,
+            'source_url' => $url,
+            'synced_at'  => $nowLabel,
+            'timestamp'  => time(),
+            'message'    => "Berhasil menyinkronkan {$saved} profil pejabat & pegawai dari SIMTEPA.",
+        );
+        update_option('pa_simtepa_sync_status', $payload, false);
+        set_transient('pa_simtepa_sync_fresh', 1, DAY_IN_SECONDS);
+        return $payload;
+    }
+
+    $payload = array(
+        'status'     => (string) ($parsed['status'] ?? 'error'),
+        'count'      => 0,
+        'source_url' => $url,
+        'synced_at'  => $nowLabel,
+        'timestamp'  => time(),
+        'message'    => (string) ($parsed['message'] ?? 'Gagal memproses data SIMTEPA.'),
+    );
+    update_option('pa_simtepa_sync_status', $payload, false);
+    set_transient('pa_simtepa_sync_fresh', 1, $manual ? 300 : HOUR_IN_SECONDS * 6);
+    return $payload;
+}
+
+add_action('pa_simtepa_cron_sync', static function () {
+    $cfg = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    if (($cfg['simtepa_autosync'] ?? '1') === '0' || trim((string) ($cfg['simtepa_url'] ?? '')) === '') {
+        return;
+    }
+    pa_portal_sync_simtepa_remote(false);
+});
+
+function pa_portal_maybe_schedule_simtepa_sync(): void {
+    $cfg = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
+    $on  = (($cfg['simtepa_autosync'] ?? '1') !== '0') && trim((string) ($cfg['simtepa_url'] ?? '')) !== '';
+    $nxt = wp_next_scheduled('pa_simtepa_cron_sync');
+    if (!$on) {
+        if ($nxt) {
+            wp_unschedule_event($nxt, 'pa_simtepa_cron_sync');
+        }
+        return;
+    }
+    if (!$nxt) {
+        wp_schedule_event(time() + 300, 'daily', 'pa_simtepa_cron_sync');
+    }
+}
+add_action('init', static function () {
+    if (!wp_doing_ajax()) {
+        pa_portal_maybe_schedule_simtepa_sync();
+    }
+}, 31);
+
 add_shortcode('pa_pegawai_grid', static function () {
-    $rows   = pa_portal_get_records('pegawai', 120);
-    $groups = array('Semua', 'Pimpinan', 'Hakim', 'Kepaniteraan', 'Kesekretariatan', 'PPNPN');
+    $rows        = pa_portal_get_records('pegawai', 150);
+    $groups      = array('Semua', 'Pimpinan', 'Hakim', 'Kepaniteraan', 'Kesekretariatan', 'PPNPN');
+    $groupCounts = array_fill_keys($groups, 0);
+    $hasSimtepa  = false;
+    foreach ($rows as $r) {
+        $groupCounts['Semua']++;
+        $gLow = strtolower((string) ($r['category'] ?? ''));
+        foreach ($groups as $g) {
+            if ($g !== 'Semua' && strpos($gLow, strtolower($g)) !== false) {
+                $groupCounts[$g]++;
+            }
+        }
+        $m = json_decode((string) ($r['meta_json'] ?? ''), true);
+        if (is_array($m) && in_array((string) ($m['source'] ?? ''), array('simtepa', 'simtepa_csv', 'simtepa_push'), true)) {
+            $hasSimtepa = true;
+        }
+    }
     ob_start();
     ?>
-    <div class="pa-ops-wrap" id="pa-pegawai-board">
-        <div class="pa-ops-filter-tabs" role="tablist" aria-label="Filter Kelompok Pegawai">
-            <?php foreach ($groups as $idx => $g) :
-                $tid = 'pa-peg-tab-' . sanitize_key($g);
-            ?>
-                <button type="button" role="tab" id="<?php echo esc_attr($tid); ?>" aria-selected="<?php echo $idx === 0 ? 'true' : 'false'; ?>" tabindex="<?php echo $idx === 0 ? '0' : '-1'; ?>" class="pa-ops-tab<?php echo $idx === 0 ? ' is-active' : ''; ?>" data-pegawai-filter="<?php echo esc_attr($g); ?>"><?php echo esc_html($g); ?></button>
-            <?php endforeach; ?>
+    <div class="pa-ops-wrap pa-pegawai-dir" id="pa-pegawai-board">
+        <div class="pa-peg-toolbar">
+            <div class="pa-ops-filter-tabs pa-peg-tabs" role="tablist" aria-label="Filter Kelompok Pegawai">
+                <?php foreach ($groups as $idx => $g) :
+                    $tid = 'pa-peg-tab-' . sanitize_key($g);
+                    $cnt = (int) ($groupCounts[$g] ?? 0);
+                ?>
+                    <button type="button" role="tab" id="<?php echo esc_attr($tid); ?>" aria-selected="<?php echo $idx === 0 ? 'true' : 'false'; ?>" tabindex="<?php echo $idx === 0 ? '0' : '-1'; ?>" class="pa-ops-tab<?php echo $idx === 0 ? ' is-active' : ''; ?>" data-pegawai-filter="<?php echo esc_attr($g); ?>">
+                        <span><?php echo esc_html($g); ?></span>
+                        <span class="pa-peg-tab-cnt"><?php echo $cnt; ?></span>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+            <div class="pa-peg-tools-right">
+                <input type="search" id="pa-pegawai-search" class="pa-ops-search pa-peg-search" aria-label="Cari nama, jabatan, NIP, atau pangkat pegawai" placeholder="Cari nama, jabatan, atau NIP...">
+                <?php if ($hasSimtepa) : ?>
+                    <span class="pa-ops-badge pa-peg-sync-badge">Tersinkron SIMTEPA</span>
+                <?php endif; ?>
+            </div>
         </div>
         <p id="pa-pegawai-status" class="screen-reader-text" aria-live="polite"></p>
         <div class="pa-pegawai-grid" role="tabpanel">
             <?php foreach ($rows as $r) :
-                $meta     = json_decode((string) ($r['meta_json'] ?? ''), true);
-                if (!is_array($meta)) $meta = array();
-                $name     = (string) $r['title'];
-                $words    = preg_split('/\s+/', trim(preg_replace('/^(?:Dr\.|Dra\.|H\.|Hj\.|Ir\.)\s*/i', '', $name)));
+                $meta = json_decode((string) ($r['meta_json'] ?? ''), true);
+                if (!is_array($meta)) {
+                    $meta = array();
+                }
+                $name     = trim((string) ($r['title'] ?? ''));
+                $role     = trim((string) ($r['subtitle'] ?? ''));
+                $group    = trim((string) ($r['category'] ?? '')) ?: 'Aparatur';
+                $grpSlug  = sanitize_key($group);
+                $words    = preg_split('/\s+/', trim((string) preg_replace('/^(?:Prof\.|Dr\.|Dra\.|Drs\.|H\.|Hj\.|Ir\.|K\.H\.)\s*/i', '', $name)));
                 $initials = strtoupper(substr((string) ($words[0] ?? 'P'), 0, 1) . substr((string) ($words[1] ?? ''), 0, 1));
                 $photo    = esc_url_raw((string) ($meta['photo'] ?? ''), array('http', 'https'));
+                $nip      = trim((string) ($meta['nip'] ?? ''));
+                $gol      = trim((string) ($meta['gol'] ?? ''));
+                $edu      = trim((string) ($meta['edu'] ?? ''));
+                $tmt      = trim((string) ($meta['tmt'] ?? ''));
+                $searchHay = strtolower($name . ' ' . $role . ' ' . $group . ' ' . $nip . ' ' . $gol . ' ' . $edu);
             ?>
-                <article class="pa-pegawai-card" data-group="<?php echo esc_attr((string) $r['category']); ?>">
-                    <div class="pa-pegawai-avatar">
-                        <?php if ($photo !== '') : ?>
-                            <img src="<?php echo esc_url($photo); ?>" alt="<?php echo esc_attr($name); ?>" width="56" height="56" loading="lazy" decoding="async">
-                        <?php else : ?>
-                            <span><?php echo esc_html($initials ?: 'PA'); ?></span>
+                <article class="pa-pegawai-card" data-group="<?php echo esc_attr($group); ?>" data-grp-key="<?php echo esc_attr($grpSlug); ?>" data-search="<?php echo esc_attr($searchHay); ?>">
+                    <header class="pa-peg-head">
+                        <div class="pa-pegawai-avatar">
+                            <?php if ($photo !== '') : ?>
+                                <img src="<?php echo esc_url($photo); ?>" alt="<?php echo esc_attr($name); ?>" width="64" height="64" loading="lazy" decoding="async">
+                            <?php else : ?>
+                                <span aria-hidden="true"><?php echo esc_html($initials ?: 'PA'); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="pa-pegawai-info">
+                            <span class="pa-pegawai-cat is-grp-<?php echo esc_attr($grpSlug); ?>"><?php echo esc_html($group); ?></span>
+                            <h3><?php echo esc_html($name); ?></h3>
+                            <p class="pa-pegawai-role"><?php echo esc_html($role ?: 'Aparatur Pengadilan'); ?></p>
+                        </div>
+                    </header>
+                    <dl class="pa-peg-meta">
+                        <?php if ($nip !== '') : ?>
+                            <div class="pa-peg-meta-row"><dt>NIP</dt><dd class="pa-peg-nip"><?php echo esc_html($nip); ?></dd></div>
                         <?php endif; ?>
-                    </div>
-                    <div class="pa-pegawai-info">
-                        <span class="pa-pegawai-cat"><?php echo esc_html((string) ($r['category'] ?: 'Aparatur')); ?></span>
-                        <h3><?php echo esc_html($name); ?></h3>
-                        <p class="pa-pegawai-role"><?php echo esc_html((string) $r['subtitle']); ?></p>
+                        <?php if ($gol !== '') : ?>
+                            <div class="pa-peg-meta-row"><dt>Pangkat / Gol.</dt><dd><?php echo esc_html($gol); ?></dd></div>
+                        <?php endif; ?>
+                        <?php if ($edu !== '') : ?>
+                            <div class="pa-peg-meta-row"><dt>Pendidikan</dt><dd><?php echo esc_html($edu); ?></dd></div>
+                        <?php endif; ?>
+                        <?php if ($nip === '' && $gol === '' && $edu === '') : ?>
+                            <div class="pa-peg-meta-row"><dt>Unit Kerja</dt><dd><?php echo esc_html($group); ?></dd></div>
+                        <?php endif; ?>
+                    </dl>
+                    <footer class="pa-peg-foot">
                         <button type="button" class="pa-peg-detail-btn" data-peg-detail="<?php echo esc_attr(wp_json_encode(array(
                             'name'  => $name,
-                            'role'  => (string) $r['subtitle'],
-                            'group' => (string) ($r['category'] ?: 'Aparatur'),
+                            'role'  => $role,
+                            'group' => $group,
                             'photo' => $photo,
                             'init'  => $initials ?: 'PA',
-                            'nip'   => (string) ($meta['nip'] ?? ''),
-                            'gol'   => (string) ($meta['gol'] ?? ''),
-                            'tmt'   => (string) ($meta['tmt'] ?? ''),
-                            'edu'   => (string) ($meta['edu'] ?? ''),
+                            'nip'   => $nip,
+                            'gol'   => $gol,
+                            'tmt'   => $tmt,
+                            'edu'   => $edu,
                             'r_edu' => (string) ($meta['riwayat_pendidikan'] ?? ''),
                             'r_jab' => (string) ($meta['riwayat_jabatan'] ?? ''),
-                        )) ?: '{}'); ?>">Detail Profil</button>
-                    </div>
-                    <div class="pa-pegawai-hover-meta">
-                        <?php if (!empty($meta['nip'])) : ?><div><strong>NIP:</strong> <?php echo esc_html((string) $meta['nip']); ?></div><?php endif; ?>
-                        <?php if (!empty($meta['gol'])) : ?><div><strong>Pangkat/Gol:</strong> <?php echo esc_html((string) $meta['gol']); ?></div><?php endif; ?>
-                        <?php if (!empty($meta['edu'])) : ?><div><strong>Pendidikan:</strong> <?php echo esc_html((string) $meta['edu']); ?></div><?php endif; ?>
-                    </div>
+                        )) ?: '{}'); ?>">Lihat Profil &amp; Riwayat<span class="screen-reader-text"> <?php echo esc_html($name); ?></span> <span aria-hidden="true">→</span></button>
+                    </footer>
                 </article>
             <?php endforeach; ?>
         </div>
+        <p id="pa-pegawai-empty" class="pa-peg-empty" hidden>Tidak ada profil pejabat atau pegawai yang sesuai dengan filter atau pencarian Anda.</p>
         <dialog id="pa-pegawai-dlg" class="pa-peg-dlg" closedby="any" aria-labelledby="pa-peg-dlg-name">
             <div class="pa-peg-dlg-head">
                 <h1 id="pa-peg-dlg-name">Profil Pejabat / Pegawai</h1>

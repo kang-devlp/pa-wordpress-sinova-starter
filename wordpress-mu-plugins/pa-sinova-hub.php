@@ -609,6 +609,47 @@ add_action('rest_api_init', static function () {
         },
     ));
 
+    register_rest_route('pa-sinova/v1', '/simtepa/push-staff', array(
+        'methods'             => 'POST',
+        'permission_callback' => 'pa_sinova_verify_hmac',
+        'callback'            => static function (WP_REST_Request $req) {
+            if (!function_exists('pa_portal_simtepa_normalize_row') || !function_exists('pa_portal_upsert_simtepa_records')) {
+                return new WP_Error('pa_records_missing', 'Modul pegawai belum aktif.', array('status' => 500));
+            }
+            $body    = $req->get_json_params();
+            $rawList = is_array($body['items'] ?? null) ? $body['items'] : (is_array($body['data'] ?? null) ? $body['data'] : array());
+            $replace = !empty($body['replace_all']);
+            $items   = array();
+            foreach ($rawList as $rawRow) {
+                if (!is_array($rawRow)) {
+                    continue;
+                }
+                $norm = pa_portal_simtepa_normalize_row($rawRow, '');
+                if ($norm !== null) {
+                    $items[] = $norm;
+                }
+            }
+            if (empty($items)) {
+                return new WP_Error('pa_empty_staff', 'Daftar items/data pegawai kosong atau tidak valid.', array('status' => 422));
+            }
+            $saved    = pa_portal_upsert_simtepa_records($items, 'simtepa_push', $replace);
+            $pushedAt = wp_date('d-m-Y H:i') . ' WIB';
+            update_option('pa_simtepa_sync_status', array(
+                'status'     => 'ok',
+                'count'      => $saved,
+                'source_url' => 'HMAC Push API (/simtepa/push-staff)',
+                'synced_at'  => $pushedAt,
+                'timestamp'  => time(),
+                'message'    => "Diterima via Push API SIMTEPA ({$saved} pegawai).",
+            ), false);
+            return new WP_REST_Response(array(
+                'ok'        => true,
+                'saved'     => $saved,
+                'pushed_at' => $pushedAt,
+            ), 200);
+        },
+    ));
+
     register_rest_route('pa-sinova/v1', '/documents', array(
         'methods'             => 'GET',
         'permission_callback' => 'pa_sinova_verify_hmac',
