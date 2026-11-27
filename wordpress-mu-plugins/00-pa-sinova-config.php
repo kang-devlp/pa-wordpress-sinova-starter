@@ -16,6 +16,7 @@ function pa_sinova_get_settings(): array {
         'satker_name'              => get_bloginfo('name') ?: 'Pengadilan Agama Contoh Kelas I-A',
         'logo_url'                 => '',
         'favicon_url'              => '',
+        'timezone_zone'            => 'WIB',
         'preserve_existing_design' => '0',
         'address'                  => 'Jl. Keadilan Raya No. 1, Kota Contoh',
         'phone'                    => '(000) 123-4567 · WA PTSP 0811-0000-0000',
@@ -102,6 +103,18 @@ function pa_sinova_get_settings(): array {
         $saved = array();
     }
     $merged = array_merge($defaults, $saved);
+    // Adapt only bundled text; never reinterpret a court's custom schedule.
+    $zone = $merged['timezone_zone'];
+    if (in_array($zone, array('WIB', 'WITA', 'WIT'), true)) {
+        foreach (array('hearing_hours', 'home_ticker_text') as $field) {
+            foreach (array('WIB', 'WITA', 'WIT') as $previous) {
+                if ($merged[$field] === str_replace('WIB', $previous, $defaults[$field])) {
+                    $merged[$field] = str_replace('WIB', $zone, $defaults[$field]);
+                    break;
+                }
+            }
+        }
+    }
 
     if (defined('PA_SINOVA_SATKER_NAME') && PA_SINOVA_SATKER_NAME !== '') {
         $merged['satker_name'] = (string) PA_SINOVA_SATKER_NAME;
@@ -129,6 +142,41 @@ function pa_sinova_get_settings(): array {
     }
 
     return $merged;
+}
+
+/**
+ * Mengembalikan informasi zona waktu resmi peradilan (WIB / WITA / WIT).
+ */
+function pa_sinova_timezone_info(?string $zone = null): array {
+    $cfg = pa_sinova_get_settings();
+    $z = strtoupper(trim((string) ($zone ?: ($cfg['timezone_zone'] ?? 'WIB'))));
+    if (!in_array($z, array('WIB', 'WITA', 'WIT'), true)) {
+        $z = 'WIB';
+    }
+    switch ($z) {
+        case 'WITA':
+            return array(
+                'zone'   => 'WITA',
+                'tz'     => 'Asia/Makassar',
+                'offset' => 8,
+                'label'  => 'WITA (Waktu Indonesia Tengah - UTC+8)',
+            );
+        case 'WIT':
+            return array(
+                'zone'   => 'WIT',
+                'tz'     => 'Asia/Jayapura',
+                'offset' => 9,
+                'label'  => 'WIT (Waktu Indonesia Timur - UTC+9)',
+            );
+        case 'WIB':
+        default:
+            return array(
+                'zone'   => 'WIB',
+                'tz'     => 'Asia/Jakarta',
+                'offset' => 7,
+                'label'  => 'WIB (Waktu Indonesia Barat - UTC+7)',
+            );
+    }
 }
 
 /**
@@ -393,7 +441,7 @@ add_action('init', 'pa_sinova_register_roles', 5);
 
 function pa_sinova_user_allowed_tabs(): array {
     if (current_user_can('manage_options')) {
-        return array('compliance', 'upload', 'data', 'homepage', 'migration', 'settings', 'security');
+        return array('compliance', 'homepage', 'settings', 'upload', 'data', 'migration', 'security', 'advanced');
     }
     if (current_user_can('pa_manage_kepaniteraan') || current_user_can('pa_manage_kesekretariatan')) {
         return array('compliance', 'upload', 'data', 'security');
@@ -2765,7 +2813,7 @@ function pa_sinova_build_record_payload(array $input): array {
             'biaya' => $recM3,
         );
     } else {
-        $metaArr = array('jam' => ($recM1 !== '' ? $recM1 : '09.00 WIB'));
+        $metaArr = array('jam' => ($recM1 !== '' ? $recM1 : '09.00 ' . pa_sinova_timezone_info()['zone']));
     }
 
     return array(
@@ -2911,11 +2959,16 @@ function pa_sinova_render_admin_page(): void {
             if ($tickerLbl === '') {
                 $tickerLbl = 'INFO LAYANAN';
             }
+            $tzZoneInput = strtoupper(sanitize_key((string) ($_POST['timezone_zone'] ?? ($cur['timezone_zone'] ?? 'WIB'))));
+            if (!in_array($tzZoneInput, array('WIB', 'WITA', 'WIT'), true)) {
+                $tzZoneInput = 'WIB';
+            }
 
             $new = array_merge($cur, array(
                 'satker_name'              => sanitize_text_field(wp_unslash((string) ($_POST['satker_name'] ?? $cur['satker_name']))),
                 'logo_url'                 => esc_url_raw(wp_unslash((string) ($_POST['logo_url'] ?? ''))),
                 'favicon_url'              => esc_url_raw(wp_unslash((string) ($_POST['favicon_url'] ?? ''))),
+                'timezone_zone'            => $tzZoneInput,
                 'preserve_existing_design' => isset($_POST['preserve_existing_design']) ? (!empty($_POST['preserve_existing_design']) ? '1' : '0') : ((string) ($cur['preserve_existing_design'] ?? '0')),
                 'address'                  => sanitize_text_field(wp_unslash((string) ($_POST['address'] ?? $cur['address']))),
                 'phone'                    => sanitize_text_field(wp_unslash((string) ($_POST['phone'] ?? $cur['phone']))),
@@ -2964,11 +3017,11 @@ function pa_sinova_render_admin_page(): void {
                 'rss_badilag_url'          => $rssBadCheck['url'],
                 'enforce_mfa'              => (string) ($cur['enforce_mfa'] ?? '0'),
                 'custom_login_slug'        => (string) ($cur['custom_login_slug'] ?? ''),
-                'hmac_secret'              => trim(sanitize_text_field(wp_unslash((string) ($_POST['hmac_secret'] ?? '')))),
-                'turnstile_site_key'       => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_site_key'] ?? '')))),
-                'turnstile_secret_key'     => trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_secret_key'] ?? '')))),
+                'hmac_secret'              => isset($_POST['hmac_secret']) ? trim(sanitize_text_field(wp_unslash((string) $_POST['hmac_secret']))) : (string) ($cur['hmac_secret'] ?? ''),
+                'turnstile_site_key'       => isset($_POST['turnstile_site_key']) ? trim(sanitize_text_field(wp_unslash((string) $_POST['turnstile_site_key']))) : (string) ($cur['turnstile_site_key'] ?? ''),
+                'turnstile_secret_key'     => isset($_POST['turnstile_secret_key']) ? trim(sanitize_text_field(wp_unslash((string) $_POST['turnstile_secret_key']))) : (string) ($cur['turnstile_secret_key'] ?? ''),
                 'accent_palette'           => $palette,
-                'csp_mode'                 => $cspMode,
+                'csp_mode'                 => isset($_POST['csp_mode']) ? $cspMode : ($cur['csp_mode'] ?? 'strict'),
                 'emergency_notice'         => sanitize_text_field(wp_unslash((string) ($_POST['emergency_notice'] ?? ''))),
                 'emergency_notice_url'     => esc_url_raw(wp_unslash((string) ($_POST['emergency_notice_url'] ?? ''))),
                 'siwas_url'                => esc_url_raw(wp_unslash((string) ($_POST['siwas_url'] ?? ($cur['siwas_url'] ?? '')))),
@@ -2996,12 +3049,38 @@ function pa_sinova_render_admin_page(): void {
             }
             pa_sinova_sync_direktori_putusan_page((string) ($new['direktori_url'] ?? ''));
             pa_sinova_purge_html_cache_files();
-            $notice = 'Pengaturan Satker, Identitas Visual, Umpan RSS, & API HMAC berhasil disimpan.';
+            $notice = 'Pengaturan Identitas Satker &amp; Zona Waktu berhasil disimpan.';
             if ($rssMaCheck['warn'] || $rssBadCheck['warn'] || $rssDirCheck['warn']) {
                 $notice .= ' Catatan: URL RSS non-HTTPS atau di luar domain resmi (.go.id) ditolak dan dikembalikan ke URL aman sebelumnya.';
             }
             if ($sippSlideWarn) {
                 $notice .= ' Catatan: URL Slide Jadwal Sidang SIPP wajib memakai protokol HTTPS dengan domain valid.';
+            }
+        } elseif ($action === 'save_advanced' && $requireAdmin()) {
+            $activeTab = 'advanced';
+            $cur       = pa_sinova_get_settings();
+            $cspMode   = sanitize_key((string) ($_POST['csp_mode'] ?? ($cur['csp_mode'] ?? 'strict')));
+            if (!in_array($cspMode, array('strict', 'compat', 'off'), true)) {
+                $cspMode = 'strict';
+            }
+            $slugCheck = pa_sinova_sanitize_login_slug(wp_unslash((string) ($_POST['custom_login_slug'] ?? ($cur['custom_login_slug'] ?? ''))));
+            if (!$slugCheck['valid']) {
+                $notice = 'Gagal: ' . $slugCheck['error'];
+            } else {
+                $genKey = !empty($_POST['generate_hmac']);
+                $secret = $genKey ? bin2hex(random_bytes(32)) : trim(sanitize_text_field(wp_unslash((string) ($_POST['hmac_secret'] ?? ($cur['hmac_secret'] ?? '')))));
+                $tsSite   = trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_site_key'] ?? ($cur['turnstile_site_key'] ?? '')))));
+                $tsSecret = trim(sanitize_text_field(wp_unslash((string) ($_POST['turnstile_secret_key'] ?? ($cur['turnstile_secret_key'] ?? '')))));
+                $new = array_merge($cur, array(
+                    'csp_mode'             => $cspMode,
+                    'hmac_secret'          => $secret,
+                    'turnstile_site_key'   => $tsSite,
+                    'turnstile_secret_key' => $tsSecret,
+                    'custom_login_slug'    => $slugCheck['slug'],
+                ));
+                update_option('pa_sinova_starter_settings', $new, false);
+                pa_sinova_purge_html_cache_files();
+                $notice = 'Pengaturan Lanjutan IT (Mode CSP, Kunci HMAC API, Cloudflare Turnstile & URL Login Kustom) berhasil disimpan.' . ($genKey ? ' Kunci HMAC baru berhasil digenerate!' : '');
             }
         } elseif ($action === 'save_home_layout' && $requireAdmin()) {
             $activeTab = 'homepage';
@@ -3134,7 +3213,7 @@ function pa_sinova_render_admin_page(): void {
             ), false);
             $notice = 'Baseline SHA-256 File Integrity Monitor (FIM) berhasil diperbarui sesuai berkas aktif saat ini.';
         } elseif ($action === 'run_seeder' && $requireAdmin()) {
-            $activeTab = 'settings';
+            $activeTab = 'migration';
             $res = pa_sinova_run_starter_seeder();
             if (function_exists('pa_home_page_cache_mark_stale')) {
                 pa_home_page_cache_mark_stale();
@@ -3152,7 +3231,7 @@ function pa_sinova_render_admin_page(): void {
                     $res['menu_items']
                 );
         } elseif ($action === 'rebuild_6menu' && $requireAdmin()) {
-            $activeTab = 'settings';
+            $activeTab = 'migration';
             $res = pa_sinova_run_starter_seeder(false, true);
             if (function_exists('pa_home_page_cache_mark_stale')) {
                 pa_home_page_cache_mark_stale();
@@ -3764,12 +3843,13 @@ function pa_sinova_render_admin_page(): void {
     $exportJsonUrl = admin_url('admin.php?page=pa-sinova-starter&pa_sinova_export=json&_wpnonce=' . rawurlencode($exportNonce));
     $tabLabels     = array(
         'compliance' => 'Dashboard 3 Pilar &amp; 35 Kriteria (' . $audit['weighted_total'] . ')',
+        'homepage'   => 'Tampilan Beranda',
+        'settings'   => 'Identitas Satker',
         'upload'     => 'Upload &amp; Kelola Dokumen',
-        'data'       => 'Data Operasional &amp; RSS',
-        'homepage'   => 'Desain &amp; Tata Letak Beranda',
-        'migration'  => 'Migrasi &amp; Adopsi',
-        'settings'   => 'Identitas Satker &amp; Seeder',
-        'security'   => 'Keamanan, Update &amp; Audit',
+        'data'       => 'Data Operasional &amp; Publikasi',
+        'migration'  => 'Setup Awal, Migrasi &amp; Update',
+        'security'   => 'Keamanan &amp; Akses Admin',
+        'advanced'   => 'Pengaturan Lanjutan (Khusus IT)',
     );
     $updInfo    = current_user_can('manage_options') ? pa_sinova_github_check_update(false) : array('has_update' => false);
     $rbMeta     = current_user_can('manage_options') ? get_option('pa_sinova_last_update_backup', array()) : array();
@@ -3788,7 +3868,10 @@ function pa_sinova_render_admin_page(): void {
         .pa-adm-emblem img{width:100%;height:100%;object-fit:contain;display:block}
         .pa-adm-cols-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:20px;align-items:start}
         .pa-adm-cols-set{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,0.9fr);gap:20px;align-items:start}
-        @media(max-width:1080px){.pa-adm-cols-2,.pa-adm-cols-set{grid-template-columns:1fr}}
+        .pa-adm-cols-2>*, .pa-adm-cols-set>*{min-width:0;max-width:100%}
+        .pa-table-responsive{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+        .pa-filter-pills{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        @media(max-width:1260px){.pa-adm-cols-2,.pa-adm-cols-set{grid-template-columns:1fr;gap:16px}}
         .pa-adm-brand strong{display:block;font-size:13px;line-height:1.25;color:#fff}
         .pa-adm-brand span{display:block;font-size:11px;color:#a7f3d0}
         .pa-adm-grp-lbl{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#86efac;opacity:.75;padding:6px 10px 3px}
@@ -3887,8 +3970,7 @@ function pa_sinova_render_admin_page(): void {
                 <?php if ($isAdm) : ?>
                     <div class="pa-adm-grp-lbl">Konten &amp; Beranda</div>
                     <a href="<?php echo esc_url($tabBaseUrl . 'homepage'); ?>" class="<?php echo $activeTab === 'homepage' ? 'is-active' : ''; ?>"><span>Tampilan Beranda</span></a>
-                    <a href="<?php echo esc_url($tabBaseUrl . 'settings'); ?>" class="<?php echo $activeTab === 'settings' ? 'is-active' : ''; ?>"><span>Identitas &amp; Seeder</span></a>
-                    <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>" class="<?php echo $activeTab === 'migration' ? 'is-active' : ''; ?>"><span>Migrasi &amp; Adopsi</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'settings'); ?>" class="<?php echo $activeTab === 'settings' ? 'is-active' : ''; ?>"><span>Identitas Satker</span></a>
                 <?php endif; ?>
 
                 <?php if (in_array('data', $allowedTabs, true)) : ?>
@@ -3916,8 +3998,14 @@ function pa_sinova_render_admin_page(): void {
                     <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=yurisdiksi'); ?>" class="<?php echo ($activeTab === 'data' && $curRecType === 'yurisdiksi') ? 'is-active' : ''; ?>"><span>Wilayah Yurisdiksi</span></a>
                 <?php endif; ?>
 
-                <div class="pa-adm-grp-lbl">Sistem</div>
-                <a href="<?php echo esc_url($tabBaseUrl . 'security'); ?>" class="<?php echo $activeTab === 'security' ? 'is-active' : ''; ?>"><span>Keamanan &amp; Update</span></a>
+                <div class="pa-adm-grp-lbl">Sistem &amp; Setup</div>
+                <?php if ($isAdm) : ?>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>" class="<?php echo $activeTab === 'migration' ? 'is-active' : ''; ?>"><span>Setup, Migrasi &amp; Update</span></a>
+                <?php endif; ?>
+                <a href="<?php echo esc_url($tabBaseUrl . 'security'); ?>" class="<?php echo $activeTab === 'security' ? 'is-active' : ''; ?>"><span>Keamanan &amp; Akses Admin</span></a>
+                <?php if ($isAdm) : ?>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'advanced'); ?>" class="<?php echo $activeTab === 'advanced' ? 'is-active' : ''; ?>"><span>Pengaturan Lanjutan (IT)</span></a>
+                <?php endif; ?>
             </nav>
         </aside>
 
@@ -4538,8 +4626,10 @@ function pa_sinova_render_admin_page(): void {
             $feedCache = function_exists('pa_portal_get_official_feeds') ? pa_portal_get_official_feeds(false) : array();
             $feedMaCnt = count((array) ($feedCache['ma'] ?? array()));
             $feedBdCnt = count((array) ($feedCache['badilag'] ?? array()));
-            $feedUpd   = !empty($feedCache['updated_at']) ? wp_date('d M Y H:i', (int) $feedCache['updated_at']) . ' WIB' : 'Belum disinkronkan';
+            $feedTz    = pa_sinova_timezone_info();
+            $feedUpd   = !empty($feedCache['updated_at']) ? wp_date('d M Y H:i', (int) $feedCache['updated_at'], new DateTimeZone($feedTz['tz'])) . ' ' . $feedTz['zone'] : 'Belum disinkronkan';
         ?>
+            <?php if ($filterRecType === 'all') : ?>
             <div style="background:#fff;border:1px solid #cbd5e1;border-left:5px solid #056e4f;border-radius:10px;padding:14px 18px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
                 <div>
                     <strong style="color:#056e4f;">Umpan RSS Resmi (MA RI &amp; Ditjen Badilag)</strong><br>
@@ -4555,6 +4645,7 @@ function pa_sinova_render_admin_page(): void {
                     <button type="submit" class="button button-secondary">Sinkronkan RSS Resmi Sekarang</button>
                 </form>
             </div>
+            <?php endif; ?>
 
             <?php
             $isJadwalSection  = ($filterRecType === 'jadwal' || ($filterRecType === 'all' && $formRecType === 'jadwal' && !$isEditingRec));
@@ -4825,8 +4916,9 @@ function pa_sinova_render_admin_page(): void {
                         (function(){
                             var sel = document.getElementById('pa-rec-type-sel');
                             if (!sel) return;
+                            var tzLabel = '<?php echo esc_js($feedTz['zone']); ?>';
                             var map = {
-                                jadwal:     ['Nomor Perkara', 'Agenda Sidang', 'Ruang Sidang', 'Jam (WIB)', 'Catatan', 'Opsional'],
+                                jadwal:     ['Nomor Perkara', 'Agenda Sidang', 'Ruang Sidang', 'Jam (' + tzLabel + ')', 'Catatan', 'Opsional'],
                                 putusan:    ['Nomor Perkara / Judul Putusan', 'Amar / Ringkasan Putusan', 'Jenis Perkara', 'URL Salinan PDF / Putusan3 (HTTPS)', 'Majelis Hakim (Opsional)', 'Status Hukum (BHT / Kasasi)'],
                                 pegawai:    ['Nama Lengkap', 'Jabatan', 'Kelompok (Pimpinan/Hakim/dll)', 'NIP', 'Pangkat / Golongan', 'Pendidikan Terakhir'],
                                 ghaib:      ['Nomor Perkara', 'Status Pihak', 'Keterangan Pasal 27', 'Nama Pihak Dipanggil', 'URL Relaas PDF/Drive', 'Opsional'],
@@ -4855,10 +4947,10 @@ function pa_sinova_render_admin_page(): void {
                     <?php endif; ?>
                 </div>
 
-                <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:18px;min-width:0;max-width:100%;">
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
                         <h2 style="margin:0;color:#056e4f;">Daftar Entri Terpublikasi (<?php echo count((array) $recRows); ?>)</h2>
-                        <div>
+                        <div class="pa-filter-pills">
                             <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=all'); ?>" class="button button-small <?php echo $filterRecType === 'all' ? 'button-primary' : ''; ?>">Semua</a>
                             <?php foreach ($recTypes as $rk => $rl) : ?>
                                 <a href="<?php echo esc_url($tabBaseUrl . 'data&rec_type=' . $rk); ?>" class="button button-small <?php echo $filterRecType === $rk ? 'button-primary' : ''; ?>"><?php echo esc_html(ucfirst($rk)); ?></a>
@@ -4880,6 +4972,7 @@ function pa_sinova_render_admin_page(): void {
                                 <button type="submit" id="pa-bulk-rec-del-btn" class="button" style="color:#b91c1c;border-color:#fca5a5;" disabled>Hapus Terpilih (0)</button>
                             </div>
                         </div>
+                        <div class="pa-table-responsive" style="margin-top:8px;">
                         <table class="widefat striped">
                             <thead>
                                 <tr>
@@ -4936,6 +5029,7 @@ function pa_sinova_render_admin_page(): void {
                                 <?php endforeach; endif; ?>
                             </tbody>
                         </table>
+                        </div>
                     </form>
                     <form method="post" id="pa-single-rec-del-form" action="<?php echo esc_url($dataViewUrl); ?>" style="display:none;">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
@@ -5021,10 +5115,40 @@ function pa_sinova_render_admin_page(): void {
                 'orderby'        => 'title',
                 'order'          => 'ASC',
             ));
+            $seededOption = get_option('pa_sinova_seeded_pages', array());
+            $seededCount  = is_array($seededOption) ? count($seededOption) : 0;
         ?>
             <div style="display:grid;grid-template-columns:1fr;gap:20px;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                        <div>
+                            <h2 style="margin:0;color:#056e4f;font-size:16px;">1. Struktur Halaman Wajib &amp; 6 Menu Baku (Seeder 1-Klik)</h2>
+                            <p style="margin:4px 0 0;color:#64748b;font-size:12.5px;">Membangun otomatis halaman transparansi publik (SK 2722/2026 &amp; KMA 2-144/2022), modul arsip, dan 6 menu induk resmi tanpa menghapus konten yang sudah ada.</p>
+                        </div>
+                        <span style="padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:700;<?php echo $seededCount >= 15 ? 'background:#dcfce7;color:#166534;' : 'background:#fef3c7;color:#92400e;'; ?>">
+                            <?php echo $seededCount >= 15 ? ('● ' . (int) $seededCount . ' Halaman Siap') : '● Belum Di-seed'; ?>
+                        </span>
+                    </div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                        <form method="post" style="margin:0;display:flex;align-items:center;gap:6px;">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="run_seeder">
+                            <button type="submit" class="button button-primary">
+                                <?php echo $seededCount >= 15 ? 'Lengkapi Halaman &amp; Menu (1-Klik)' : 'Generate Halaman, Beranda &amp; Menu (1-Klik)'; ?>
+                            </button>
+                            <?php echo pa_sinova_info_tip('Otomatis membuat halaman 23 modul arsip, halaman wajib SK 2722/2026 & KMA 2-144/2022, Beranda dinamis, berita contoh, serta menyusun 6 menu utama. Halaman lama tidak tertimpa.', 'Info Seeder 1-Klik'); ?>
+                        </form>
+                        <form method="post" style="margin:0;display:flex;align-items:center;gap:6px;" onsubmit="return confirm('Susun ulang item Menu Utama SINOVA menjadi 6 menu standar? Halaman tidak dihapus.');">
+                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                            <input type="hidden" name="pa_sinova_action" value="rebuild_6menu">
+                            <button type="submit" class="button button-secondary">Rapikan 6 Menu Resmi</button>
+                            <?php echo pa_sinova_info_tip('Menata ulang Menu Utama SINOVA menjadi tepat 6 induk baku (Beranda, Profil, Layanan Hukum, Transparansi, Layanan Publik, Berita). Halaman & dokumen tetap aman.', 'Info Rapikan 6 Menu'); ?>
+                        </form>
+                    </div>
+                </div>
+
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">1. Mode Adopsi Situs Lama (Non-Destruktif) <?php echo pa_sinova_info_tip('Aktifkan bila sudah punya tema, menu, Elementor, atau konten impor Joomla yang ingin tetap dipertahankan.', 'Info mode adopsi'); ?></h2>
+                    <h2 style="margin-top:0;color:#056e4f;">2. Mode Adopsi Situs Lama (Non-Destruktif) <?php echo pa_sinova_info_tip('Aktifkan bila sudah punya tema, menu, Elementor, atau konten impor Joomla yang ingin tetap dipertahankan.', 'Info mode adopsi'); ?></h2>
                     <form method="post">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <label style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:14px;">
@@ -5039,7 +5163,7 @@ function pa_sinova_render_admin_page(): void {
                 </div>
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">2. Ekstrak &amp; Impor Tautan Dokumen <?php echo pa_sinova_info_tip('Pindai link PDF atau Google Drive dari halaman/berita lama (termasuk hasil impor Joomla) langsung ke tabel modul arsip.', 'Info impor tautan'); ?></h2>
+                    <h2 style="margin-top:0;color:#056e4f;">3. Ekstrak &amp; Impor Tautan Dokumen <?php echo pa_sinova_info_tip('Pindai link PDF atau Google Drive dari halaman/berita lama (termasuk hasil impor Joomla) langsung ke tabel modul arsip.', 'Info impor tautan'); ?></h2>
                     <form method="post" style="display:grid;grid-template-columns:1.4fr 1.2fr 120px auto;gap:12px;align-items:end;margin-bottom:16px;">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="scan_links">
@@ -5840,9 +5964,9 @@ function pa_sinova_render_admin_page(): void {
                     · <a href="<?php echo esc_url($tabBaseUrl . 'migration'); ?>">Kelola</a>
                 </div>
             <?php endif; ?>
-            <div class="pa-adm-cols-set">
-                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;">Identitas Satker, Tampilan &amp; API</h2>
+            <div style="max-width:980px;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:20px;">
+                    <h2 style="margin-top:0;color:#056e4f;">Identitas Satker &amp; Konfigurasi Tampilan</h2>
                     <form method="post">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                         <input type="hidden" name="pa_sinova_action" value="save_settings">
@@ -5895,7 +6019,15 @@ function pa_sinova_render_admin_page(): void {
                             <tr><th>Alamat Kantor</th><td><input type="text" name="address" class="regular-text" value="<?php echo esc_attr($cfg['address']); ?>"></td></tr>
                             <tr><th>Telepon / WA PTSP</th><td><input type="text" name="phone" class="regular-text" value="<?php echo esc_attr($cfg['phone']); ?>"></td></tr>
                             <tr><th>Email Resmi</th><td><input type="email" name="email" class="regular-text" value="<?php echo esc_attr($cfg['email']); ?>"></td></tr>
-                            <tr><th>Jam Sidang</th><td><input type="text" name="hearing_hours" class="regular-text" value="<?php echo esc_attr($cfg['hearing_hours'] ?? ''); ?>"></td></tr>
+                            <tr><th>Jam Sidang <?php echo pa_sinova_info_tip('Contoh: 09:00 WIB s/d Selesai. Tampil pada kartu info jadwal sidang Beranda.', 'Info Jam Sidang'); ?></th><td><input type="text" name="hearing_hours" class="regular-text" value="<?php echo esc_attr($cfg['hearing_hours'] ?? ''); ?>" placeholder="Contoh: 09:00 WIB s/d Selesai"></td></tr>
+                            <tr><th>Zona Waktu Satker <?php echo pa_sinova_info_tip('Pilih zona waktu operasional satuan kerja. Jam digital topbar header portal, jam operasional PTSP, dan jadwal sidang otomatis menggunakan zona waktu ini.', 'Info Zona Waktu'); ?></th><td>
+                                <select name="timezone_zone" class="regular-text" style="max-width:280px;">
+                                    <option value="WIB" <?php selected($cfg['timezone_zone'] ?? 'WIB', 'WIB'); ?>>WIB — Waktu Indonesia Barat (UTC+7)</option>
+                                    <option value="WITA" <?php selected($cfg['timezone_zone'] ?? 'WIB', 'WITA'); ?>>WITA — Waktu Indonesia Tengah (UTC+8)</option>
+                                    <option value="WIT" <?php selected($cfg['timezone_zone'] ?? 'WIB', 'WIT'); ?>>WIT — Waktu Indonesia Timur (UTC+9)</option>
+                                </select>
+                                <p class="description" style="margin-top:4px;color:#64748b;">Mempengaruhi jam live clock di topbar header, jam operasional layanan PTSP, dan jadwal sidang.</p>
+                            </td></tr>
                             <tr><th>Nama &amp; Jabatan Pimpinan</th><td>
                                 <input type="text" name="leader_name" class="regular-text" value="<?php echo esc_attr($cfg['leader_name']); ?>" placeholder="Nama Ketua Pengadilan Agama"><br>
                                 <input type="text" name="leader_title" class="regular-text" value="<?php echo esc_attr($cfg['leader_title'] ?? 'Ketua Pengadilan Agama'); ?>" placeholder="Jabatan (mis. Ketua Pengadilan Agama Sumedang)" style="margin-top:4px;">
@@ -5992,44 +6124,103 @@ function pa_sinova_render_admin_page(): void {
                                 <input type="url" name="rss_ma_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_ma_url'] ?? 'https://kepaniteraan.mahkamahagung.go.id/?format=feed&type=rss'); ?>" style="margin-bottom:4px;"><br>
                                 <input type="url" name="rss_badilag_url" class="regular-text" value="<?php echo esc_attr($cfg['rss_badilag_url'] ?? 'https://badilag.mahkamahagung.go.id/pengumuman-elektronik?format=feed&type=rss'); ?>">
                             </td></tr>
-                            <tr><th>Mode Keamanan CSP <?php echo pa_sinova_info_tip('Strict: Nonce + Strict-Dynamic + Trusted Types. Pilih Compat bila memakai plugin/Elementor lawas.', 'Info CSP'); ?></th><td>
-                                <select name="csp_mode" class="regular-text">
-                                    <option value="strict" <?php selected($cfg['csp_mode'] ?? 'strict', 'strict'); ?>>Strict (Rekomendasi)</option>
-                                    <option value="compat" <?php selected($cfg['csp_mode'] ?? 'strict', 'compat'); ?>>Compat (Plugin/Elementor Lawas)</option>
-                                    <option value="off" <?php selected($cfg['csp_mode'] ?? 'strict', 'off'); ?>>Off (Header Dasar Saja)</option>
-                                </select>
-                            </td></tr>
-                            <tr><th>Secret Key HMAC API</th><td><input type="text" name="hmac_secret" class="regular-text" value="<?php echo esc_attr($cfg['hmac_secret']); ?>" placeholder="Minimal 32 karakter"><br><label><input type="checkbox" name="generate_hmac" value="1"> Generate Secret Key baru</label></td></tr>
-                            <tr><th>Turnstile Site Key</th><td><input type="text" name="turnstile_site_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_site_key']); ?>"></td></tr>
-                            <tr><th>Turnstile Secret Key</th><td><input type="password" name="turnstile_secret_key" class="regular-text" value="<?php echo esc_attr($cfg['turnstile_secret_key']); ?>"></td></tr>
+                            <tr>
+                                <td colspan="2" style="padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                                        <div>
+                                            <strong style="color:#056e4f;">Pengaturan Keamanan Tingkat Lanjut (Khusus IT)</strong>
+                                            <p style="margin:2px 0 0;font-size:12px;color:#64748b;">Pengaturan Content Security Policy (CSP), Secret Key HMAC API Gateway, Cloudflare Turnstile, dan URL Login Kustom sekarang dikelola terpusat pada tab Pengaturan Lanjutan.</p>
+                                        </div>
+                                        <a href="<?php echo esc_url($tabBaseUrl . 'advanced'); ?>" class="button button-secondary">Buka Pengaturan Lanjutan &rarr;</a>
+                                    </div>
+                                </td>
+                            </tr>
                         </table>
-                        <p><button type="submit" class="button button-primary">Simpan Pengaturan</button></p>
+                        <p style="margin-top:16px;"><button type="submit" class="button button-primary button-hero">Simpan Identitas &amp; Pengaturan</button></p>
                     </form>
                 </div>
+            </div>
 
-                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;">
-                        <h2 style="margin:0;color:#056e4f;font-size:16px;">Aksi Cepat Struktur</h2>
-                        <span style="padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;<?php echo $seededCount >= 15 ? 'background:#dcfce7;color:#166534;' : 'background:#fef3c7;color:#92400e;'; ?>">
-                            <?php echo $seededCount >= 15 ? ('● ' . (int) $seededCount . ' Halaman Siap') : '● Belum Di-seed'; ?>
-                        </span>
+        <?php elseif ($activeTab === 'advanced' && current_user_can('manage_options')) :
+            $curCspMode  = (string) ($cfg['csp_mode'] ?? 'strict');
+            $curHmacSec  = (string) ($cfg['hmac_secret'] ?? '');
+            $curTsSite   = (string) ($cfg['turnstile_site_key'] ?? '');
+            $curTsSec    = (string) ($cfg['turnstile_secret_key'] ?? '');
+            $curLogSlug  = (string) ($cfg['custom_login_slug'] ?? '');
+            $effLoginUrl = $curLogSlug !== '' ? trailingslashit(home_url('/' . $curLogSlug)) : site_url('wp-login.php');
+        ?>
+            <div style="max-width:980px;">
+                <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:20px;margin-bottom:20px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+                        <div>
+                            <h2 style="margin:0;color:#056e4f;font-size:17px;">Pengaturan Lanjutan Khusus Administrator IT</h2>
+                            <p style="margin:4px 0 0;color:#64748b;font-size:12.5px;">Konfigurasi keamanan tingkat lanjut: Content Security Policy, integrasi Cloudflare Turnstile, otentikasi HMAC REST API, dan masking URL login.</p>
+                        </div>
+                        <span class="pa-sec-pill is-ok">Khusus Administrator</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;gap:10px;">
-                        <form method="post" style="margin:0;display:flex;align-items:center;gap:6px;">
-                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                            <input type="hidden" name="pa_sinova_action" value="run_seeder">
-                            <button type="submit" class="button button-primary" style="flex:1;">
-                                <?php echo $seededCount >= 15 ? 'Lengkapi Halaman & Menu (1-Klik)' : 'Generate Halaman, Beranda & Menu (1-Klik)'; ?>
-                            </button>
-                            <?php echo pa_sinova_info_tip('Otomatis membuat halaman 23 modul arsip, halaman wajib SK 2722/2026 & KMA 2-144/2022, Beranda dinamis, berita contoh, serta menyusun 6 menu utama. Halaman lama tidak tertimpa.', 'Info Seeder 1-Klik'); ?>
-                        </form>
-                        <form method="post" style="margin:0;display:flex;align-items:center;gap:6px;" onsubmit="return confirm('Susun ulang item Menu Utama SINOVA menjadi 6 menu standar? Halaman tidak dihapus.');">
-                            <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
-                            <input type="hidden" name="pa_sinova_action" value="rebuild_6menu">
-                            <button type="submit" class="button button-secondary" style="flex:1;">Rapikan 6 Menu Resmi</button>
-                            <?php echo pa_sinova_info_tip('Menata ulang Menu Utama SINOVA menjadi tepat 6 induk baku (Beranda, Profil, Layanan Hukum, Transparansi, Layanan Publik, Berita). Halaman & dokumen tetap aman.', 'Info Rapikan 6 Menu'); ?>
-                        </form>
-                    </div>
+
+                    <form method="post">
+                        <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
+                        <input type="hidden" name="pa_sinova_action" value="save_advanced">
+
+                        <table class="form-table">
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Content Security Policy (CSP) &amp; Keamanan Web</th></tr>
+                            <tr>
+                                <th>Mode Keamanan CSP <?php echo pa_sinova_info_tip('Strict: Nonce + Strict-Dynamic + Trusted Types. Rekomendasi tinggi untuk perlindungan XSS/injeksi skrip. Pilih Compat bila masih memerlukan kompatibilitas plugin lawas.', 'Info CSP'); ?></th>
+                                <td>
+                                    <select name="csp_mode" class="regular-text" style="max-width:340px;">
+                                        <option value="strict" <?php selected($curCspMode, 'strict'); ?>>Strict (Rekomendasi MA RI &amp; Siber — Nonce + Trusted Types)</option>
+                                        <option value="compat" <?php selected($curCspMode, 'compat'); ?>>Compat (Kompatibilitas Plugin/Elementor Lawas)</option>
+                                        <option value="off" <?php selected($curCspMode, 'off'); ?>>Off (Hanya Header Keamanan Dasar)</option>
+                                    </select>
+                                    <p class="description" style="margin-top:4px;color:#64748b;">Header CSP juga otomatis disertakan pada Early HTML Cache di layer depan.</p>
+                                </td>
+                            </tr>
+
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Otentikasi HMAC Secret (REST API Gateway &amp; Push SIPP)</th></tr>
+                            <tr>
+                                <th>Secret Key HMAC API <?php echo pa_sinova_info_tip('Kunci rahasia minimal 32 karakter untuk memverifikasi payload push jadwal sidang SIPP dan integrasi gateway eksternal.', 'Info HMAC API'); ?></th>
+                                <td>
+                                    <input type="text" name="hmac_secret" class="regular-text" style="font-family:monospace;max-width:540px;" value="<?php echo esc_attr($curHmacSec); ?>" placeholder="Minimal 32 karakter hex/alfanumerik">
+                                    <br>
+                                    <label style="margin-top:6px;display:inline-flex;align-items:center;gap:6px;">
+                                        <input type="checkbox" name="generate_hmac" value="1">
+                                        <span>Generate Secret Key 64-karakter baru secara acak (kriptografis CSPRNG)</span>
+                                    </label>
+                                </td>
+                            </tr>
+
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Cloudflare Turnstile (Anti-Bot &amp; Perlindungan Login)</th></tr>
+                            <tr>
+                                <th>Turnstile Site Key <?php echo pa_sinova_info_tip('Site Key publik dari dashboard Cloudflare Turnstile. Menggantikan CAPTCHA lama dengan verifikasi pintar tanpa klik.', 'Info Turnstile'); ?></th>
+                                <td>
+                                    <input type="text" name="turnstile_site_key" class="regular-text" value="<?php echo esc_attr($curTsSite); ?>" placeholder="0x4AAAAAA..." style="max-width:400px;">
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Turnstile Secret Key</th>
+                                <td>
+                                    <input type="password" name="turnstile_secret_key" class="regular-text" value="<?php echo esc_attr($curTsSec); ?>" placeholder="0x4AAAAAA..." style="max-width:400px;">
+                                    <p class="description" style="margin-top:4px;color:#64748b;">Bila Site Key dan Secret Key diisi, Turnstile otomatis aktif di halaman login WordPress.</p>
+                                </td>
+                            </tr>
+
+                            <tr><th colspan="2" style="padding:14px 0 4px;border-bottom:1px solid #e2e8f0;color:#056e4f;font-size:13.5px;">Penyamaran Alamat Login Admin (Custom Login Slug)</th></tr>
+                            <tr>
+                                <th>Slug URL Login Kustom <?php echo pa_sinova_info_tip('Menyamarkan jalur login wp-login.php ke slug unik (misal: pintu-masuk atau gerbang-admin). Permintaan langsung ke wp-login.php dialihkan atau diblokir.', 'Info Login Kustom'); ?></th>
+                                <td>
+                                    <input type="text" name="custom_login_slug" class="regular-text" value="<?php echo esc_attr($curLogSlug); ?>" placeholder="Kosongkan untuk bawaan (wp-login.php)" style="max-width:320px;">
+                                    <p class="description" style="margin-top:4px;color:#64748b;">
+                                        URL login aktif saat ini: <code><?php echo esc_html($effLoginUrl); ?></code>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p style="margin-top:18px;">
+                            <button type="submit" class="button button-primary button-hero">Simpan Pengaturan Lanjutan</button>
+                        </p>
+                    </form>
                 </div>
             </div>
 

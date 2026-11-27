@@ -232,12 +232,16 @@ add_shortcode('pa_sinova_welcome_section', static function () {
             </div>
         </div>
         <div class="pa-maklumat-card">
+            <?php
+            $tzInfo = function_exists('pa_sinova_timezone_info') ? pa_sinova_timezone_info() : array('zone' => 'WIB');
+            $tzZone = $tzInfo['zone'] ?? 'WIB';
+            ?>
             <span class="pa-mk-kicker">Maklumat Pelayanan &amp; PTSP</span>
             <h3>Pelayanan Prima Berintegritas</h3>
             <p class="pa-mk-quote">"Dengan ini kami menyatakan sanggup menyelenggarakan pelayanan sesuai standar pelayanan yang telah ditetapkan dan apabila tidak menepati janji siap menerima sanksi sesuai peraturan perundang-undangan."</p>
             <ul class="pa-mk-hours">
-                <li><strong>Senin – Kamis:</strong> 08.00 – 16.30 WIB</li>
-                <li><strong>Jumat:</strong> 08.00 – 17.00 WIB</li>
+                <li><strong>Senin – Kamis:</strong> 08.00 – 16.30 <?php echo esc_html($tzZone); ?></li>
+                <li><strong>Jumat:</strong> 08.00 – 17.00 <?php echo esc_html($tzZone); ?></li>
                 <li><strong>Layanan PTSP:</strong> <?php echo esc_html($phone . ' · ' . $email); ?></li>
             </ul>
             <a class="pa-mk-btn" href="./standar-maklumat-pelayanan/">Baca Standar &amp; Maklumat Pelayanan →</a>
@@ -319,7 +323,9 @@ function pa_sinova_render_schedule_dashboard(array $atts = array()): string {
 
     $satker      = function_exists('pa_sinova_satker_name') ? pa_sinova_satker_name() : (get_bloginfo('name') ?: 'Pengadilan Agama');
     $sippPortal  = trim((string) ($cfg['sipp_url'] ?? ''));
-    $hearingHrs  = trim((string) ($cfg['hearing_hours'] ?? 'Senin–Kamis 09.00 WIB s.d. selesai'));
+    $tzInfoSched = function_exists('pa_sinova_timezone_info') ? pa_sinova_timezone_info() : array('zone' => 'WIB');
+    $tzZoneSched = $tzInfoSched['zone'] ?? 'WIB';
+    $hearingHrs  = trim((string) ($cfg['hearing_hours'] ?? ('Senin–Kamis 09.00 ' . $tzZoneSched . ' s.d. selesai')));
     $agendaUrl   = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('agenda-jadwal-persidangan') : home_url('/agenda-jadwal-persidangan/');
     $ghaibUrl    = function_exists('pa_sinova_resolve_page_url') ? pa_sinova_resolve_page_url('panggilan-ghaib') : home_url('/panggilan-ghaib/');
     $heading     = trim((string) $cfgAtts['title']) ?: 'Jadwal Persidangan & Monitor SIPP';
@@ -390,7 +396,7 @@ function pa_sinova_render_schedule_dashboard(array $atts = array()): string {
                     <div class="pa-sched-cards">
                         <?php foreach (array_slice($hearings, 0, 6) as $hr) :
                             $meta    = isset($hr['meta_json']) ? json_decode((string) $hr['meta_json'], true) : array();
-                            $jam     = (string) ($hr['jam'] ?? (is_array($meta) ? ($meta['jam'] ?? '09.00 WIB') : '09.00 WIB'));
+                            $jam     = (string) ($hr['jam'] ?? (is_array($meta) ? ($meta['jam'] ?? ('09.00 ' . $tzZoneSched)) : ('09.00 ' . $tzZoneSched)));
                             $ruang   = (string) ($hr['category'] ?? 'Ruang Sidang');
                             $nomor   = (string) ($hr['title'] ?? '-');
                             $agendaT = (string) ($hr['subtitle'] ?? 'Persidangan');
@@ -4278,13 +4284,15 @@ add_action('wp_body_open', static function () {
     $tagline = get_bloginfo('description') ?: 'Portal Resmi Keterbukaan Informasi Publik';
     $phone   = $cfg['phone'] ?? '';
 
-    $wibNow  = new DateTimeImmutable('now', new DateTimeZone('Asia/Jakarta'));
+    $tzInfo  = function_exists('pa_sinova_timezone_info') ? pa_sinova_timezone_info() : array('zone' => 'WIB', 'tz' => 'Asia/Jakarta', 'offset' => 7, 'label' => 'WIB (UTC+7)');
+    $tzZone  = $tzInfo['zone'];
+    $wibNow  = new DateTimeImmutable('now', new DateTimeZone($tzInfo['tz']));
     $daysId  = array('Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu');
     $monsId  = array(1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember');
     $clockInit = $daysId[(int) $wibNow->format('w')] . ', '
         . $wibNow->format('j') . ' '
         . ($monsId[(int) $wibNow->format('n')] ?? $wibNow->format('F')) . ' '
-        . $wibNow->format('Y') . ' · ' . $wibNow->format('H:i:s') . ' WIB';
+        . $wibNow->format('Y') . ' · ' . $wibNow->format('H:i:s') . ' ' . $tzZone;
     $emg    = trim((string) ($cfg['emergency_notice'] ?? ''));
     $emgUrl = trim((string) ($cfg['emergency_notice_url'] ?? ''));
     ?>
@@ -4302,9 +4310,9 @@ add_action('wp_body_open', static function () {
 <?php endif; ?>
 <div class="pa-shell-topbar">
     <div class="pa-shell-inner">
-        <span id="pa-live-clock" class="pa-live-clock" title="Waktu Indonesia Barat"><?php echo esc_html($clockInit); ?></span>
+        <span id="pa-live-clock" class="pa-live-clock" title="<?php echo esc_attr($tzInfo['label']); ?>"><?php echo esc_html($clockInit); ?></span>
         <div class="pa-shell-topbar-links">
-            <span id="pa-ptsp-live-pill" class="pa-ptsp-pill" data-pa-tip="Jam layanan PTSP: Senin–Kamis 08.00–16.30 WIB · Jumat 08.00–17.00 WIB">● PTSP</span>
+            <span id="pa-ptsp-live-pill" class="pa-ptsp-pill" data-pa-tip="Jam layanan PTSP: Senin–Kamis 08.00–16.30 <?php echo esc_attr($tzZone); ?> · Jumat 08.00–17.00 <?php echo esc_attr($tzZone); ?>">● PTSP</span>
             <span>PTSP: <?php echo esc_html($phone ?: 'Senin–Jumat'); ?></span>
             <a href="<?php echo esc_url($cfg['sipp_url'] ?? 'https://sipp.pa-contoh.go.id/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Sistem Informasi Penelusuran Perkara">SIPP</a>
             <a href="<?php echo esc_url($cfg['ecourt_url'] ?? 'https://ecourt.mahkamahagung.go.id/'); ?>" target="_blank" rel="noopener noreferrer" data-pa-tip="Layanan Perkara Elektronik MA RI">e-Court</a>
@@ -4395,6 +4403,7 @@ add_action('wp_footer', static function () {
     $cfg     = function_exists('pa_sinova_get_settings') ? pa_sinova_get_settings() : array();
     $satker  = $cfg['satker_name'] ?? (get_bloginfo('name') ?: 'Pengadilan Agama');
     $logoUrl = trim((string) ($cfg['logo_url'] ?? ''));
+    $tzInfo = function_exists('pa_sinova_timezone_info') ? pa_sinova_timezone_info() : array('zone' => 'WIB', 'offset' => 7);
     $vStats  = pa_starter_get_visitor_stats();
     if (!pa_sinova_is_adoption_mode()) :
     ?>
@@ -4673,10 +4682,12 @@ add_action('wp_footer', static function () {
         var bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
         var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
         var lastPtspOpen = null;
+        var tzOffset = <?php echo (int) ($tzInfo['offset'] ?? 7); ?>;
+        var tzLabel = <?php echo json_encode($tzInfo['zone'] ?? 'WIB'); ?>;
         var tickClock = function(){
             if(document.hidden) return;
-            var d = new Date(Date.now() + 7 * 3600000);
-            clockEl.textContent = hari[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + bulan[d.getUTCMonth()] + ' ' + d.getUTCFullYear() + ' · ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + ' WIB';
+            var d = new Date(Date.now() + tzOffset * 3600000);
+            clockEl.textContent = hari[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + bulan[d.getUTCMonth()] + ' ' + d.getUTCFullYear() + ' · ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + ' ' + tzLabel;
             if(ptspPill){
                 var dow = d.getUTCDay(), mins = d.getUTCHours() * 60 + d.getUTCMinutes();
                 var open = (dow >= 1 && dow <= 4 && mins >= 480 && mins <= 990) || (dow === 5 && mins >= 480 && mins <= 1020);
