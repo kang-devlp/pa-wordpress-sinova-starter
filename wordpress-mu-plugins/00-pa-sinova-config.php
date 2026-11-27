@@ -7,7 +7,7 @@
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.5.0');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.5.1');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -441,7 +441,7 @@ add_action('init', 'pa_sinova_register_roles', 5);
 
 function pa_sinova_user_allowed_tabs(): array {
     if (current_user_can('manage_options')) {
-        return array('compliance', 'homepage', 'settings', 'upload', 'data', 'migration', 'security', 'advanced');
+        return array('compliance', 'homepage', 'content_studio', 'settings', 'upload', 'data', 'migration', 'security', 'advanced');
     }
     if (current_user_can('pa_manage_kepaniteraan') || current_user_can('pa_manage_kesekretariatan')) {
         return array('compliance', 'upload', 'data', 'security');
@@ -3817,6 +3817,19 @@ function pa_sinova_render_admin_page(): void {
                     $notice = 'Penyembunyian URL login dinonaktifkan; WordPress kembali memakai /wp-login.php standar.';
                 }
             }
+        } elseif ($action === 'save_content_studio' && $requireAdmin()) {
+            $activeTab = 'content_studio';
+            if (function_exists('pa_sinova_handle_content_studio_action')) {
+                $notice = pa_sinova_handle_content_studio_action();
+            }
+        } elseif (in_array($action, array('joomla_wizard_scan', 'joomla_wizard_apply', 'joomla_wizard_rollback'), true) && $requireAdmin()) {
+            $activeTab = 'migration';
+            if (function_exists('pa_sinova_handle_joomla_wizard_action')) {
+                $jwMsg = pa_sinova_handle_joomla_wizard_action($action);
+                if ($jwMsg !== null) {
+                    $notice = $jwMsg;
+                }
+            }
         }
     }
 
@@ -3843,8 +3856,9 @@ function pa_sinova_render_admin_page(): void {
     $exportJsonUrl = admin_url('admin.php?page=pa-sinova-starter&pa_sinova_export=json&_wpnonce=' . rawurlencode($exportNonce));
     $tabLabels     = array(
         'compliance' => 'Dashboard 3 Pilar &amp; 35 Kriteria (' . $audit['weighted_total'] . ')',
-        'homepage'   => 'Tampilan Beranda',
-        'settings'   => 'Identitas Satker',
+        'homepage'       => 'Tampilan Beranda',
+        'content_studio' => 'Desain Postingan &amp; HTML',
+        'settings'       => 'Identitas Satker',
         'upload'     => 'Upload &amp; Kelola Dokumen',
         'data'       => 'Data Operasional &amp; Publikasi',
         'migration'  => 'Setup Awal, Migrasi &amp; Update',
@@ -3970,6 +3984,7 @@ function pa_sinova_render_admin_page(): void {
                 <?php if ($isAdm) : ?>
                     <div class="pa-adm-grp-lbl">Konten &amp; Beranda</div>
                     <a href="<?php echo esc_url($tabBaseUrl . 'homepage'); ?>" class="<?php echo $activeTab === 'homepage' ? 'is-active' : ''; ?>"><span>Tampilan Beranda</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'content_studio'); ?>" class="<?php echo $activeTab === 'content_studio' ? 'is-active' : ''; ?>"><span>Desain Postingan &amp; HTML</span></a>
                     <a href="<?php echo esc_url($tabBaseUrl . 'settings'); ?>" class="<?php echo $activeTab === 'settings' ? 'is-active' : ''; ?>"><span>Identitas Satker</span></a>
                 <?php endif; ?>
 
@@ -5147,6 +5162,8 @@ function pa_sinova_render_admin_page(): void {
                     </div>
                 </div>
 
+                <?php if (function_exists('pa_sinova_render_joomla_wizard_card')) { pa_sinova_render_joomla_wizard_card(); } ?>
+
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
                     <h2 style="margin-top:0;color:#056e4f;">2. Mode Adopsi Situs Lama (Non-Destruktif) <?php echo pa_sinova_info_tip('Aktifkan bila sudah punya tema, menu, Elementor, atau konten impor Joomla yang ingin tetap dipertahankan.', 'Info mode adopsi'); ?></h2>
                     <form method="post">
@@ -5284,6 +5301,12 @@ function pa_sinova_render_admin_page(): void {
                     </form>
                 </div>
             </div>
+
+        <?php elseif ($activeTab === 'content_studio') :
+            if (function_exists('pa_sinova_render_content_studio_tab')) {
+                pa_sinova_render_content_studio_tab();
+            }
+        ?>
 
         <?php elseif ($activeTab === 'homepage') :
             $frontIdNow    = (int) get_option('page_on_front', 0);
