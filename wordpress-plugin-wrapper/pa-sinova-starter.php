@@ -3,7 +3,7 @@
  * Plugin Name: PA SINOVA Starter Kit (Portal Resmi Pengadilan Agama)
  * Plugin URI: https://github.com/kang-devlp/pa-wordpress-sinova-starter
  * Description: Paket starter open source website resmi Pengadilan Agama (SK Dirjen Badilag 2722/2026): Editor Grid Beranda 12 Kolom Drag & Resize tanpa Elementor, Dashboard Jadwal Sidang & Live SIPP, API Push SIPP, 23 Modul Dokumen Publik, Audit 3 Pilar, MFA TOTP, dan Update 1-Klik + Rollback dari GitHub.
- * Version: 2.5.1
+ * Version: 2.5.2
  * Requires at least: 6.2
  * Requires PHP: 8.1
  * Author: M. Agus Hayyudin
@@ -38,6 +38,7 @@ $paSinovaCoreFiles = array(
     'pa-security-hardening.php',
     'pa-joomla-migration-wizard.php',
     'pa-content-studio.php',
+    'pa-visual-builder.php',
 );
 
 foreach ($paSinovaCoreFiles as $paFile) {

@@ -673,8 +673,7 @@ if (!function_exists('pa_sinova_render_joomla_wizard_card')) {
         <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
                 <div>
-                    <h2 style="margin:0;color:#056e4f;font-size:16px;">Wizard Migrasi Joomla &rarr; WordPress (1-Klik + Rollback)</h2>
-                    <p style="margin:4px 0 0;color:#64748b;font-size:12.5px;">Otomatis mengelompokkan postingan <code>Uncategorized</code> hasil impor Joomla ke 7 kategori standar PA SINOVA, mengisi laman placeholder <code>[LENGKAPI]</code>, membersihkan tag <code>{source}</code>/postingan kosong ke Draft, dan menghapus kategori kosong.</p>
+                    <h2 style="margin:0;color:#056e4f;font-size:16px;">Wizard Migrasi Joomla &rarr; WordPress (1-Klik + Rollback) <?php echo function_exists('pa_sinova_info_tip') ? pa_sinova_info_tip('Otomatis mengelompokkan postingan Uncategorized hasil impor Joomla ke 7 kategori standar PA SINOVA, mengisi laman placeholder [LENGKAPI], membersihkan tag {source}/postingan kosong ke Draft, dan menghapus kategori kosong.', 'Info Wizard Migrasi') : ''; ?></h2>
                 </div>
                 <span style="padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:700;<?php echo $liveUncat === 0 ? 'background:#dcfce7;color:#166534;' : 'background:#fef3c7;color:#92400e;'; ?>">
                     <?php echo $liveUncat === 0 ? '● Uncategorized Bersih (0)' : ('● ' . $liveUncat . ' Pos Uncategorized'); ?>

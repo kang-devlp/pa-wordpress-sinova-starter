@@ -551,36 +551,54 @@ if (!function_exists('pa_sinova_handle_content_studio_action')) {
 if (!function_exists('pa_sinova_render_content_studio_tab')) {
     function pa_sinova_render_content_studio_tab(): void {
         $cs = pa_sinova_cs_get_settings();
+        $quickItems = get_posts(array(
+            'post_type'      => array('page', 'post'),
+            'post_status'    => array('publish', 'draft'),
+            'posts_per_page' => 60,
+            'orderby'        => 'modified',
+            'order'          => 'DESC',
+        ));
         ?>
+        <?php if (function_exists('pa_kd_builder_url')) : ?>
+            <div style="background:linear-gradient(135deg,#033022 0%,#056e4f 100%);color:#fff;border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;">
+                <div>
+                    <div style="display:inline-block;padding:2px 8px;border-radius:6px;background:#C9A227;color:#022c22;font-size:11px;font-weight:900;margin-bottom:6px;">v2.5.2</div>
+                    <h2 style="margin:0;color:#fff;font-size:17px;">✨ Visual Builder — Edit with KangDevlp <?php echo function_exists('pa_sinova_info_tip') ? pa_sinova_info_tip('Desain tata letak Laman & Postingan secara visual 2-panel (Heading, Kolom, HTML Custom, Embed PDF, Tabel, & Widget SINOVA Hub) tanpa Elementor. Hasil dikompilasi ke HTML bersih.', 'Info Visual Builder') : ''; ?></h2>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <select id="pa-kd-quick-select" style="min-width:250px;max-width:340px;">
+                        <?php foreach ($quickItems as $qi) : ?>
+                            <option value="<?php echo esc_attr(pa_kd_builder_url((int) $qi->ID)); ?>"><?php echo esc_html('[' . strtoupper((string) $qi->post_type) . '] ' . ($qi->post_title ?: '(Tanpa Judul)')); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="button" class="button button-primary" style="background:#C9A227;border-color:#C9A227;color:#022c22;font-weight:800;" onclick="var s=document.getElementById('pa-kd-quick-select');if(s&&s.value)location.href=s.value;">Buka KangDevlp Builder &rarr;</button>
+                </div>
+            </div>
+        <?php endif; ?>
         <form method="post">
             <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
             <input type="hidden" name="pa_sinova_action" value="save_content_studio">
 
             <div class="pa-adm-cols-2">
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:18px;">
-                    <h2 style="margin-top:0;color:#056e4f;font-size:16px;">1. Auto-Beautifier Postingan &amp; Laman</h2>
-                    <p style="font-size:12.5px;color:#64748b;margin-top:-4px;">Otomatis mempercantik seluruh postingan lama (termasuk hasil migrasi Joomla) dan postingan baru tanpa perlu edit satu per satu atau memasang Elementor.</p>
+                    <h2 style="margin-top:0;color:#056e4f;font-size:16px;">1. Auto-Beautifier Postingan &amp; Laman <?php echo function_exists('pa_sinova_info_tip') ? pa_sinova_info_tip('Otomatis mempercantik seluruh postingan lama (termasuk hasil migrasi Joomla) dan postingan baru tanpa perlu edit satu per satu atau memasang Elementor.', 'Info Auto-Beautifier') : ''; ?></h2>
 
                     <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
                         <label style="padding:10px 12px;background:#f4f8f6;border:1px solid #d7e7e0;border-radius:8px;font-weight:700;">
                             <input type="checkbox" name="cs_enable_beautifier" value="1" <?php checked($cs['enable_beautifier'], '1'); ?>>
-                            Aktifkan Auto-Beautifier PA SINOVA di semua Post &amp; Laman
+                            Aktifkan Auto-Beautifier PA SINOVA
                         </label>
-                        <label><input type="checkbox" name="cs_responsive_tables" value="1" <?php checked($cs['responsive_tables'], '1'); ?>> <strong>Tabel HTML Responsif Otomatis</strong> (header hijau PA, zebra stripe, geser halus di HP)</label>
-                        <label><input type="checkbox" name="cs_auto_pdf_cards" value="1" <?php checked($cs['auto_pdf_cards'], '1'); ?>> <strong>Kartu/Tombol Dokumen PDF &amp; Google Drive</strong> otomatis pada tautan lampiran</label>
-                        <label><input type="checkbox" name="cs_auto_toc" value="1" <?php checked($cs['auto_toc'], '1'); ?>> <strong>Daftar Isi Otomatis (Auto-TOC)</strong> untuk artikel/laman panjang (&ge; 3 subjudul <code>H2</code>)</label>
-                        <label><input type="checkbox" name="cs_article_meta_bar" value="1" <?php checked($cs['article_meta_bar'], '1'); ?>> <strong>Lencana Kategori &amp; Estimasi Waktu Baca</strong> di bagian atas artikel</label>
-                        <label><input type="checkbox" name="cs_share_and_related" value="1" <?php checked($cs['share_and_related'], '1'); ?>> <strong>Tombol Bagikan WhatsApp, Salin Tautan &amp; Berita Terkait</strong> di bawah artikel</label>
-                        <label><input type="checkbox" name="cs_image_lightbox" value="1" <?php checked($cs['image_lightbox'], '1'); ?>> <strong>Lightbox Gambar</strong> (klik foto berita untuk memperbesar)</label>
+                        <label><input type="checkbox" name="cs_responsive_tables" value="1" <?php checked($cs['responsive_tables'], '1'); ?>> <strong>Tabel HTML Responsif</strong> <?php echo function_exists('pa_sinova_info_tip') ? pa_sinova_info_tip('Header hijau PA, zebra stripe, dan horizontal scroll otomatis di HP.', 'Info Tabel') : ''; ?></label>
+                        <label><input type="checkbox" name="cs_auto_pdf_cards" value="1" <?php checked($cs['auto_pdf_cards'], '1'); ?>> <strong>Kartu Dokumen PDF &amp; Drive</strong> <?php echo function_exists('pa_sinova_info_tip') ? pa_sinova_info_tip('Tautan .pdf dan Google Drive otomatis tampil sebagai tombol kartu rapi.', 'Info Kartu PDF') : ''; ?></label>
+                        <label><input type="checkbox" name="cs_auto_toc" value="1" <?php checked($cs['auto_toc'], '1'); ?>> <strong>Daftar Isi Otomatis (Auto-TOC)</strong> <?php echo function_exists('pa_sinova_info_tip') ? pa_sinova_info_tip('Muncul otomatis pada artikel/laman panjang dengan 3 atau lebih subjudul H2.', 'Info Auto-TOC') : ''; ?></label>
+                        <label><input type="checkbox" name="cs_article_meta_bar" value="1" <?php checked($cs['article_meta_bar'], '1'); ?>> <strong>Lencana Kategori &amp; Waktu Baca</strong></label>
+                        <label><input type="checkbox" name="cs_share_and_related" value="1" <?php checked($cs['share_and_related'], '1'); ?>> <strong>Share WhatsApp &amp; Berita Terkait</strong></label>
+                        <label><input type="checkbox" name="cs_image_lightbox" value="1" <?php checked($cs['image_lightbox'], '1'); ?>> <strong>Lightbox Gambar</strong> <?php echo function_exists('pa_sinova_info_tip') ? pa_sinova_info_tip('Klik foto berita untuk memperbesar layar penuh.', 'Info Lightbox') : ''; ?></label>
                     </div>
 
-                    <hr style="margin:18px 0;">
-                    <h3 style="margin:0 0 8px;color:#056e4f;font-size:14px;">Panduan Shortcode &amp; Editor Per Postingan</h3>
-                    <ul style="margin:0 0 0 18px;list-style:disc;font-size:12.5px;color:#475569;line-height:1.6;">
-                        <li>Di setiap halaman edit <strong>Post</strong> atau <strong>Laman</strong>, tersedia kotak <strong>PA SINOVA — Custom HTML &amp; CSS</strong> lengkap dengan 6 tombol preset snippet 1-klik.</li>
-                        <li>Gunakan shortcode <code>[pa_html_box title="Info" style="green|gold|info"]...[/pa_html_box]</code> untuk kotak konten rapi di mana saja.</li>
-                        <li>Di editor Gutenberg, klik tombol <strong>+ &rarr; Patterns &rarr; PA SINOVA</strong> untuk memakai template <em>Berita Kegiatan</em>, <em>Berita Mediasi</em>, dan <em>Pengumuman Resmi</em>.</li>
-                    </ul>
+                    <div style="margin-top:16px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12.5px;color:#334155;">
+                        <strong>Shortcode &amp; Patterns:</strong> <code>[pa_html_box title="Info" style="green|gold|info"]...[/pa_html_box]</code> <?php echo function_exists('pa_sinova_info_tip') ? pa_sinova_info_tip('Di setiap editor Post/Laman tersedia kotak Custom HTML & CSS + 6 preset snippet, serta di Gutenberg klik + -> Patterns -> PA SINOVA.', 'Info Shortcode') : ''; ?>
+                    </div>
                 </div>
 
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">

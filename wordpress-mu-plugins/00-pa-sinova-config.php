@@ -7,7 +7,7 @@
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.5.1');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.5.2');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -4759,8 +4759,7 @@ function pa_sinova_render_admin_page(): void {
                         </form>
 
                         <div style="border-top:1px dashed #cbd5e1;padding-top:12px;">
-                            <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:4px;">Impor Cepat CSV dari Ekspor SIMTEPA / SIKEP</div>
-                            <p style="margin:0 0 9px;font-size:12px;color:#64748b;line-height:1.45;">Karena SIMTEPA memakai SSO Badilag, cara tercepat tanpa akses API adalah ekspor daftar pegawai dari SIMTEPA/Excel ke format <code>.csv</code> lalu unggah di sini (otomatis mengelompokkan Pimpinan, Hakim, Kepaniteraan, Kesekretariatan, &amp; PPNPN).</p>
+                            <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:8px;">Impor Cepat CSV SIMTEPA / SIKEP <?php echo pa_sinova_info_tip('Ekspor daftar pegawai dari SIMTEPA/Excel ke format .csv lalu unggah di sini (otomatis mengelompokkan Pimpinan, Hakim, Kepaniteraan, Kesekretariatan, & PPNPN).', 'Info Impor CSV SIMTEPA'); ?></div>
                             <form method="post" action="<?php echo esc_url($dataViewUrl); ?>" enctype="multipart/form-data">
                                 <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
                                 <input type="hidden" name="pa_sinova_action" value="import_simtepa_csv">
@@ -4846,11 +4845,9 @@ function pa_sinova_render_admin_page(): void {
                             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                                 <button type="submit" name="pa_sinova_action" value="sync_sipp_web" class="button button-primary">Sinkronkan dari SIPP Web</button>
                                 <button type="submit" name="pa_sinova_action" value="save_sipp_autosync" class="button button-secondary">Simpan Jadwal Cron</button>
+                                <?php echo pa_sinova_info_tip('Cukup isi URL SIPP di Identitas Satker. Tarik otomatis bergantung apakah SIPP Web satker dapat diakses langsung oleh server hosting.', 'Info SIPP Web'); ?>
                             </div>
                         </form>
-                        <p style="margin:10px 0 0;font-size:12px;color:#64748b;line-height:1.5;">
-                            Operator cukup mengisi <strong>URL SIPP</strong> di <em>Identitas &amp; Seeder</em>. Catatan: tarik otomatis bergantung apakah SIPP Web satker dapat diakses langsung oleh server hosting (tanpa proteksi Cloudflare/blokir IP).
-                        </p>
                     </div>
                     <?php endif; ?>
 
@@ -4858,8 +4855,7 @@ function pa_sinova_render_admin_page(): void {
                     <details style="background:#fff;border:1px solid #cbd5e1;border-top:3px solid <?php echo $isEditingRec ? '#056e4f' : '#94a3b8'; ?>;border-radius:10px;padding:14px 18px;" <?php echo $isEditingRec ? 'open' : ''; ?>>
                         <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
                             <div>
-                                <strong style="color:#0f172a;font-size:14.5px;"><?php echo $isEditingRec ? 'Edit Entri Manual Jadwal Sidang' : 'Input Manual Jadwal Sidang (Cadangan / Fallback)'; ?></strong>
-                                <div style="font-size:12px;color:#64748b;margin-top:2px;">Khusus <em>fallback</em> jika Auto-Sync SIPP Web atau Push SIPP tidak tersedia/terblokir. Bila jadwal sudah sinkron otomatis, bagian ini tidak perlu diisi.</div>
+                                <strong style="color:#0f172a;font-size:14.5px;"><?php echo $isEditingRec ? 'Edit Entri Manual Jadwal Sidang' : 'Input Manual Jadwal Sidang (Cadangan)'; ?> <?php echo pa_sinova_info_tip('Khusus fallback jika Auto-Sync SIPP Web atau Push SIPP tidak tersedia/terblokir. Bila jadwal sudah sinkron otomatis, bagian ini tidak perlu diisi.', 'Info Fallback'); ?></strong>
                             </div>
                             <span style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;"><?php echo $isEditingRec ? ('Edit #' . esc_html((string) $editRec['id'])) : 'Opsional ▾'; ?></span>
                         </summary>
@@ -4875,9 +4871,6 @@ function pa_sinova_render_admin_page(): void {
                                 <span style="background:#ecfdf5;color:#056e4f;border:1px solid #86efac;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;">Edit #<?php echo esc_html((string) $editRec['id']); ?></span>
                             <?php endif; ?>
                         </div>
-                        <?php if ($isPegawaiSection && !$isEditingRec) : ?>
-                            <p style="margin:0 0 10px;font-size:12px;color:#64748b;">Tambahkan atau lengkapi foto, NIP, pangkat, dan riwayat pegawai secara manual kapan saja (tidak tertimpa oleh impor CSV/SIMTEPA).</p>
-                        <?php endif; ?>
                     <?php endif; ?>
                     <form method="post" action="<?php echo esc_url($dataViewUrl); ?>">
                         <?php wp_nonce_field('pa_sinova_starter_nonce'); ?>
@@ -5137,8 +5130,7 @@ function pa_sinova_render_admin_page(): void {
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #C9A227;border-radius:10px;padding:18px;">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
                         <div>
-                            <h2 style="margin:0;color:#056e4f;font-size:16px;">1. Struktur Halaman Wajib &amp; 6 Menu Baku (Seeder 1-Klik)</h2>
-                            <p style="margin:4px 0 0;color:#64748b;font-size:12.5px;">Membangun otomatis halaman transparansi publik (SK 2722/2026 &amp; KMA 2-144/2022), modul arsip, dan 6 menu induk resmi tanpa menghapus konten yang sudah ada.</p>
+                            <h2 style="margin:0;color:#056e4f;font-size:16px;">1. Struktur Halaman Wajib &amp; 6 Menu Baku (Seeder 1-Klik) <?php echo pa_sinova_info_tip('Membangun otomatis halaman transparansi publik (SK 2722/2026 & KMA 2-144/2022), 23 modul arsip, dan 6 menu induk resmi tanpa menghapus konten yang sudah ada.', 'Info Seeder'); ?></h2>
                         </div>
                         <span style="padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:700;<?php echo $seededCount >= 15 ? 'background:#dcfce7;color:#166534;' : 'background:#fef3c7;color:#92400e;'; ?>">
                             <?php echo $seededCount >= 15 ? ('● ' . (int) $seededCount . ' Halaman Siap') : '● Belum Di-seed'; ?>
@@ -6176,8 +6168,7 @@ function pa_sinova_render_admin_page(): void {
                 <div style="background:#fff;border:1px solid #cbd5e1;border-top:4px solid #056e4f;border-radius:10px;padding:20px;margin-bottom:20px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
                         <div>
-                            <h2 style="margin:0;color:#056e4f;font-size:17px;">Pengaturan Lanjutan Khusus Administrator IT</h2>
-                            <p style="margin:4px 0 0;color:#64748b;font-size:12.5px;">Konfigurasi keamanan tingkat lanjut: Content Security Policy, integrasi Cloudflare Turnstile, otentikasi HMAC REST API, dan masking URL login.</p>
+                            <h2 style="margin:0;color:#056e4f;font-size:17px;">Pengaturan Lanjutan (IT) <?php echo pa_sinova_info_tip('Konfigurasi keamanan tingkat lanjut: Content Security Policy (CSP), Cloudflare Turnstile, otentikasi HMAC REST API, dan masking URL login.', 'Info Pengaturan Lanjutan'); ?></h2>
                         </div>
                         <span class="pa-sec-pill is-ok">Khusus Administrator</span>
                     </div>
@@ -6196,7 +6187,6 @@ function pa_sinova_render_admin_page(): void {
                                         <option value="compat" <?php selected($curCspMode, 'compat'); ?>>Compat (Kompatibilitas Plugin/Elementor Lawas)</option>
                                         <option value="off" <?php selected($curCspMode, 'off'); ?>>Off (Hanya Header Keamanan Dasar)</option>
                                     </select>
-                                    <p class="description" style="margin-top:4px;color:#64748b;">Header CSP juga otomatis disertakan pada Early HTML Cache di layer depan.</p>
                                 </td>
                             </tr>
 
@@ -6221,10 +6211,9 @@ function pa_sinova_render_admin_page(): void {
                                 </td>
                             </tr>
                             <tr>
-                                <th>Turnstile Secret Key</th>
+                                <th>Turnstile Secret Key <?php echo pa_sinova_info_tip('Bila Site Key dan Secret Key diisi, Turnstile otomatis aktif di halaman login WordPress.', 'Info Secret Key'); ?></th>
                                 <td>
                                     <input type="password" name="turnstile_secret_key" class="regular-text" value="<?php echo esc_attr($curTsSec); ?>" placeholder="0x4AAAAAA..." style="max-width:400px;">
-                                    <p class="description" style="margin-top:4px;color:#64748b;">Bila Site Key dan Secret Key diisi, Turnstile otomatis aktif di halaman login WordPress.</p>
                                 </td>
                             </tr>
 
