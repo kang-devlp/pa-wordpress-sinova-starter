@@ -43,28 +43,44 @@ flowchart TD
 
 ---
 
-## Tahap 1: Persiapan & Pencadangan Data Joomla
+## Tahap 1: Persiapan & Pencadangan Data Joomla (Aman untuk Pemula)
 
-Sebelum memulai proses konversi, kumpulkan data dan lakukan backup:
+> [!NOTE]
+> **100% Aman (Hanya Baca & Unduh):** Seluruh langkah di Tahap 1 hanya menyalin/mengunduh data dari website Joomla lama. Website Joomla yang sedang online **tidak akan terganggu, berubah, atau terhapus**.  
+> **Penting:** File `.sql` yang akan di-impor adalah **database Joomla milik satker Anda sendiri** (diambil dari hosting/cPanel lama), **bukan** dari paket GitHub PA SINOVA Starter.
 
-### 1.1. Ekspor Database Joomla
-1. Buka **cPanel / phpMyAdmin** pada server hosting Joomla Anda.
-2. Pilih database Joomla satker Anda, klik tab **Export** → pilih metode **Quick** → format **SQL** → klik **Go**.
-3. Simpan berkas `.sql` ini di komputer Anda dengan aman.
+### 1.1. Cek Nama Database & Prefix Tabel (`configuration.php`)
+Jika di hosting Anda terdapat lebih dari satu database, cek terlebih dahulu nama database yang benar-benar dipakai Joomla:
+1. Login ke **cPanel** hosting website Joomla satker Anda → buka **File Manager**.
+2. Masuk ke folder utama website (biasanya `public_html/`).
+3. Cari berkas bernama **`configuration.php`**, klik kanan → pilih **View** *(jangan Edit agar tidak sengaja mengubah isi)*.
+4. Catat 2 baris penting ini:
+   ```php
+   public $db = 'nama_db_joomla';   // Contoh: pasatker_joomla3
+   public $dbprefix = 'jos_';       // Catat prefix tabel ini (misal: jos_, j3_, k7x8_)
+   ```
 
-### 1.2. Unduh Folder Media/Gambar
-1. Melalui cPanel File Manager atau FTP (FileZilla), unduh seluruh folder `images/` dari direktori root Joomla.
-2. Folder ini berisi seluruh foto berita, banner, dan berkas lampiran yang pernah diunggah operator.
+### 1.2. Backup & Download Database Joomla (`.sql`) dari phpMyAdmin Hosting
+1. Kembali ke halaman utama **cPanel** → buka menu **phpMyAdmin** (di bagian *Databases*).
+2. Di panel sebelah kiri, klik **nama database Joomla** sesuai catatan dari `configuration.php` tadi (pastikan di dalamnya terlihat tabel seperti `jos_content`, `jos_categories`, `jos_users`).
+3. Klik tab **Export** di menu bagian atas.
+4. Pilih metode ekspor:
+   * **Quick** *(cukup untuk sebagian besar satker)* → Format: **SQL** → klik tombol **Go** / **Export**.
+   * *(Jika database besar & sering gagal unduh, atau ingin sekalian dikompres)*: pilih **Custom** → pada bagian *Compression* pilih **`zipped`** atau **`gzipped`** → pastikan *Format* tetap **SQL** → gulir ke bawah lalu klik **Go** / **Export**.
+5. Tunggu hingga berkas `.sql` (atau `.sql.zip`) selesai terunduh ke folder **Downloads** komputer Anda. Simpan salinannya sebagai backup aman.
 
-### 1.3. Catat Kredensial Database dari `configuration.php`
-Buka berkas `configuration.php` pada direktori utama Joomla Anda, dan catat baris-baris berikut:
-```php
-public $host = 'localhost';
-public $user = 'user_joomla';
-public $password = 'password_rahasia';
-public $db = 'nama_db_joomla';
-public $dbprefix = 'jos_'; // Catat prefix tabel ini (bisa jos_, j3_, dsb.)
-```
+### 1.3. Download Folder Foto & Lampiran (`images/`)
+1. Kembali ke **cPanel → File Manager → `public_html/`**.
+2. Klik kanan folder **`images`** → pilih **Compress** → pilih **Zip Archive** → klik **Compress File(s)**.
+3. Setelah muncul berkas `images.zip`, klik kanan berkas tersebut → pilih **Download**.
+4. *(Opsional bersih)* Hapus berkas `images.zip` sementara di `public_html/` setelah unduhan di komputer selesai 100%, agar tidak memenuhi kuota hosting. *(Jangan menghapus folder `images` aslinya!)*
+
+### 1.4. Siapkan Database di XAMPP / Laragon Lokal (Untuk Uji Coba Migrasi)
+1. Pastikan Anda sudah menginstall **WordPress kosongan** di XAMPP (misal database `db_webpa`) + tema **Astra** + upload plugin **`pa-sinova-starter.zip`**.
+2. Buka **phpMyAdmin lokal** (`http://localhost/phpmyadmin/`).
+3. Klik **New** di panel kiri → buat **1 database terpisah khusus menampung data Joomla** (misal beri nama `db_joomla_temp`, Collation biarkan `utf8mb4_general_ci`) → klik **Create**.
+4. Klik database `db_joomla_temp` di panel kiri → klik tab **Import** → klik **Choose File** → pilih **berkas `.sql` / `.sql.zip` hasil download dari cPanel Joomla di langkah 1.2** → klik **Import / Go** di bagian bawah.
+5. Jika berhasil, tabel-tabel Joomla (`jos_content`, dll.) akan muncul di `db_joomla_temp` dan siap ditarik ke WordPress pada **Tahap 2** di bawah.
 
 ---
 
