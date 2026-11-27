@@ -1,10 +1,10 @@
 {
   "version": "2.5.0",
-  "released_at": "2026-11-26",
+  "released_at": "2026-11-27",
   "requires_php": "8.1",
   "requires_wp": "6.2",
   "tested_wp": "7.0",
   "repo": "kang-devlp/pa-wordpress-sinova-starter",
   "download_url": "https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip",
-  "changelog": "v2.5.0: Hero Split Modern + Foto Gedung & 4 motif watermark daerah (Islami/Batik/Songket/Polos), 3 palet aksen WCAG AA, Foto Pimpinan di Sambutan, blok khusus Inovasi Layanan Satker, Strip Ringkasan Kinerja (KPI Bar), Widget Penelusuran Perkara Cepat (SIPP), jalur hybrid Direktori Putusan (Putusan Pilihan + API Push /sipp/push-decisions), ikon Medsos & Google Maps di Footer, lencana PA Plugin, dan 5 aset foto dummy SVG bawaan siap pakai."
+  "changelog": "v2.5.0: Hero Split Modern + Foto Gedung & 4 motif watermark daerah, 3 palet aksen WCAG AA, Foto Pimpinan, Inovasi Layanan Satker, KPI Bar, Penelusuran Perkara SIPP, Direktori Putusan hybrid, Auto-Sync Jadwal Sidang SIPP Web (WP-Cron 30 menit + fallback manual), redesain Profil Pegawai + sinkronisasi SIMTEPA/SIKEP (API/JSON, Impor CSV, Push HMAC & input manual), Menu Utama sticky/freeze saat di-scroll, Medsos & Maps di Footer, lencana PA Plugin, serta 5 aset dummy SVG."
 }
