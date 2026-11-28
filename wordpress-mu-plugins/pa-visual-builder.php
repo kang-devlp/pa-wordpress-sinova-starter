@@ -17,6 +17,7 @@ if (!function_exists('pa_kd_builder_sinova_widgets')) {
     function pa_kd_builder_sinova_widgets(): array {
         return array(
             'pa_sinova_latest_posts'    => 'Berita Terkini Satker',
+            'pa_sipp_list_perkara'      => 'Daftar Perkara Terbaru (Live SIPP)',
             'pa_official_announcements' => 'Pengumuman Resmi (Satker + MA/Badilag)',
             'pa_jadwal_sidang'          => 'Jadwal Sidang',
             'pa_panggilan_ghaib'        => 'Daftar Panggilan Ghaib',

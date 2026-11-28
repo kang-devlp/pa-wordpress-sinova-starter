@@ -7,7 +7,7 @@
 
 defined('ABSPATH') || exit;
 
-defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.5.2');
+defined('PA_SINOVA_STARTER_VERSION') || define('PA_SINOVA_STARTER_VERSION', '2.5.3');
 defined('PA_SINOVA_GITHUB_REPO') || define('PA_SINOVA_GITHUB_REPO', 'kang-devlp/pa-wordpress-sinova-starter');
 defined('PA_SINOVA_RUNTIME_MODE') || define('PA_SINOVA_RUNTIME_MODE', 'mu-plugin');
 
@@ -441,7 +441,7 @@ add_action('init', 'pa_sinova_register_roles', 5);
 
 function pa_sinova_user_allowed_tabs(): array {
     if (current_user_can('manage_options')) {
-        return array('compliance', 'homepage', 'content_studio', 'settings', 'upload', 'data', 'migration', 'security', 'advanced');
+        return array('compliance', 'homepage', 'menus', 'content_studio', 'settings', 'upload', 'data', 'migration', 'security', 'advanced');
     }
     if (current_user_can('pa_manage_kepaniteraan') || current_user_can('pa_manage_kesekretariatan')) {
         return array('compliance', 'upload', 'data', 'security');
@@ -1679,6 +1679,7 @@ function pa_sinova_home_block_catalog(): array {
         'kpi_bar'       => array('label' => 'Strip Ringkasan Kinerja (KPI)', 'default_w' => 12, 'default_h' => 1, 'icon' => '📈'),
         'services'      => array('label' => 'Pintasan Layanan Utama', 'default_w' => 12, 'default_h' => 1, 'icon' => '⊞'),
         'sipp_tracker'  => array('label' => 'Penelusuran Perkara (SIPP)', 'default_w' => 12, 'default_h' => 1, 'icon' => '🔎'),
+        'sipp_perkara'  => array('label' => 'Daftar Perkara Terbaru (Live SIPP)', 'default_w' => 12, 'default_h' => 1, 'icon' => '⚖'),
         'schedule'      => array('label' => 'Jadwal Sidang & Live SIPP', 'default_w' => 7, 'default_h' => 1, 'icon' => '📅'),
         'stats'         => array('label' => 'Statistik Perkara', 'default_w' => 5, 'default_h' => 1, 'icon' => '📊'),
         'inovasi'       => array('label' => 'Inovasi Layanan Satker', 'default_w' => 12, 'default_h' => 1, 'icon' => '✨'),
@@ -1709,14 +1710,15 @@ function pa_sinova_default_home_blocks(): array {
         array('id' => 'blk_tracker', 'type' => 'sipp_tracker', 'title' => 'Penelusuran Perkara Cepat (SIPP)', 'x' => 1, 'y' => 4, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
         array('id' => 'blk_schedule', 'type' => 'schedule', 'title' => 'Jadwal Sidang & Live SIPP', 'x' => 1, 'y' => 5, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('height' => 480)),
         array('id' => 'blk_stats', 'type' => 'stats', 'title' => 'Statistik Perkara', 'x' => 8, 'y' => 5, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_inovasi', 'type' => 'inovasi', 'title' => 'Inovasi Layanan Unggulan', 'x' => 1, 'y' => 6, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('count' => 4)),
-        array('id' => 'blk_ann', 'type' => 'announcements', 'title' => 'Pengumuman & Panggilan Ghaib', 'x' => 1, 'y' => 7, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array('limit' => 5)),
-        array('id' => 'blk_news', 'type' => 'news', 'title' => 'Berita Pelayanan & Inovasi Satker', 'x' => 6, 'y' => 7, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('count' => 3)),
-        array('id' => 'blk_dirput', 'type' => 'dirput', 'title' => 'Direktori Putusan Terbaru', 'x' => 1, 'y' => 8, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('count' => 6)),
-        array('id' => 'blk_welcome', 'type' => 'welcome', 'title' => 'Sambutan Pimpinan & Maklumat', 'x' => 1, 'y' => 9, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_zi', 'type' => 'zi', 'title' => 'Zona Integritas (6 Area)', 'x' => 1, 'y' => 10, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_survey', 'type' => 'survey', 'title' => 'Indeks Kepuasan & Integritas Pelayanan', 'x' => 1, 'y' => 11, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
-        array('id' => 'blk_directory', 'type' => 'directory', 'title' => 'Direktori Dokumen Publik', 'x' => 6, 'y' => 11, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_sipp_perkara', 'type' => 'sipp_perkara', 'title' => 'Daftar Perkara Terbaru (Live SIPP)', 'x' => 1, 'y' => 6, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('limit' => 10)),
+        array('id' => 'blk_inovasi', 'type' => 'inovasi', 'title' => 'Inovasi Layanan Unggulan', 'x' => 1, 'y' => 7, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('count' => 4)),
+        array('id' => 'blk_ann', 'type' => 'announcements', 'title' => 'Pengumuman & Panggilan Ghaib', 'x' => 1, 'y' => 8, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array('limit' => 5)),
+        array('id' => 'blk_news', 'type' => 'news', 'title' => 'Berita Pelayanan & Inovasi Satker', 'x' => 6, 'y' => 8, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array('count' => 4)),
+        array('id' => 'blk_dirput', 'type' => 'dirput', 'title' => 'Direktori Putusan Terbaru', 'x' => 1, 'y' => 9, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array('count' => 6)),
+        array('id' => 'blk_welcome', 'type' => 'welcome', 'title' => 'Sambutan Pimpinan & Maklumat', 'x' => 1, 'y' => 10, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_zi', 'type' => 'zi', 'title' => 'Zona Integritas (6 Area)', 'x' => 1, 'y' => 11, 'w' => 12, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_survey', 'type' => 'survey', 'title' => 'Indeks Kepuasan & Integritas Pelayanan', 'x' => 1, 'y' => 12, 'w' => 5, 'h' => 1, 'enabled' => true, 'config' => array()),
+        array('id' => 'blk_directory', 'type' => 'directory', 'title' => 'Direktori Dokumen Publik', 'x' => 6, 'y' => 12, 'w' => 7, 'h' => 1, 'enabled' => true, 'config' => array()),
     );
 }
 
@@ -1767,7 +1769,7 @@ function pa_sinova_sanitize_home_blocks($rawBlocks): array {
             $bCfg['count'] = max(1, min(9, (int) $rawCfg['count']));
         }
         if (isset($rawCfg['limit'])) {
-            $bCfg['limit'] = max(2, min(12, (int) $rawCfg['limit']));
+            $bCfg['limit'] = max(2, min(20, (int) $rawCfg['limit']));
         }
         if (!empty($rawCfg['default_tab']) && in_array((string) $rawCfg['default_tab'], array('auto', 'agenda', 'sipp'), true)) {
             $bCfg['default_tab'] = (string) $rawCfg['default_tab'];
@@ -3817,6 +3819,14 @@ function pa_sinova_render_admin_page(): void {
                     $notice = 'Penyembunyian URL login dinonaktifkan; WordPress kembali memakai /wp-login.php standar.';
                 }
             }
+        } elseif (in_array($action, array('mm_save_all', 'mm_add_item', 'mm_delete_item'), true) && $requireAdmin()) {
+            $activeTab = 'menus';
+            if (function_exists('pa_sinova_mm_handle_action')) {
+                $mmMsg = pa_sinova_mm_handle_action($action);
+                if ($mmMsg !== null) {
+                    $notice = $mmMsg;
+                }
+            }
         } elseif ($action === 'save_content_studio' && $requireAdmin()) {
             $activeTab = 'content_studio';
             if (function_exists('pa_sinova_handle_content_studio_action')) {
@@ -3857,6 +3867,7 @@ function pa_sinova_render_admin_page(): void {
     $tabLabels     = array(
         'compliance' => 'Dashboard 3 Pilar &amp; 35 Kriteria (' . $audit['weighted_total'] . ')',
         'homepage'       => 'Tampilan Beranda',
+        'menus'          => 'Kelola Menu &amp; Sub-Menu',
         'content_studio' => 'Desain Postingan &amp; HTML',
         'settings'       => 'Identitas Satker',
         'upload'     => 'Upload &amp; Kelola Dokumen',
@@ -3984,6 +3995,7 @@ function pa_sinova_render_admin_page(): void {
                 <?php if ($isAdm) : ?>
                     <div class="pa-adm-grp-lbl">Konten &amp; Beranda</div>
                     <a href="<?php echo esc_url($tabBaseUrl . 'homepage'); ?>" class="<?php echo $activeTab === 'homepage' ? 'is-active' : ''; ?>"><span>Tampilan Beranda</span></a>
+                    <a href="<?php echo esc_url($tabBaseUrl . 'menus'); ?>" class="<?php echo $activeTab === 'menus' ? 'is-active' : ''; ?>"><span>Kelola Menu &amp; Sub-Menu</span></a>
                     <a href="<?php echo esc_url($tabBaseUrl . 'content_studio'); ?>" class="<?php echo $activeTab === 'content_studio' ? 'is-active' : ''; ?>"><span>Desain Postingan &amp; HTML</span></a>
                     <a href="<?php echo esc_url($tabBaseUrl . 'settings'); ?>" class="<?php echo $activeTab === 'settings' ? 'is-active' : ''; ?>"><span>Identitas Satker</span></a>
                 <?php endif; ?>
@@ -5293,6 +5305,12 @@ function pa_sinova_render_admin_page(): void {
                     </form>
                 </div>
             </div>
+
+        <?php elseif ($activeTab === 'menus') :
+            if (function_exists('pa_sinova_mm_render_tab')) {
+                pa_sinova_mm_render_tab();
+            }
+        ?>
 
         <?php elseif ($activeTab === 'content_studio') :
             if (function_exists('pa_sinova_render_content_studio_tab')) {

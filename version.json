@@ -1,10 +1,10 @@
 {
-  "version": "2.5.2",
+  "version": "2.5.3",
   "released_at": "2026-11-28",
   "requires_php": "8.1",
   "requires_wp": "6.2",
   "tested_wp": "7.0",
   "repo": "kang-devlp/pa-wordpress-sinova-starter",
   "download_url": "https://github.com/kang-devlp/pa-wordpress-sinova-starter/raw/main/dist/pa-sinova-starter.zip",
-  "changelog": "v2.5.2: Visual Page & Post Builder terintegrasi 'Edit with KangDevlp' (kanvas 2-panel layar penuh ala Elementor, 14 widget termasuk HTML Custom, Grid 2-3 Kolom, Media Library, Embed PDF/Drive, Google Maps, Tabel Responsif, serta Widget Dinamis SINOVA Hub & Arsip Dokumen — dikompilasi ke HTML bersih tanpa JS berat di frontend) + Wizard Migrasi Joomla 1-Klik dan PA SINOVA Content Studio."
+  "changelog": "v2.5.3: Modul Daftar Perkara Terbaru Live SIPP ([pa_sipp_list_perkara] + blok Beranda 12 kolom + widget KangDevlp Builder yang otomatis mengikuti URL SIPP tiap satker), Pengelola Menu & Sub-Menu Visual di SINOVA Hub (ganti nama menu utama, tambah/edit/hapus sub-menu), grid default 4 berita terkini, perbaikan breakpoint mega-menu 922px Astra & sticky header, serta Visual Builder Edit with KangDevlp."
 }

@@ -742,6 +742,11 @@ function pa_sinova_render_home_block_item(array $blk, array $cfg): string {
             : '';
     }
 
+    if ($type === 'sipp_perkara') {
+        $cnt = !empty($bCfg['limit']) ? (int) $bCfg['limit'] : (!empty($bCfg['count']) ? (int) $bCfg['count'] : 10);
+        return do_shortcode('[pa_sipp_list_perkara limit="' . $cnt . '" title="' . esc_attr($title ?: 'Daftar Perkara Terbaru (Live SIPP)') . '"]');
+    }
+
     if ($type === 'iframe_embed') {
         $embedUrl = '';
         if (!empty($bCfg['embed_url']) && function_exists('pa_sinova_sanitize_https_embed_url')) {
@@ -1017,7 +1022,7 @@ add_filter('the_content', static function ($content) {
 
 // 4. Shortcode [pa_sinova_latest_posts count="3"]: Berita Terkini Satuan Kerja (Memisahkan Kategori Pengumuman)
 add_shortcode('pa_sinova_latest_posts', static function ($atts) {
-    $cfgAtts = shortcode_atts(array('count' => 3), $atts, 'pa_sinova_latest_posts');
+    $cfgAtts = shortcode_atts(array('count' => 4), $atts, 'pa_sinova_latest_posts');
     $count   = max(1, min(6, (int) $cfgAtts['count']));
     $qArgs   = array(
         'post_type'      => 'post',
