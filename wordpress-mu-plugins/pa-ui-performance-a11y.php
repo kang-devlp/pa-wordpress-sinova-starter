@@ -1322,8 +1322,6 @@ body.pa-sinova-classic-shell #masthead {
     top: calc(var(--pa-wpbar-h, 0px) - var(--pa-brand-h, 0px)) !important;
     z-index: 9990 !important;
     overflow: visible !important;
-    container-type: scroll-state;
-    container-name: pa-sticky-nav;
 }
 @media (max-width: 921px) {
     body.pa-sinova-classic-shell #masthead {
@@ -1356,9 +1354,7 @@ html.pa-nav-stuck body.pa-sinova-classic-shell #ast-desktop-header .main-header-
     box-shadow: 0 12px 30px rgba(2, 44, 34, 0.34) !important;
 }
 html.pa-nav-stuck body.pa-sinova-classic-shell #ast-desktop-header .site-header-primary-section-right {
-    background: rgba(2, 38, 29, 0.96) !important;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(2, 38, 29, 0.98) !important;
 }
 html.pa-nav-stuck .pa-shell-navwrap {
     background: rgba(2, 36, 28, 0.96) !important;
@@ -1617,7 +1613,7 @@ body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item.is-
 body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item.is-mega-open > .menu-link svg.ast-arrow-svg {
     transform: rotate(180deg) !important;
 }
-@media (min-width: 961px) {
+@media (min-width: 922px) {
     body.pa-sinova-classic-shell #ast-desktop-header #ast-hf-menu-1 > .menu-item > .sub-menu,
     body.pa-sinova-classic-shell.ast-desktop #ast-desktop-header .main-header-menu > .menu-item > .sub-menu,
     .pa-shell-navwrap .pa-shell-menu > li > .pa-shell-submenu {
@@ -1853,7 +1849,7 @@ body.pa-sinova-classic-shell #ast-desktop-header .main-header-menu .sub-menu .pa
 @media (max-width: 1120px) {
     .pa-mega-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 }
-@media (max-width: 960px) {
+@media (max-width: 921px) {
     .pa-mega-head { padding: 12px 14px !important; }
     .pa-mega-body { padding: 12px 14px !important; max-height: none; }
     .pa-mega-grid,
@@ -4901,11 +4897,11 @@ add_action('wp_footer', static function () {
                 }
 
                 li.addEventListener('mouseenter', function(){
-                    if(window.innerWidth <= 960) return;
+                    if(window.innerWidth <= 921) return;
                     openThis();
                 });
                 li.addEventListener('mouseleave', function(){
-                    if(window.innerWidth <= 960) return;
+                    if(window.innerWidth <= 921) return;
                     clearTimeout(entry.timer);
                     entry.timer = setTimeout(function(){
                         closeThis(false);
@@ -4915,7 +4911,7 @@ add_action('wp_footer', static function () {
                 });
                 trigger.addEventListener('click', function(e){
                     var rawHref = trigger.getAttribute('href') || '';
-                    var isMobile = window.innerWidth <= 960;
+                    var isMobile = window.innerWidth <= 921;
                     var isHash = rawHref === '#' || rawHref.indexOf('#') === 0;
                     if(!isHash && !isMobile) return;
                     e.preventDefault();
